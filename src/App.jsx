@@ -17,6 +17,7 @@ import EmployeeManager from "./pages/employee/EmployeeManager"
 import WorkEntries from "./pages/employee/WorkEntries"
 import ApprovalCenter from "./pages/approval/ApprovalCenter"
 import LeaveCalendar from "./pages/leave/LeaveCalendar"
+import DaySwapRequest from "./pages/leave/DaySwapRequest"
 import MonthlyReport from "./pages/report/MonthlyReport"
 
 export default function App() {
@@ -37,8 +38,11 @@ export default function App() {
   useEffect(() => {
     if (!user || user.role !== "admin") return
     const poll = async () => {
-      const lr = await sbGet("leave_requests?status=eq.申請中&select=id", user.token)
-      setBadge(lr.length)
+      const [lr, sw] = await Promise.all([
+        sbGet("leave_requests?status=eq.申請中&select=id", user.token),
+        sbGet("day_swap_requests?status=eq.申請中&select=id", user.token),
+      ])
+      setBadge((lr?.length || 0) + (sw?.length || 0))
     }
     poll()
     const iv = setInterval(poll, 30000)
@@ -58,11 +62,12 @@ export default function App() {
     home:    <Dashboard user={user} t={t} tk={user.token} />,
     att:     <AttendanceList user={user} t={t} tk={user.token} />,
     leave:   <LeaveRequest user={user} t={t} tk={user.token} />,
+    swap:    <DaySwapRequest user={user} t={t} tk={user.token} />,
     comm:    <CommissionEntry user={user} t={t} tk={user.token} />,
     trans:   <TransportLog user={user} t={t} tk={user.token} />,
     expense: <ExpenseClaim user={user} t={t} tk={user.token} />,
     work:    <WorkEntries user={user} t={t} tk={user.token} />,
-    empmgr:  <EmployeeManager t={t} tk={user.token} />,
+    empmgr:  <EmployeeManager user={user} t={t} tk={user.token} />,
     approve: <ApprovalCenter t={t} tk={user.token} />,
     cal:     <LeaveCalendar t={t} tk={user.token} />,
     report:  <MonthlyReport t={t} tk={user.token} />,

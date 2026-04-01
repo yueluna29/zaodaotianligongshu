@@ -1,17 +1,20 @@
+import { Home, ClipboardList, Palmtree, ArrowLeftRight, Clock, PenLine, Train, Receipt, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
+
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge }) {
   const isA = user.role === "admin"
   const items = [
-    { id: "home", l: "首页", ic: "🏠", r: ["staff", "admin"] },
-    { id: "att", l: "勤怠一览", ic: "📋", r: ["staff", "admin"] },
-    { id: "leave", l: "假期管理", ic: "🌴", r: ["staff", "admin"] },
-    { id: "work", l: "工时管理", ic: "⏱", r: ["staff", "admin"] },
-    { id: "comm", l: "签单录入", ic: "💰", r: ["staff", "admin"] },
-    { id: "trans", l: "交通费", ic: "🚃", r: ["staff", "admin"] },
-    { id: "expense", l: "报销", ic: "🧾", r: ["staff", "admin"] },
-    { id: "empmgr", l: "人事档案", ic: "👥", r: ["staff", "admin"] },
-    { id: "approve", l: "承认中心", ic: "✅", r: ["admin"] },
-    { id: "cal", l: "休假日历", ic: "📅", r: ["staff", "admin"] },
-    { id: "report", l: "月度报告", ic: "📊", r: ["admin"] },
+    { id: "home", l: "首页", ic: Home, r: ["staff", "admin"] },
+    { id: "att", l: "勤怠一览", ic: ClipboardList, r: ["staff", "admin"] },
+    { id: "leave", l: "假期管理", ic: Palmtree, r: ["staff", "admin"] },
+    { id: "swap", l: "换休管理", ic: ArrowLeftRight, r: ["staff", "admin"] },
+    { id: "work", l: "工时管理", ic: Clock, r: ["staff", "admin"] },
+    { id: "comm", l: "签单录入", ic: PenLine, r: ["staff", "admin"] },
+    { id: "trans", l: "交通费", ic: Train, r: ["staff", "admin"] },
+    { id: "expense", l: "报销", ic: Receipt, r: ["staff", "admin"] },
+    { id: "empmgr", l: "人事档案", ic: Users, r: ["staff", "admin"] },
+    { id: "approve", l: "承认中心", ic: CheckCircle, r: ["admin"] },
+    { id: "cal", l: "休假日历", ic: CalendarDays, r: ["staff", "admin"] },
+    { id: "report", l: "月度报告", ic: BarChart3, r: ["admin"] },
   ]
 
   return (
@@ -21,19 +24,22 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
         <div style={{ fontSize: 14, fontWeight: 600, color: t.tx, marginTop: 3 }}>管理系统</div>
       </div>
       <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {items.filter((n) => n.r.includes(user.role)).map((it) => (
-          <button key={it.id} onClick={() => onNav(it.id)} style={{
-            display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", borderRadius: 8,
-            border: "none", background: view === it.id ? t.sa : "transparent",
-            color: view === it.id ? t.sat : t.st, fontSize: 13, cursor: "pointer",
-            textAlign: "left", fontWeight: view === it.id ? 600 : 400, position: "relative",
-          }}>
-            <span style={{ fontSize: 15 }}>{it.ic}</span>{it.l}
-            {it.id === "approve" && badge > 0 && (
-              <span style={{ position: "absolute", right: 10, background: t.rd, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 10, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{badge}</span>
-            )}
-          </button>
-        ))}
+        {items.filter((n) => n.r.includes(user.role)).map((it) => {
+          const Icon = it.ic
+          return (
+            <button key={it.id} onClick={() => onNav(it.id)} style={{
+              display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", borderRadius: 8,
+              border: "none", background: view === it.id ? t.sa : "transparent",
+              color: view === it.id ? t.sat : t.st, fontSize: 13, cursor: "pointer",
+              textAlign: "left", fontWeight: view === it.id ? 600 : 400, position: "relative",
+            }}>
+              <Icon size={16} strokeWidth={1.8} />{it.l}
+              {it.id === "approve" && badge > 0 && (
+                <span style={{ position: "absolute", right: 10, background: t.rd, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 10, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{badge}</span>
+              )}
+            </button>
+          )
+        })}
       </nav>
       <div style={{ padding: 14, borderTop: `1px solid ${t.bd}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { sbGet, sbPost, sbPatch } from "../../api/supabase"
+import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
+import { calcPaidLeave } from "../../config/leaveCalc"
 import { WEEKDAYS } from "../../config/constants"
 
 const EMP_TYPES = ["正社員", "契約社員", "アルバイト", "外部講師"]
@@ -36,6 +37,10 @@ export default function EmployeeManager({ user, t, tk }) {
   const [creating, sCreating] = useState(false)
   const [fm, sFm] = useState({})
   const [saving, sSaving] = useState(false)
+  const [leaveBal, setLeaveBal] = useState(null)
+  const [schedules, setSchedules] = useState([])
+  const [editSched, setEditSched] = useState(false)
+  const [schedFm, setSchedFm] = useState({})
 
   const isAdmin = user && user.role === "admin"
 
@@ -51,6 +56,27 @@ export default function EmployeeManager({ user, t, tk }) {
   }, [tk])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!selected || selected.id === "__new__") { setLeaveBal(null); setSchedules([]); return }
+    (async () => {
+      const [usedReqs, compReqs, scheds] = await Promise.all([
+        sbGet(`leave_requests?employee_id=eq.${selected.id}&status=eq.承認&leave_type=eq.有休&select=leave_date,is_half_day`, tk),
+        sbGet(`day_swap_requests?employee_id=eq.${selected.id}&swap_type=eq.休日出勤&compensation_type=eq.換休&status=eq.承認&select=id,swap_date,deadline`, tk),
+        sbGet(`work_schedules?employee_id=eq.${selected.id}&order=day_of_week&select=*`, tk),
+      ])
+      const paid = calcPaidLeave(selected.hire_date, usedReqs || [])
+      const compAll = compReqs || []
+      const compUnused = compAll.filter(c => !c.swap_date)
+      const expiringSoon = compUnused.filter(c => {
+        if (!c.deadline) return false
+        const diff = (new Date(c.deadline) - new Date()) / (1000 * 60 * 60 * 24)
+        return diff >= 0 && diff <= 14
+      })
+      setLeaveBal({ paid, compTotal: compAll.length, compUnused: compUnused.length, expiringSoon: expiringSoon.length })
+      setSchedules(scheds || [])
+    })()
+  }, [selected, tk])
 
   useEffect(() => {
     if (user && user.role !== "admin" && emps.length > 0) {
@@ -93,6 +119,38 @@ export default function EmployeeManager({ user, t, tk }) {
     sCreating(true)
     sFm(emptyForm())
     sEditing(true)
+  }
+
+  const startSchedEdit = () => {
+    const fm = {}
+    for (let i = 0; i < 7; i++) {
+      const s = schedules.find(sc => sc.day_of_week === i)
+      fm[i] = { enabled: !!s, start: s?.start_time?.slice(0, 5) || "09:00", end: s?.end_time?.slice(0, 5) || "18:00" }
+    }
+    setSchedFm(fm)
+    setEditSched(true)
+  }
+  
+  const saveSched = async () => {
+    sSaving(true)
+    // 删除旧的排班
+    await sbDel(`work_schedules?employee_id=eq.${selected.id}`, tk)
+    // 插入新的
+    for (let i = 0; i < 7; i++) {
+      if (schedFm[i]?.enabled) {
+        await sbPost("work_schedules", {
+          employee_id: selected.id,
+          day_of_week: i,
+          start_time: schedFm[i].start,
+          end_time: schedFm[i].end,
+        }, tk)
+      }
+    }
+    // 重新加载
+    const scheds = await sbGet(`work_schedules?employee_id=eq.${selected.id}&order=day_of_week&select=*`, tk)
+    setSchedules(scheds || [])
+    setEditSched(false)
+    sSaving(false)
   }
 
   const save = async () => {
@@ -163,7 +221,7 @@ export default function EmployeeManager({ user, t, tk }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
           {isAdmin && <button onClick={() => { sSelected(null); sEditing(false); sCreating(false) }} style={{ padding: "5px 14px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 11, cursor: "pointer" }}>← 返回列表</button>}
           <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0, flex: 1, marginLeft: 8 }}>{creating ? "新增社员" : `${e.name || e.email} 的档案`}</h2>
-          {isAdmin && !editing && !creating && <button onClick={() => startEdit(e)} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>编辑档案</button>}
+          {(isAdmin || e.id === user.id) && !editing && !creating && <button onClick={() => startEdit(e)} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>编辑档案</button>}
           {editing && <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => { if (creating) { sSelected(null); sCreating(false) } sEditing(false) }} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
             <button onClick={save} disabled={saving} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.gn, color: "#fff", fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "保存中..." : "保存"}</button>
@@ -335,7 +393,83 @@ export default function EmployeeManager({ user, t, tk }) {
               {readField("户名", e.bank_account_holder)}
             </div>
           )}
-        </div>
+
+{/* ====== 6. 排班设定 ====== */}
+{!creating && (<>
+            {secTitle("6. 排班设定")}
+            {editSched ? (
+              <div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                  {WEEKDAYS.map((w, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: schedFm[i]?.enabled ? `${t.ac}06` : "transparent" }}>
+                      <button type="button" onClick={() => setSchedFm(p => ({ ...p, [i]: { ...p[i], enabled: !p[i]?.enabled } }))} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${schedFm[i]?.enabled ? t.ac : t.bd}`, background: schedFm[i]?.enabled ? `${t.ac}20` : "transparent", color: schedFm[i]?.enabled ? t.ac : t.td, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{w}</button>
+                      {schedFm[i]?.enabled ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <input type="time" value={schedFm[i]?.start || "09:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], start: ev.target.value } }))} style={{ ...iS, width: 110 }} />
+                          <span style={{ color: t.tm, fontSize: 12 }}>~</span>
+                          <input type="time" value={schedFm[i]?.end || "18:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], end: ev.target.value } }))} style={{ ...iS, width: 110 }} />
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: t.td }}>休息</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={saveSched} disabled={saving} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.gn, color: "#fff", fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer" }}>{saving ? "保存中..." : "保存排班"}</button>
+                  <button onClick={() => setEditSched(false)} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                  {WEEKDAYS.map((w, i) => {
+                    const s = schedules.find(sc => sc.day_of_week === i)
+                    return (
+                      <div key={i} style={{ padding: "8px 12px", borderRadius: 8, border: `1px solid ${s ? t.ac : t.bd}`, background: s ? `${t.ac}08` : "transparent", minWidth: 70, textAlign: "center" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: s ? t.ac : t.td }}>{w}</div>
+                        {s ? (
+                          <div style={{ fontSize: 11, color: t.tx, marginTop: 4 }}>{s.start_time?.slice(0, 5)}~{s.end_time?.slice(0, 5)}</div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: t.td, marginTop: 4 }}>休</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {isAdmin && <button onClick={startSchedEdit} style={{ padding: "5px 14px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 11, cursor: "pointer" }}>编辑排班</button>}
+              </div>
+            )}
+          </>)}
+
+        {/* ====== 7. 假期余额 ====== */}
+        {!creating && leaveBal && (<>
+            {secTitle("7. 假期余额")}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
+              <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px solid ${t.bd}`, background: `${t.ac}08` }}>
+                <div style={{ fontSize: 9, color: t.tm }}>有休余额</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: t.ac, marginTop: 4 }}>{leaveBal.paid.balance}天</div>
+                <div style={{ fontSize: 9, color: t.td }}>本年{leaveBal.paid.currentGrant} + 繰越{leaveBal.paid.carryOver} - 已用{leaveBal.paid.used}</div>
+              </div>
+              <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px solid ${t.bd}`, background: "#8B5CF608" }}>
+                <div style={{ fontSize: 9, color: t.tm }}>代休余额</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#8B5CF6", marginTop: 4 }}>{leaveBal.compUnused}天</div>
+                <div style={{ fontSize: 9, color: t.td }}>累计{leaveBal.compTotal}次换休</div>
+              </div>
+              <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px solid ${t.bd}`, background: leaveBal.expiringSoon > 0 ? `${t.rd}08` : `${t.gn}08` }}>
+                <div style={{ fontSize: 9, color: t.tm }}>即将过期代休</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: leaveBal.expiringSoon > 0 ? t.rd : t.gn, marginTop: 4 }}>{leaveBal.expiringSoon}天</div>
+                <div style={{ fontSize: 9, color: t.td }}>{leaveBal.expiringSoon > 0 ? "14天内到期" : "暂无到期"}</div>
+              </div>
+              {!selected.hire_date && (
+                <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px dashed ${t.wn}`, background: `${t.wn}08` }}>
+                  <div style={{ fontSize: 11, color: t.wn, fontWeight: 600 }}>未设定入职日期</div>
+                  <div style={{ fontSize: 9, color: t.tm, marginTop: 4 }}>请在"归属与状态"中填写入职日期，有休余额才能自动计算</div>
+                </div>
+              )}
+            </div>
+          </>)}
+          </div>
       </div>
     )
   }
