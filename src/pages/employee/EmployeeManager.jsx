@@ -445,7 +445,7 @@ export default function EmployeeManager({ user, t, tk }) {
 
           {!creating && (<>
           {secTitle("7. 时薪配置")}
-          <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} />
+          <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} allEmps={emps} />
         </>)}
 
         {/* ====== 8. 假期余额 ====== */}

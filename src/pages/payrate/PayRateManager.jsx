@@ -10,7 +10,7 @@ const COMMON_TYPES = [
   "研究計画書修改",
 ]
 
-export default function PayRateSection({ empId, isAdmin, t, tk, userId }) {
+export default function PayRateSection({ empId, isAdmin, t, tk, userId, allEmps }) {
   const [rates, setRates] = useState([])
   const [history, setHistory] = useState({})
   const [showAdd, setShowAdd] = useState(false)
@@ -229,6 +229,11 @@ export default function PayRateSection({ empId, isAdmin, t, tk, userId }) {
                         <span style={{ fontSize: 12, fontWeight: i === 0 ? 700 : 400, color: i === 0 ? t.tx : t.ts }}>¥{Number(h.hourly_rate).toLocaleString()}/時</span>
                         <span style={{ fontSize: 9, color: t.tm }}>{h.effective_from}</span>
                         {h.note && <span style={{ fontSize: 9, color: t.td }}>({h.note})</span>}
+                        {h.modified_by && allEmps && (
+  <span style={{ fontSize: 9, color: t.ac }}>
+    ✎ {allEmps.find(e => e.id === h.modified_by)?.name || ""}
+  </span>
+)}
                       </div>
                       {isAdmin && i !== 0 && (
                         <button onClick={() => delRate(h.id)} style={{ background: "none", border: "none", color: t.rd, cursor: "pointer", padding: 2 }}><Trash2 size={10} /></button>
