@@ -184,6 +184,13 @@ export default function PayRateSection({ empId, isAdmin, t, tk, userId, allEmps 
                         <button onClick={() => { setRaiseMode(raiseMode === r.business_type ? null : r.business_type); setRaiseFm({ hourly_rate: "", effective_from: new Date().toISOString().split("T")[0], note: "涨薪" }); setShowAdd(false); setEditId(null) }} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.ac}44`, background: "transparent", color: t.ac, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
                           <Plus size={9} /> 涨薪
                         </button>
+                        <button onClick={async () => {
+                          if (!confirm(`确定删除「${r.business_type}」的全部记录？`)) return
+                          for (const h of (history[r.business_type] || [r])) await sbDel(`pay_rates?id=eq.${h.id}`, tk)
+                          await loadRates()
+                        }} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                          <Trash2 size={9} /> 删除
+                        </button>
                       </>
                     )}
                     <button onClick={() => setExpandedType(expandedType === r.business_type ? null : r.business_type)} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>

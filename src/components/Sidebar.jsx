@@ -2,19 +2,22 @@ import { Home, ClipboardList, Palmtree, ArrowLeftRight, Clock, PenLine, Train, R
 
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge }) {
   const isA = user.role === "admin"
+  const et = user.employment_type || "正社員"
+  const isHourly = et === "アルバイト" || et === "外部講師"
+
   const items = [
-    { id: "home", l: "首页", ic: Home, r: ["staff", "admin"] },
-    { id: "att", l: "勤怠一览", ic: ClipboardList, r: ["staff", "admin"] },
-    { id: "leave", l: "假期管理", ic: Palmtree, r: ["staff", "admin"] },
-    { id: "swap", l: "换休管理", ic: ArrowLeftRight, r: ["staff", "admin"] },
-    { id: "work", l: "工时管理", ic: Clock, r: ["staff", "admin"] },
-    { id: "comm", l: "签单录入", ic: PenLine, r: ["staff", "admin"] },
-    { id: "trans", l: "交通费", ic: Train, r: ["staff", "admin"] },
-    { id: "expense", l: "报销", ic: Receipt, r: ["staff", "admin"] },
-    { id: "empmgr", l: "人事档案", ic: Users, r: ["staff", "admin"] },
-    { id: "approve", l: "承认中心", ic: CheckCircle, r: ["admin"] },
-    { id: "cal", l: "休假日历", ic: CalendarDays, r: ["staff", "admin"] },
-    { id: "report", l: "月度报告", ic: BarChart3, r: ["admin"] },
+    { id: "home", l: "首页", ic: Home, show: true },
+    { id: "att", l: "勤怠一览", ic: ClipboardList, show: !isHourly || isA },
+    { id: "leave", l: "假期管理", ic: Palmtree, show: !isHourly || isA },
+    { id: "swap", l: "换休管理", ic: ArrowLeftRight, show: !isHourly || isA },
+    { id: "work", l: "工资报表", ic: Clock, show: isHourly || isA },
+    { id: "comm", l: "签单录入", ic: PenLine, show: !isHourly || isA },
+    { id: "trans", l: "交通费", ic: Train, show: !isHourly || isA },
+    { id: "expense", l: "报销", ic: Receipt, show: !isHourly || isA },
+    { id: "empmgr", l: "人事档案", ic: Users, show: true },
+    { id: "approve", l: "承认中心", ic: CheckCircle, show: isA },
+    { id: "cal", l: "休假日历", ic: CalendarDays, show: true },
+    { id: "report", l: "月度报告", ic: BarChart3, show: isA },
   ]
 
   return (
@@ -24,7 +27,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
         <div style={{ fontSize: 14, fontWeight: 600, color: t.tx, marginTop: 3 }}>管理系统</div>
       </div>
       <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {items.filter((n) => n.r.includes(user.role)).map((it) => {
+        {items.filter((n) => n.show).map((it) => {
           const Icon = it.ic
           return (
             <button key={it.id} onClick={() => onNav(it.id)} style={{
@@ -47,7 +50,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
             <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg,${isA ? t.wn : t.ac},${isA ? "#B45309" : "#1D4ED8"})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700 }}>{(user.name || "?")[0]}</div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: t.tx }}>{user.name}</div>
-              <div style={{ fontSize: 9, color: t.tm }}>{isA ? "管理者" : "社員"}</div>
+              <div style={{ fontSize: 9, color: t.tm }}>{isA ? "管理者" : et}</div>
             </div>
           </div>
           <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
