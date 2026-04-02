@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import { WEEKDAYS } from "../../config/constants"
+import PayRateSection from "../../components/PayRateSection"
 
 const EMP_TYPES = ["正社員", "契約社員", "アルバイト", "外部講師"]
 const COMPANIES = [{ id: 1, name: "世家学舍" }, { id: 2, name: "紫陽花教育" }]
-const DEPTS = ["大学院", "学部", "教务", "宣传"]
+const DEPTS = ["大学院", "学部", "教务", "咨询", "宣传"]
 const SUBJECTS = ["物理", "数学", "机械工学", "电气电子", "情报科学", "土木建筑", "生命理工", "材料化学", "环境工学", "体育学", "大学院文科", "经营工学", "EJU数学", "EJU理科", "日语", "英语", "班主任"]
 const GENDERS = ["男", "女"]
 const PAY_METHODS = ["银行转账", "现金"]
@@ -441,6 +442,11 @@ export default function EmployeeManager({ user, t, tk }) {
               </div>
             )}
           </>)}
+
+          {!creating && (<>
+          {secTitle("8. 时薪配置")}
+          <PayRateSection empId={selected.id} empName={selected.name} isAdmin={isAdmin} t={t} tk={tk} allEmps={emps} />
+        </>)}
 
         {/* ====== 7. 假期余额 ====== */}
         {!creating && leaveBal && (<>

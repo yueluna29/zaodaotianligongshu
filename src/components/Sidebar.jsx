@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Palmtree, ArrowLeftRight, Clock, PenLine, Train, Receipt, Users, CheckCircle, CalendarDays, DollarSign, Timer, BarChart3 } from "lucide-react"
+import { Home, ClipboardList, Palmtree, ArrowLeftRight, Clock, PenLine, Train, Receipt, Users, CheckCircle, CalendarDays, Timer, BarChart3 } from "lucide-react"
 
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge }) {
   const isA = user.role === "admin"
@@ -15,7 +15,6 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
     { id: "approve", l: "承认中心", ic: CheckCircle, r: ["admin"] },
     { id: "cal", l: "休假日历", ic: CalendarDays, r: ["staff", "admin"] },
     { id: "report", l: "月度报告", ic: BarChart3, r: ["admin"] },
-    { id: "payrate", l: "时薪配置", ic: DollarSign, r: ["admin"] },
     { id: "workentry", l: "工时录入", ic: Timer, r: ["staff", "admin"] },
   ]
 
