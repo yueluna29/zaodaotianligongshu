@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { sbGet, sbPost, sbDel } from "../../api/supabase"
-import { DollarSign, Plus, History, ChevronDown, ChevronUp, Pencil, Trash2, Copy } from "lucide-react"
+import { sbGet, sbPost, sbPatch, sbDel } from "../api/supabase"
+import { Plus, History, ChevronDown, ChevronUp, Pencil, Trash2, Check, X } from "lucide-react"
 
 const COMMON_TYPES = [
   "事務",
@@ -10,17 +10,19 @@ const COMMON_TYPES = [
   "研究計画書修改",
 ]
 
-export default function PayRateSection({ empId, empName, isAdmin, t, tk, allEmps }) {
+export default function PayRateSection({ empId, isAdmin, t, tk }) {
   const [rates, setRates] = useState([])
   const [history, setHistory] = useState({})
   const [showAdd, setShowAdd] = useState(false)
   const [fm, setFm] = useState({ business_type: "", custom_type: "", hourly_rate: "", effective_from: new Date().toISOString().split("T")[0], note: "" })
   const [sub, setSub] = useState(false)
   const [expandedType, setExpandedType] = useState(null)
+  // 涨薪
   const [raiseMode, setRaiseMode] = useState(null)
   const [raiseFm, setRaiseFm] = useState({ hourly_rate: "", effective_from: new Date().toISOString().split("T")[0], note: "涨薪" })
-  const [copyFrom, setCopyFrom] = useState("")
-  const [showCopy, setShowCopy] = useState(false)
+  // 编辑
+  const [editId, setEditId] = useState(null)
+  const [editFm, setEditFm] = useState({ hourly_rate: "", effective_from: "", note: "" })
 
   const loadRates = useCallback(async () => {
     if (!empId) return
@@ -62,64 +64,40 @@ export default function PayRateSection({ empId, empName, isAdmin, t, tk, allEmps
     setRaiseMode(null); setRaiseFm({ hourly_rate: "", effective_from: new Date().toISOString().split("T")[0], note: "涨薪" }); setSub(false)
   }
 
+  const startEdit = (r) => {
+    setEditId(r.id)
+    setEditFm({ hourly_rate: String(r.hourly_rate), effective_from: r.effective_from, note: r.note || "" })
+    setRaiseMode(null); setShowAdd(false)
+  }
+
+  const submitEdit = async () => {
+    if (!editFm.hourly_rate || !editFm.effective_from) return
+    setSub(true)
+    await sbPatch(`pay_rates?id=eq.${editId}`, {
+      hourly_rate: parseFloat(editFm.hourly_rate), effective_from: editFm.effective_from, note: editFm.note || null,
+    }, tk)
+    await loadRates()
+    setEditId(null); setSub(false)
+  }
+
   const delRate = async (id) => {
     if (!confirm("确定删除这条时薪记录？")) return
     await sbDel(`pay_rates?id=eq.${id}`, tk)
     await loadRates()
   }
 
-  const doCopy = async () => {
-    if (!copyFrom || copyFrom === empId) return
-    setSub(true)
-    const src = await sbGet(`pay_rates?employee_id=eq.${copyFrom}&order=business_type,effective_from.desc&select=*`, tk)
-    if (!src?.length) { setSub(false); alert("来源员工没有时薪配置"); return }
-    const seen = new Set()
-    const srcName = (allEmps || []).find(e => e.id === copyFrom)?.name || ""
-    for (const r of src) {
-      if (seen.has(r.business_type)) continue
-      seen.add(r.business_type)
-      await sbPost("pay_rates", {
-        employee_id: empId, business_type: r.business_type, hourly_rate: r.hourly_rate,
-        effective_from: new Date().toISOString().split("T")[0], note: `复制自 ${srcName}`,
-      }, tk)
-    }
-    await loadRates()
-    setShowCopy(false); setCopyFrom(""); setSub(false)
-  }
-
   const iS = { width: "100%", padding: "8px 10px", borderRadius: 7, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }
 
   return (
     <div>
-      {/* 操作栏 */}
       {isAdmin && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-          <button onClick={() => { setShowAdd(!showAdd); setRaiseMode(null); setShowCopy(false) }} style={{ padding: "5px 12px", borderRadius: 6, border: showAdd ? `1px solid ${t.bd}` : "none", background: showAdd ? "transparent" : t.ac, color: showAdd ? t.ts : "#fff", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={() => { setShowAdd(!showAdd); setRaiseMode(null); setEditId(null) }} style={{ padding: "5px 12px", borderRadius: 6, border: showAdd ? `1px solid ${t.bd}` : "none", background: showAdd ? "transparent" : t.ac, color: showAdd ? t.ts : "#fff", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
             {showAdd ? "✕ 取消" : <><Plus size={12} /> 添加工种</>}
           </button>
-          <button onClick={() => { setShowCopy(!showCopy); setShowAdd(false); setRaiseMode(null) }} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-            <Copy size={11} /> 从他人复制
-          </button>
         </div>
       )}
 
-      {/* 从他人复制 */}
-      {showCopy && (
-        <div style={{ padding: 12, borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, marginBottom: 12 }}>
-          <div style={{ fontSize: 10, color: t.ts, marginBottom: 6 }}>复制另一位员工的当前时薪配置</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <select value={copyFrom} onChange={e => setCopyFrom(e.target.value)} style={{ ...iS, flex: 1 }}>
-              <option value="">选择来源</option>
-              {(allEmps || []).filter(e => e.id !== empId).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-            <button onClick={doCopy} disabled={!copyFrom || sub} style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: t.ac, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: (!copyFrom || sub) ? 0.5 : 1, whiteSpace: "nowrap" }}>
-              {sub ? "..." : "确认"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 添加新工种表单 */}
       {showAdd && (
         <div style={{ padding: 14, borderRadius: 8, border: `2px solid ${t.ac}33`, background: t.bgC, marginBottom: 12 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
@@ -156,7 +134,6 @@ export default function PayRateSection({ empId, empName, isAdmin, t, tk, allEmps
         </div>
       )}
 
-      {/* 当前时薪列表 */}
       {!rates.length ? (
         <div style={{ padding: 16, textAlign: "center", color: t.tm, fontSize: 11, borderRadius: 8, border: `1px dashed ${t.bd}` }}>
           {isAdmin ? "暂未配置时薪，点击上方「添加工种」开始设定" : "暂无时薪配置"}
@@ -165,29 +142,59 @@ export default function PayRateSection({ empId, empName, isAdmin, t, tk, allEmps
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {rates.map(r => (
             <div key={r.business_type} style={{ borderRadius: 8, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
-              <div style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: "#8B5CF6", background: "#8B5CF620" }}>{r.business_type}</span>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: t.ac }}>¥{Number(r.hourly_rate).toLocaleString()}</span>
-                  <span style={{ fontSize: 10, color: t.tm }}>/時</span>
-                  <span style={{ fontSize: 9, color: t.td }}>生效: {r.effective_from}</span>
-                  {r.note && <span style={{ fontSize: 9, color: t.td }}>({r.note})</span>}
+              {/* 当前时薪 or 编辑模式 */}
+              {editId === r.id ? (
+                <div style={{ padding: "10px 14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <div>
+                      <label style={{ fontSize: 9, color: t.ts, display: "block", marginBottom: 3 }}>时薪</label>
+                      <input type="number" value={editFm.hourly_rate} onChange={e => setEditFm(p => ({ ...p, hourly_rate: e.target.value }))} style={iS} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 9, color: t.ts, display: "block", marginBottom: 3 }}>生效日</label>
+                      <input type="date" value={editFm.effective_from} onChange={e => setEditFm(p => ({ ...p, effective_from: e.target.value }))} style={iS} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 9, color: t.ts, display: "block", marginBottom: 3 }}>备注</label>
+                      <input value={editFm.note} onChange={e => setEditFm(p => ({ ...p, note: e.target.value }))} style={iS} />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                    <button onClick={submitEdit} disabled={sub} style={{ padding: "4px 12px", borderRadius: 5, border: "none", background: t.gn, color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}><Check size={10} /> 保存</button>
+                    <button onClick={() => setEditId(null)} style={{ padding: "4px 12px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}><X size={10} /> 取消</button>
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {isAdmin && (
-                    <button onClick={() => { setRaiseMode(raiseMode === r.business_type ? null : r.business_type); setRaiseFm({ hourly_rate: "", effective_from: new Date().toISOString().split("T")[0], note: "涨薪" }); setShowAdd(false) }} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.ac}44`, background: "transparent", color: t.ac, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                      <Pencil size={9} /> 涨薪
+              ) : (
+                <div style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: "#8B5CF6", background: "#8B5CF620" }}>{r.business_type}</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: t.ac }}>¥{Number(r.hourly_rate).toLocaleString()}</span>
+                    <span style={{ fontSize: 10, color: t.tm }}>/時</span>
+                    <span style={{ fontSize: 9, color: t.td }}>生效: {r.effective_from}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {isAdmin && (
+                      <>
+                        <button onClick={() => startEdit(r)} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                          <Pencil size={9} /> 编辑
+                        </button>
+                        <button onClick={() => { setRaiseMode(raiseMode === r.business_type ? null : r.business_type); setRaiseFm({ hourly_rate: "", effective_from: new Date().toISOString().split("T")[0], note: "涨薪" }); setShowAdd(false); setEditId(null) }} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.ac}44`, background: "transparent", color: t.ac, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                          <Plus size={9} /> 涨薪
+                        </button>
+                      </>
+                    )}
+                    <button onClick={() => setExpandedType(expandedType === r.business_type ? null : r.business_type)} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                      <History size={9} /> {history[r.business_type]?.length > 1 ? `(${history[r.business_type].length})` : ""}
+                      {expandedType === r.business_type ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
                     </button>
-                  )}
-                  <button onClick={() => setExpandedType(expandedType === r.business_type ? null : r.business_type)} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                    <History size={9} /> {history[r.business_type]?.length > 1 ? `(${history[r.business_type].length})` : ""}
-                    {expandedType === r.business_type ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
-                  </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
+              {/* 涨薪表单 */}
               {raiseMode === r.business_type && (
                 <div style={{ padding: "10px 14px", borderTop: `1px solid ${t.bl}` }}>
+                  <div style={{ fontSize: 9, color: t.ac, marginBottom: 6, fontWeight: 600 }}>新增一条涨薪记录（旧记录保留为历史）</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     <div>
                       <label style={{ fontSize: 9, color: t.ts, display: "block", marginBottom: 3 }}>新时薪</label>
@@ -209,6 +216,7 @@ export default function PayRateSection({ empId, empName, isAdmin, t, tk, allEmps
                 </div>
               )}
 
+              {/* 历史记录 */}
               {expandedType === r.business_type && history[r.business_type] && (
                 <div style={{ borderTop: `1px solid ${t.bl}` }}>
                   {history[r.business_type].map((h, i) => (

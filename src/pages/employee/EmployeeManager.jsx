@@ -444,13 +444,13 @@ export default function EmployeeManager({ user, t, tk }) {
           </>)}
 
           {!creating && (<>
-          {secTitle("8. 时薪配置")}
-          <PayRateSection empId={selected.id} empName={selected.name} isAdmin={isAdmin} t={t} tk={tk} allEmps={emps} />
+          {secTitle("7. 时薪配置")}
+          <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} />
         </>)}
 
-        {/* ====== 7. 假期余额 ====== */}
+        {/* ====== 8. 假期余额 ====== */}
         {!creating && leaveBal && (<>
-            {secTitle("7. 假期余额")}
+            {secTitle("8. 假期余额")}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
               <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px solid ${t.bd}`, background: `${t.ac}08` }}>
                 <div style={{ fontSize: 9, color: t.tm }}>有休余额</div>

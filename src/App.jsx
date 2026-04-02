@@ -14,9 +14,8 @@ import CommissionEntry from "./pages/commission/CommissionEntry"
 import TransportLog from "./pages/transport/TransportLog"
 import ExpenseClaim from "./pages/expense/ExpenseClaim"
 import EmployeeManager from "./pages/employee/EmployeeManager"
-import WorkEntries from "./pages/employee/WorkEntries"
-import ApprovalCenter from "./pages/approval/ApprovalCenter"
 import WorkEntryManager from "./pages/workentry/WorkEntryManager"
+import ApprovalCenter from "./pages/approval/ApprovalCenter"
 import LeaveCalendar from "./pages/leave/LeaveCalendar"
 import DaySwapRequest from "./pages/leave/DaySwapRequest"
 import MonthlyReport from "./pages/report/MonthlyReport"
@@ -67,13 +66,11 @@ export default function App() {
     comm:    <CommissionEntry user={user} t={t} tk={user.token} />,
     trans:   <TransportLog user={user} t={t} tk={user.token} />,
     expense: <ExpenseClaim user={user} t={t} tk={user.token} />,
-    work:    <WorkEntries user={user} t={t} tk={user.token} />,
+    work:    <WorkEntryManager user={user} t={t} tk={user.token} />,
     empmgr:  <EmployeeManager user={user} t={t} tk={user.token} />,
     approve: <ApprovalCenter t={t} tk={user.token} />,
     cal:     <LeaveCalendar t={t} tk={user.token} />,
     report:  <MonthlyReport t={t} tk={user.token} />,
-    payrate:   <PayRateManager user={user} t={t} tk={user.token} />,
-    workentry: <WorkEntryManager user={user} t={t} tk={user.token} />,
   }
 
   return (
