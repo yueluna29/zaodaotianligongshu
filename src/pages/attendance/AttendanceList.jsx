@@ -439,7 +439,7 @@ export default function AttendanceList({ user, t, tk }) {
               <HistEmpSelect histMode={leaveHistMode} />
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
-                <select value={leaveFm.leave_type} onChange={(e) => setLeaveFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>{LEAVE_TYPES.map((l) => <option key={l.v} value={l.v}>{l.i} {l.l}</option>)}</select>
+                <select value={leaveFm.leave_type} onChange={(e) => setLeaveFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>{LEAVE_TYPES.map((l) => <option key={l.v} value={l.v}>{l.i}</option>)}</select>
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{leaveEditId ? "日期" : "选择日期（点击选取，可多选）"}</label>
@@ -474,7 +474,7 @@ export default function AttendanceList({ user, t, tk }) {
               return (
                 <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{lt?.i} {r.leave_type}</span>
+                    <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{r.leave_type}</span>
                     <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.leave_date}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
                     {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                   </div>
