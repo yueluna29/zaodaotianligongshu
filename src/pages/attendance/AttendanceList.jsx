@@ -3,10 +3,11 @@ import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
-import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, ListChecks } from "lucide-react"
+import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks } from "lucide-react"
 
 const mkTrans = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, claim_date: "", route: "", round_trip: true, amount: "", note: "" })
 const mkComm = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, entry_date: "", seq_number: "", student_name: "", tuition_amount: "", commission_rate: "", commission_amount: 0 })
+const EXPENSE_CATS = ["教材费", "办公用品", "餐费", "打印费", "通信费", "其他"]
 
 export default function AttendanceList({ user, t, tk }) {
   const now = new Date()
@@ -52,12 +53,17 @@ export default function AttendanceList({ user, t, tk }) {
   const [transRows, setTransRows] = useState([])
   const [commRows, setCommRows] = useState([])
   const [editingKeys, setEditingKeys] = useState(new Set())
+  const [expRecs, setExpRecs] = useState([])
+  const [expShow, setExpShow] = useState(false)
+  const [expSub, setExpSub] = useState(false)
+  const [expEditId, setExpEditId] = useState(null)
+  const [expFm, setExpFm] = useState({ claim_date: todayStr(), category: "教材费", amount: "", note: "" })
 
   // ==================== 数据加载 ====================
   const load = useCallback(async () => {
     sLd(true)
     const from = `${y}-${pad(m)}-01`, to = `${y}-${pad(m)}-${pad(days)}`
-    const [attData, trData, cmData, lvData, swData, usedReqs, compReqs] = await Promise.all([
+    const [attData, trData, cmData, lvData, swData, usedReqs, compReqs, expData] = await Promise.all([
       sbGet(`attendance_records?employee_id=eq.${user.id}&work_date=gte.${from}&work_date=lte.${to}&order=work_date`, tk),
       sbGet(`transportation_claims?employee_id=eq.${user.id}&claim_date=gte.${from}&claim_date=lte.${to}&order=claim_date&select=*`, tk),
       user.has_commission ? sbGet(`commission_entries?employee_id=eq.${user.id}&entry_date=gte.${from}&entry_date=lte.${to}&order=entry_date,seq_number&select=*`, tk) : Promise.resolve([]),
@@ -65,6 +71,7 @@ export default function AttendanceList({ user, t, tk }) {
       sbGet(`day_swap_requests?employee_id=eq.${user.id}&order=created_at.desc&select=*`, tk),
       sbGet(`leave_requests?employee_id=eq.${user.id}&status=eq.承認&leave_type=eq.有休&select=leave_date,is_half_day`, tk),
       sbGet(`day_swap_requests?employee_id=eq.${user.id}&swap_type=eq.休日出勤&compensation_type=eq.換休&status=eq.承認&select=id,swap_date`, tk),
+      sbGet(`expense_claims?employee_id=eq.${user.id}&order=claim_date.desc&select=*`, tk),
     ])
 
     const mp = {}; (attData || []).forEach((r) => { mp[r.work_date] = r }); sRecs(mp)
@@ -80,6 +87,7 @@ export default function AttendanceList({ user, t, tk }) {
     setCompBal((compReqs || []).filter(c => !c.swap_date).length)
 
     setSwapReqs(swData || [])
+    setExpRecs(expData || [])
 
     if (isAdmin && !allEmps.length) {
       const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name", tk)
@@ -223,12 +231,28 @@ export default function AttendanceList({ user, t, tk }) {
     await load(); sSv(false)
   }
 
+  // ==================== 报销登记（逐条保存） ====================
+  const resetExpForm = () => { setExpFm({ claim_date: todayStr(), category: "教材费", amount: "", note: "" }); setExpEditId(null); setExpShow(false) }
+
+  const submitExp = async () => {
+    if (!expFm.amount) return
+    setExpSub(true)
+    const body = { claim_date: expFm.claim_date, category: expFm.category, amount: Number(expFm.amount), note: expFm.note || null }
+    if (expEditId) { await sbPatch(`expense_claims?id=eq.${expEditId}`, body, tk); setExpEditId(null) }
+    else { await sbPost("expense_claims", { employee_id: user.id, ...body }, tk) }
+    await load(); resetExpForm(); setExpSub(false)
+  }
+
+  const startExpEdit = (r) => { setExpFm({ claim_date: r.claim_date, category: r.category, amount: String(r.amount), note: r.note || "" }); setExpEditId(r.id); setExpShow(true); setTab("expense") }
+  const delExp = async (id) => { if (!confirm("确认删除？")) return; await sbDel(`expense_claims?id=eq.${id}`, tk); await load() }
+
   // ==================== 统计 ====================
   const tw = Object.values(recs).reduce((s, r) => s + Number(r.work_minutes || 0), 0)
   const to = Object.values(recs).reduce((s, r) => s + Math.max(Number(r.work_minutes || 0) - 480, 0), 0)
   const wds = Object.values(recs).filter((r) => r.clock_in).length
   const totalTrans = transRows.filter(r => !r._isNew).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
   const totalComm = commRows.filter(r => !r._isNew).reduce((s, r) => s + (r.commission_amount || 0), 0)
+  const totalExp = expRecs.reduce((s, r) => s + Number(r.amount || 0), 0)
 
   const swapApproved = swapReqs.filter(r => r.status === "承認")
   const unusedComp = swapApproved.filter(r => r.swap_type === "休日出勤" && r.compensation_type === "換休" && !r.swap_date).length
@@ -284,6 +308,7 @@ export default function AttendanceList({ user, t, tk }) {
     { key: "swap", label: "换休管理", icon: ArrowLeftRight, badge: swapPending },
     { key: "summary", label: "报销一览", icon: ListChecks },
     { key: "transport", label: "交通費", icon: Train },
+    { key: "expense", label: "报销登记", icon: Banknote },
     ...(user.has_commission ? [{ key: "commission", label: "签单提成", icon: Receipt }] : []),
   ]
 
@@ -315,6 +340,7 @@ export default function AttendanceList({ user, t, tk }) {
           { l: "有休余额", v: `${bal.balance}天`, c: t.ac, sub: `本年${bal.currentGrant}+繰越${bal.carryOver}-已用${bal.used}`, click: () => setShowTL(p => !p) },
           { l: "代休余额", v: `${compBal + unusedComp}天`, c: "#8B5CF6" },
           { l: "交通费", v: `¥${totalTrans.toLocaleString()}`, c: "#8B5CF6" },
+          { l: "报销", v: `¥${totalExp.toLocaleString()}`, c: t.wn },
           ...(user.has_commission ? [{ l: "签单提成", v: `¥${totalComm.toLocaleString()}`, c: "#EC4899" }] : []),
         ].map((c, i) => (
           <div key={i} onClick={c.click} style={{ background: t.bgC, borderRadius: 10, padding: "12px 14px", border: `1px solid ${t.bd}`, cursor: c.click ? "pointer" : "default" }}>
@@ -685,6 +711,50 @@ export default function AttendanceList({ user, t, tk }) {
         </div>
       )}
 
+      {/* ====== 报销登记 Tab ====== */}
+      {tab === "expense" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button onClick={() => { if (expShow) resetExpForm(); else setExpShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: expShow ? `1px solid ${t.bd}` : "none", background: expShow ? "transparent" : t.ac, color: expShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expShow ? "✕ 关闭" : "+ 新报销"}</button>
+          </div>
+
+          {expShow && (
+            <div style={{ background: t.bgC, borderRadius: 12, padding: 22, border: `2px solid ${t.ac}33`, marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: t.tx, margin: "0 0 14px" }}>{expEditId ? "编辑报销" : "报销登记"}</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div><label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>日期</label><input type="date" value={expFm.claim_date} onChange={(e) => setExpFm(p => ({ ...p, claim_date: e.target.value }))} style={fmS} /></div>
+                <div><label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类目</label><select value={expFm.category} onChange={(e) => setExpFm(p => ({ ...p, category: e.target.value }))} style={fmS}>{EXPENSE_CATS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                <div><label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>金额（円）</label><input type="number" value={expFm.amount} onChange={(e) => setExpFm(p => ({ ...p, amount: e.target.value }))} style={fmS} /></div>
+                <div><label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>备注</label><input placeholder="可选" value={expFm.note} onChange={(e) => setExpFm(p => ({ ...p, note: e.target.value }))} style={fmS} /></div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={submitExp} disabled={expSub || !expFm.amount} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (expSub || !expFm.amount) ? "not-allowed" : "pointer", opacity: (expSub || !expFm.amount) ? 0.5 : 1 }}>{expSub ? "保存中..." : expEditId ? "更新" : "登记"}</button>
+                {expEditId && <button onClick={resetExpForm} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>取消</button>}
+              </div>
+            </div>
+          )}
+
+          <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
+            {!expRecs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无报销记录</div> : expRecs.map(r => (
+              <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.claim_date}</span>
+                  <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: t.ac, background: `${t.ac}15` }}>{r.category}</span>
+                  {r.note && <span style={{ fontSize: 11, color: t.ts }}>{r.note}</span>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: t.tx }}>¥{Number(r.amount || 0).toLocaleString()}</span>
+                  <button onClick={() => startExpEdit(r)} style={{ background: "none", border: `1px solid ${t.bd}`, borderRadius: 4, color: t.ts, cursor: "pointer", padding: "2px 4px", display: "flex", alignItems: "center" }}><Pencil size={11} /></button>
+                  <button onClick={() => delExp(r.id)} style={{ background: "none", border: "none", color: t.rd, cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}><Trash2 size={11} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
       {/* ====== 签单提成 Tab ====== */}
       {tab === "commission" && user.has_commission && (
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
