@@ -58,7 +58,7 @@ export default function DateMultiPicker({ selected = [], onChange, t }) {
               type="button"
               onClick={() => toggle(ds)}
               style={{
-                width: "100%", aspectRatio: "1", borderRadius: 8,
+                width: "100%", borderRadius: 8,
                 border: isSel ? `2px solid ${t.ac}` : `1px solid ${t.bl}`,
                 background: isSel ? `${t.ac}20` : "transparent",
                 color: isSel ? t.ac : isWe ? t.rd : t.tx,
