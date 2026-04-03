@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Palmtree, Clock, PenLine, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
 
 export default function MobileNav({ user, view, onNav, t, badge }) {
   const isA = user.role === "admin"
@@ -8,9 +8,7 @@ export default function MobileNav({ user, view, onNav, t, badge }) {
   const all = [
     { id: "home", ic: Home, l: "首页", show: true },
     { id: "att", ic: ClipboardList, l: "勤怠", show: !isHourly || isA },
-    { id: "leave", ic: Palmtree, l: "休假", show: !isHourly || isA },
     { id: "work", ic: Clock, l: "报表", show: isHourly || isA },
-    { id: "comm", ic: PenLine, l: "签单", show: !isHourly || isA },
     { id: "empmgr", ic: Users, l: "档案", show: true },
     { id: "cal", ic: CalendarDays, l: "日历", show: true },
     { id: "approve", ic: CheckCircle, l: "审批", show: isA },
