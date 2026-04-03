@@ -3,7 +3,7 @@ import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
-import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt } from "lucide-react"
+import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X } from "lucide-react"
 
 const mkTrans = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, claim_date: "", route: "", round_trip: true, amount: "", note: "" })
 const mkComm = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, entry_date: "", seq_number: "", student_name: "", tuition_amount: "", commission_rate: "", commission_amount: 0 })
@@ -67,26 +67,20 @@ export default function AttendanceList({ user, t, tk }) {
       sbGet(`day_swap_requests?employee_id=eq.${user.id}&swap_type=eq.休日出勤&compensation_type=eq.換休&status=eq.承認&select=id,swap_date`, tk),
     ])
 
-    // 勤怠
     const mp = {}; (attData || []).forEach((r) => { mp[r.work_date] = r }); sRecs(mp)
 
-    // 交通费
     const trLoaded = (trData || []).map(r => ({ ...r, _key: r.id, _isNew: false, _dirty: false, amount: String(r.amount || "") }))
     setTransRows([...trLoaded, ...Array.from({ length: 2 }, mkTrans)])
 
-    // 签单提成
     const cmLoaded = (cmData || []).map(r => ({ ...r, _key: r.id, _isNew: false, _dirty: false, seq_number: String(r.seq_number || ""), tuition_amount: String(r.tuition_amount || ""), commission_rate: String(r.commission_rate || ""), commission_amount: Number(r.commission_amount || 0) }))
     setCommRows([...cmLoaded, ...Array.from({ length: 2 }, mkComm)])
 
-    // 假期
     setLeaveReqs(lvData || [])
     sBal(calcPaidLeave(user.hire_date, usedReqs || []))
     setCompBal((compReqs || []).filter(c => !c.swap_date).length)
 
-    // 换休
     setSwapReqs(swData || [])
 
-    // admin员工列表
     if (isAdmin && !allEmps.length) {
       const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name", tk)
       setAllEmps(emps || [])
@@ -184,8 +178,27 @@ export default function AttendanceList({ user, t, tk }) {
 
   const delSwap = async (id) => { if (!confirm("确定要取消这条申请吗？")) return; await sbDel(`day_swap_requests?id=eq.${id}`, tk); await load() }
 
-  // ==================== 交通费 + 签单操作 ====================
+  // ==================== 交通费（逐行保存） ====================
   const updateTrans = (key, field, value) => setTransRows(prev => prev.map(r => r._key === key ? { ...r, [field]: value, _dirty: true } : r))
+  const addTransRows = () => setTransRows(prev => [...prev, ...Array.from({ length: 2 }, mkTrans)])
+  const removeTrans = (key) => setTransRows(prev => prev.filter(r => r._key !== key))
+  const delTrans = async (id) => { if (!confirm("确定删除？")) return; await sbDel(`transportation_claims?id=eq.${id}`, tk); await load() }
+  const toggleEdit = (key) => setEditingKeys(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
+  const cancelEdit = (key) => { setEditingKeys(prev => { const n = new Set(prev); n.delete(key); return n }); load() }
+
+  const saveTransRow = async (key) => {
+    const r = transRows.find(r => r._key === key)
+    if (!r) return
+    sSv(true)
+    if (r._isNew) {
+      await sbPost("transportation_claims", { employee_id: user.id, claim_date: r.claim_date, route: r.route || null, round_trip: r.round_trip, amount: parseFloat(r.amount), note: r.note || null }, tk)
+    } else {
+      await sbPatch(`transportation_claims?id=eq.${r.id}`, { claim_date: r.claim_date, route: r.route || null, round_trip: r.round_trip, amount: parseFloat(r.amount), note: r.note || null }, tk)
+    }
+    await load(); sSv(false)
+  }
+
+  // ==================== 签单提成（逐行保存） ====================
   const updateComm = (key, field, value) => {
     setCommRows(prev => prev.map(r => {
       if (r._key !== key) return r
@@ -194,25 +207,18 @@ export default function AttendanceList({ user, t, tk }) {
       return next
     }))
   }
-  const toggleEdit = (key) => setEditingKeys(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
-  const addTransRows = () => setTransRows(prev => [...prev, ...Array.from({ length: 2 }, mkTrans)])
   const addCommRows = () => setCommRows(prev => [...prev, ...Array.from({ length: 2 }, mkComm)])
-  const removeTrans = (key) => setTransRows(prev => prev.filter(r => r._key !== key))
   const removeComm = (key) => setCommRows(prev => prev.filter(r => r._key !== key))
-  const delTrans = async (id, key) => { if (!confirm("确定删除？")) return; await sbDel(`transportation_claims?id=eq.${id}`, tk); setTransRows(prev => prev.filter(r => r._key !== key)) }
-  const delComm = async (id, key) => { if (!confirm("确定删除？")) return; await sbDel(`commission_entries?id=eq.${id}`, tk); setCommRows(prev => prev.filter(r => r._key !== key)) }
+  const delComm = async (id) => { if (!confirm("确定删除？")) return; await sbDel(`commission_entries?id=eq.${id}`, tk); await load() }
 
-  const saveExtra = async () => {
+  const saveCommRow = async (key) => {
+    const r = commRows.find(r => r._key === key)
+    if (!r) return
     sSv(true)
-    const newTr = transRows.filter(r => r._isNew && r.claim_date && parseFloat(r.amount) > 0)
-    const dirtyTr = transRows.filter(r => !r._isNew && r._dirty)
-    for (const r of newTr) await sbPost("transportation_claims", { employee_id: user.id, claim_date: r.claim_date, route: r.route || null, round_trip: r.round_trip, amount: parseFloat(r.amount), note: r.note || null }, tk)
-    for (const r of dirtyTr) await sbPatch(`transportation_claims?id=eq.${r.id}`, { claim_date: r.claim_date, route: r.route || null, round_trip: r.round_trip, amount: parseFloat(r.amount), note: r.note || null }, tk)
-    if (user.has_commission) {
-      const newCm = commRows.filter(r => r._isNew && r.entry_date && r.student_name && parseFloat(r.tuition_amount) > 0)
-      const dirtyCm = commRows.filter(r => !r._isNew && r._dirty)
-      for (const r of newCm) await sbPost("commission_entries", { employee_id: user.id, entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
-      for (const r of dirtyCm) await sbPatch(`commission_entries?id=eq.${r.id}`, { entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
+    if (r._isNew) {
+      await sbPost("commission_entries", { employee_id: user.id, entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
+    } else {
+      await sbPatch(`commission_entries?id=eq.${r.id}`, { entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
     }
     await load(); sSv(false)
   }
@@ -223,7 +229,6 @@ export default function AttendanceList({ user, t, tk }) {
   const wds = Object.values(recs).filter((r) => r.clock_in).length
   const totalTrans = transRows.filter(r => !r._isNew).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
   const totalComm = commRows.filter(r => !r._isNew).reduce((s, r) => s + (r.commission_amount || 0), 0)
-  const hasExtraChanges = transRows.some(r => r._dirty || (r._isNew && r.claim_date && parseFloat(r.amount) > 0)) || commRows.some(r => r._dirty || (r._isNew && r.entry_date && r.student_name))
 
   const swapApproved = swapReqs.filter(r => r.status === "承認")
   const unusedComp = swapApproved.filter(r => r.swap_type === "休日出勤" && r.compensation_type === "換休" && !r.swap_date).length
@@ -234,6 +239,7 @@ export default function AttendanceList({ user, t, tk }) {
   const iS = { padding: "5px 6px", borderRadius: 5, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, fontFamily: "monospace", boxSizing: "border-box" }
   const roS = { fontSize: 12, fontFamily: "monospace", color: t.tx, padding: "5px 6px" }
   const fmS = { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box" }
+  const smallBtn = (color, bg) => ({ padding: "3px 8px", borderRadius: 5, border: `1px solid ${color}33`, background: bg || "transparent", color, fontSize: 10, fontWeight: 600, cursor: sv ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 3, opacity: sv ? 0.5 : 1 })
 
   const tI = (ds, f) => (
     <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5}
@@ -249,15 +255,6 @@ export default function AttendanceList({ user, t, tk }) {
     const c = s === "承認" ? t.gn : s === "却下" ? t.rd : t.wn
     return { padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: c, background: `${c}18` }
   }
-
-  const tableActBtns = (r, delFn, removeFn) => r._isNew ? (
-    r.claim_date || r.entry_date ? <button onClick={() => removeFn(r._key)} style={{ background: "none", border: "none", color: t.td, cursor: "pointer", padding: 2 }}><Trash2 size={12} /></button> : null
-  ) : (
-    <div style={{ display: "flex", gap: 3 }}>
-      <button onClick={() => toggleEdit(r._key)} style={{ background: "none", border: `1px solid ${editingKeys.has(r._key) ? t.ac : t.bd}`, borderRadius: 4, color: editingKeys.has(r._key) ? t.ac : t.ts, cursor: "pointer", padding: "2px 4px", display: "flex", alignItems: "center" }}><Pencil size={11} /></button>
-      <button onClick={() => delFn(r.id, r._key)} style={{ background: "none", border: "none", color: t.rd, cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}><Trash2 size={11} /></button>
-    </div>
-  )
 
   // ==================== Admin历史录入组件 ====================
   const HistModeUI = ({ histMode, setHistMode, editId }) => (
@@ -302,7 +299,6 @@ export default function AttendanceList({ user, t, tk }) {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {hasExtraChanges && <button onClick={saveExtra} disabled={sv} style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: t.ac, color: "#fff", fontSize: 11, fontWeight: 600, cursor: sv ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 4 }}><Save size={13} /> {sv ? "保存中..." : "保存"}</button>}
           <button onClick={() => chg(-1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronLeft size={14} /></button>
           <span style={{ fontSize: 14, fontWeight: 600, color: t.tx, minWidth: 100, textAlign: "center" }}>{y}年{m}月</span>
           <button onClick={() => chg(1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronRight size={14} /></button>
@@ -439,7 +435,7 @@ export default function AttendanceList({ user, t, tk }) {
               <HistEmpSelect histMode={leaveHistMode} />
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
-                <select value={leaveFm.leave_type} onChange={(e) => setLeaveFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>{LEAVE_TYPES.map((l) => <option key={l.v} value={l.v}>{l.i}</option>)}</select>
+                <select value={leaveFm.leave_type} onChange={(e) => setLeaveFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>{LEAVE_TYPES.map((l) => <option key={l.v} value={l.v}>{l.l}</option>)}</select>
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{leaveEditId ? "日期" : "选择日期（点击选取，可多选）"}</label>
@@ -588,16 +584,40 @@ export default function AttendanceList({ user, t, tk }) {
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead><tr style={{ background: t.bgH }}>{["日期", "路线", "往返", "金额", "备注", ""].map((h, i) => <th key={i} style={{ padding: "8px 8px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
-            <tbody>{transRows.map(r => { const ed2 = r._isNew || editingKeys.has(r._key); return (
-              <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed2 ? <input type="date" value={r.claim_date} onChange={e => updateTrans(r._key, "claim_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.claim_date}</span>}</td>
-                <td style={{ padding: "6px 8px" }}>{ed2 ? <input type="text" value={r.route || ""} onChange={e => updateTrans(r._key, "route", e.target.value)} placeholder="新宿→高田馬場" style={{ ...iS, width: "100%", fontFamily: "inherit" }} /> : <span style={{ fontSize: 11, color: t.tx }}>{r.route}</span>}</td>
-                <td style={{ padding: "6px 8px", textAlign: "center", width: 50 }}>{ed2 ? <input type="checkbox" checked={r.round_trip} onChange={e => updateTrans(r._key, "round_trip", e.target.checked)} /> : <span style={{ fontSize: 11, color: t.ts }}>{r.round_trip ? "往返" : "单程"}</span>}</td>
-                <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed2 ? <input type="number" value={r.amount} onChange={e => updateTrans(r._key, "amount", e.target.value)} placeholder="0" style={{ ...iS, width: 80, textAlign: "right" }} /> : <span style={{ fontSize: 12, fontWeight: 600, color: "#8B5CF6" }}>¥{Number(r.amount || 0).toLocaleString()}</span>}</td>
-                <td style={{ padding: "6px 8px" }}>{ed2 ? <input type="text" value={r.note || ""} onChange={e => updateTrans(r._key, "note", e.target.value)} style={{ ...iS, width: "100%", fontFamily: "inherit", fontSize: 10 }} /> : <span style={{ fontSize: 10, color: t.ts }}>{r.note}</span>}</td>
-                <td style={{ padding: "6px 8px", width: 60 }}>{tableActBtns(r, delTrans, removeTrans)}</td>
-              </tr>
-            )})}</tbody>
+            <tbody>{transRows.map(r => {
+              const isEd = r._isNew || editingKeys.has(r._key)
+              const canConfirm = r._isNew && r.claim_date && parseFloat(r.amount) > 0
+              const isEditingExisting = !r._isNew && editingKeys.has(r._key)
+              return (
+                <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="date" value={r.claim_date} onChange={e => updateTrans(r._key, "claim_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.claim_date}</span>}</td>
+                  <td style={{ padding: "6px 8px" }}>{isEd ? <input type="text" value={r.route || ""} onChange={e => updateTrans(r._key, "route", e.target.value)} placeholder="新宿→高田馬場" style={{ ...iS, width: "100%", fontFamily: "inherit" }} /> : <span style={{ fontSize: 11, color: t.tx }}>{r.route}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center", width: 50 }}>{isEd ? <input type="checkbox" checked={r.round_trip} onChange={e => updateTrans(r._key, "round_trip", e.target.checked)} /> : <span style={{ fontSize: 11, color: t.ts }}>{r.round_trip ? "往返" : "单程"}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="number" value={r.amount} onChange={e => updateTrans(r._key, "amount", e.target.value)} placeholder="0" style={{ ...iS, width: 80, textAlign: "right" }} /> : <span style={{ fontSize: 12, fontWeight: 600, color: "#8B5CF6" }}>¥{Number(r.amount || 0).toLocaleString()}</span>}</td>
+                  <td style={{ padding: "6px 8px" }}>{isEd ? <input type="text" value={r.note || ""} onChange={e => updateTrans(r._key, "note", e.target.value)} style={{ ...iS, width: "100%", fontFamily: "inherit", fontSize: 10 }} /> : <span style={{ fontSize: 10, color: t.ts }}>{r.note}</span>}</td>
+                  <td style={{ padding: "6px 8px", width: 80 }}>
+                    {canConfirm && (
+                      <div style={{ display: "flex", gap: 3 }}>
+                        <button onClick={() => saveTransRow(r._key)} disabled={sv} style={smallBtn(t.gn)}><Check size={11} /> 确认</button>
+                        <button onClick={() => removeTrans(r._key)} style={{ background: "none", border: "none", color: t.td, cursor: "pointer", padding: 2 }}><Trash2 size={11} /></button>
+                      </div>
+                    )}
+                    {isEditingExisting && (
+                      <div style={{ display: "flex", gap: 3 }}>
+                        <button onClick={() => saveTransRow(r._key)} disabled={sv} style={smallBtn(t.gn)}><Check size={11} /></button>
+                        <button onClick={() => cancelEdit(r._key)} style={smallBtn(t.ts)}><X size={11} /></button>
+                      </div>
+                    )}
+                    {!r._isNew && !editingKeys.has(r._key) && (
+                      <div style={{ display: "flex", gap: 3 }}>
+                        <button onClick={() => toggleEdit(r._key)} style={{ background: "none", border: `1px solid ${t.bd}`, borderRadius: 4, color: t.ts, cursor: "pointer", padding: "2px 4px", display: "flex", alignItems: "center" }}><Pencil size={11} /></button>
+                        <button onClick={() => delTrans(r.id)} style={{ background: "none", border: "none", color: t.rd, cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}><Trash2 size={11} /></button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}</tbody>
             <tfoot><tr style={{ borderTop: `2px solid ${t.bd}` }}>
               <td style={{ padding: "10px 8px" }}><button onClick={addTransRows} style={{ background: "none", border: `1px dashed ${t.bd}`, borderRadius: 6, padding: "4px 12px", color: t.ac, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><Plus size={12} /> 添加</button></td>
               <td colSpan={2}></td>
@@ -613,17 +633,41 @@ export default function AttendanceList({ user, t, tk }) {
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 550 }}>
             <thead><tr style={{ background: t.bgH }}>{["日期", "第N个", "学生名字", "学费", "提成率(%)", "提成金额", ""].map((h, i) => <th key={i} style={{ padding: "8px 8px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
-            <tbody>{commRows.map(r => { const ed2 = r._isNew || editingKeys.has(r._key); return (
-              <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed2 ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.entry_date}</span>}</td>
-                <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed2 ? <input type="number" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} placeholder="1" style={{ ...iS, width: 45, textAlign: "center" }} /> : <span style={{ fontSize: 12 }}>{r.seq_number}</span>}</td>
-                <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed2 ? <input type="text" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} placeholder="学生姓名" style={{ ...iS, width: 100, fontFamily: "inherit" }} /> : <span style={{ fontSize: 11 }}>{r.student_name}</span>}</td>
-                <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed2 ? <input type="number" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} placeholder="0" style={{ ...iS, width: 90, textAlign: "right" }} /> : <span style={{ fontSize: 12 }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</span>}</td>
-                <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed2 ? <input type="number" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} placeholder="0" style={{ ...iS, width: 55, textAlign: "right" }} /> : <span style={{ fontSize: 12 }}>{r.commission_rate}%</span>}</td>
-                <td style={{ padding: "6px 8px", fontSize: 12, fontWeight: 600, color: "#EC4899", textAlign: "center" }}>{r.commission_amount > 0 ? `¥${r.commission_amount.toLocaleString()}` : ""}</td>
-                <td style={{ padding: "6px 8px", width: 60 }}>{tableActBtns(r, delComm, removeComm)}</td>
-              </tr>
-            )})}</tbody>
+            <tbody>{commRows.map(r => {
+              const isEd = r._isNew || editingKeys.has(r._key)
+              const canConfirm = r._isNew && r.entry_date && r.student_name && parseFloat(r.tuition_amount) > 0
+              const isEditingExisting = !r._isNew && editingKeys.has(r._key)
+              return (
+                <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.entry_date}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="number" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} placeholder="1" style={{ ...iS, width: 45, textAlign: "center" }} /> : <span style={{ fontSize: 12 }}>{r.seq_number}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="text" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} placeholder="学生姓名" style={{ ...iS, width: 100, fontFamily: "inherit" }} /> : <span style={{ fontSize: 11 }}>{r.student_name}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="number" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} placeholder="0" style={{ ...iS, width: 90, textAlign: "right" }} /> : <span style={{ fontSize: 12 }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="number" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} placeholder="0" style={{ ...iS, width: 55, textAlign: "right" }} /> : <span style={{ fontSize: 12 }}>{r.commission_rate}%</span>}</td>
+                  <td style={{ padding: "6px 8px", fontSize: 12, fontWeight: 600, color: "#EC4899", textAlign: "center" }}>{r.commission_amount > 0 ? `¥${r.commission_amount.toLocaleString()}` : ""}</td>
+                  <td style={{ padding: "6px 8px", width: 80 }}>
+                    {canConfirm && (
+                      <div style={{ display: "flex", gap: 3 }}>
+                        <button onClick={() => saveCommRow(r._key)} disabled={sv} style={smallBtn(t.gn)}><Check size={11} /> 确认</button>
+                        <button onClick={() => removeComm(r._key)} style={{ background: "none", border: "none", color: t.td, cursor: "pointer", padding: 2 }}><Trash2 size={11} /></button>
+                      </div>
+                    )}
+                    {isEditingExisting && (
+                      <div style={{ display: "flex", gap: 3 }}>
+                        <button onClick={() => saveCommRow(r._key)} disabled={sv} style={smallBtn(t.gn)}><Check size={11} /></button>
+                        <button onClick={() => cancelEdit(r._key)} style={smallBtn(t.ts)}><X size={11} /></button>
+                      </div>
+                    )}
+                    {!r._isNew && !editingKeys.has(r._key) && (
+                      <div style={{ display: "flex", gap: 3 }}>
+                        <button onClick={() => toggleEdit(r._key)} style={{ background: "none", border: `1px solid ${t.bd}`, borderRadius: 4, color: t.ts, cursor: "pointer", padding: "2px 4px", display: "flex", alignItems: "center" }}><Pencil size={11} /></button>
+                        <button onClick={() => delComm(r.id)} style={{ background: "none", border: "none", color: t.rd, cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}><Trash2 size={11} /></button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}</tbody>
             <tfoot><tr style={{ borderTop: `2px solid ${t.bd}` }}>
               <td colSpan={5} style={{ padding: "10px 8px" }}><button onClick={addCommRows} style={{ background: "none", border: `1px dashed ${t.bd}`, borderRadius: 6, padding: "4px 12px", color: t.ac, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><Plus size={12} /> 添加</button></td>
               <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 700, color: "#EC4899", textAlign: "center" }}>¥{totalComm.toLocaleString()}</td>
