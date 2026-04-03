@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Palmtree, ArrowLeftRight, Clock, PenLine, Train, Receipt, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
 
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge }) {
   const isA = user.role === "admin"
@@ -6,18 +6,11 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
   const isHourly = et === "アルバイト" || et === "外部講師"
 
   const items = [
-    { id: "home", l: "首页", ic: Home, show: true },
-    { id: "att", l: "勤怠一览", ic: ClipboardList, show: !isHourly || isA },
     { id: "leave", l: "假期管理", ic: Palmtree, show: !isHourly || isA },
     { id: "swap", l: "换休管理", ic: ArrowLeftRight, show: !isHourly || isA },
-    { id: "work", l: "工资报表", ic: Clock, show: isHourly || isA },
     { id: "comm", l: "签单录入", ic: PenLine, show: !isHourly || isA },
     { id: "trans", l: "交通费", ic: Train, show: !isHourly || isA },
     { id: "expense", l: "报销", ic: Receipt, show: !isHourly || isA },
-    { id: "empmgr", l: "人事档案", ic: Users, show: true },
-    { id: "approve", l: "承认中心", ic: CheckCircle, show: isA },
-    { id: "cal", l: "休假日历", ic: CalendarDays, show: true },
-    { id: "report", l: "月度报告", ic: BarChart3, show: isA },
   ]
 
   return (
