@@ -3,7 +3,7 @@ import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
-import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X } from "lucide-react"
+import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, ListChecks } from "lucide-react"
 
 const mkTrans = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, claim_date: "", route: "", round_trip: true, amount: "", note: "" })
 const mkComm = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, entry_date: "", seq_number: "", student_name: "", tuition_amount: "", commission_rate: "", commission_amount: 0 })
@@ -282,6 +282,7 @@ export default function AttendanceList({ user, t, tk }) {
   const tabs = [
     { key: "leave", label: "假期申请", icon: CalendarX2, badge: leavePending },
     { key: "swap", label: "换休管理", icon: ArrowLeftRight, badge: swapPending },
+    { key: "summary", label: "报销一览", icon: ListChecks },
     { key: "transport", label: "交通費", icon: Train },
     ...(user.has_commission ? [{ key: "commission", label: "签单提成", icon: Receipt }] : []),
   ]
@@ -579,6 +580,62 @@ export default function AttendanceList({ user, t, tk }) {
         </div>
       )}
 
+      {/* ====== 报销一览 Tab ====== */}
+{tab === "summary" && (
+  <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
+    <div style={{ padding: "16px 20px", borderBottom: `1px solid ${t.bd}` }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: t.tx }}>{y}年{m}月 报销汇总</div>
+      <div style={{ fontSize: 11, color: t.tm, marginTop: 2 }}>{user.name}</div>
+    </div>
+
+    {/* 交通费明细 */}
+    <div style={{ padding: "12px 20px", borderBottom: `1px solid ${t.bl}` }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#8B5CF6", marginBottom: 8 }}>交通費</div>
+      {transRows.filter(r => !r._isNew).length === 0
+        ? <div style={{ fontSize: 11, color: t.td }}>本月无记录</div>
+        : transRows.filter(r => !r._isNew).map(r => (
+          <div key={r._key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
+            <div style={{ display: "flex", gap: 8, color: t.ts }}>
+              <span style={{ fontFamily: "monospace" }}>{r.claim_date}</span>
+              <span>{r.route}</span>
+              <span style={{ color: t.td }}>{r.round_trip ? "往返" : "单程"}</span>
+            </div>
+            <span style={{ fontWeight: 600, color: "#8B5CF6" }}>¥{Number(r.amount || 0).toLocaleString()}</span>
+          </div>
+        ))
+      }
+      <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8, marginTop: 8, borderTop: `1px dashed ${t.bl}`, fontSize: 12, fontWeight: 700, color: "#8B5CF6" }}>小计: ¥{totalTrans.toLocaleString()}</div>
+    </div>
+
+    {/* 签单提成明细 */}
+    {user.has_commission && (
+      <div style={{ padding: "12px 20px", borderBottom: `1px solid ${t.bl}` }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#EC4899", marginBottom: 8 }}>签单提成</div>
+        {commRows.filter(r => !r._isNew).length === 0
+          ? <div style={{ fontSize: 11, color: t.td }}>本月无记录</div>
+          : commRows.filter(r => !r._isNew).map(r => (
+            <div key={r._key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
+              <div style={{ display: "flex", gap: 8, color: t.ts }}>
+                <span style={{ fontFamily: "monospace" }}>{r.entry_date}</span>
+                <span>{r.student_name}</span>
+                <span style={{ color: t.td }}>¥{Number(r.tuition_amount || 0).toLocaleString()} × {r.commission_rate}%</span>
+              </div>
+              <span style={{ fontWeight: 600, color: "#EC4899" }}>¥{r.commission_amount.toLocaleString()}</span>
+            </div>
+          ))
+        }
+        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8, marginTop: 8, borderTop: `1px dashed ${t.bl}`, fontSize: 12, fontWeight: 700, color: "#EC4899" }}>小计: ¥{totalComm.toLocaleString()}</div>
+      </div>
+    )}
+
+    {/* 合计 */}
+    <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <span style={{ fontSize: 14, fontWeight: 700, color: t.tx }}>本月报销合计</span>
+      <span style={{ fontSize: 20, fontWeight: 700, color: t.gn }}>¥{(totalTrans + totalComm).toLocaleString()}</span>
+    </div>
+  </div>
+)}
+      
       {/* ====== 交通費 Tab ====== */}
       {tab === "transport" && (
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
