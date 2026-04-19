@@ -10,6 +10,7 @@ export default function Dashboard({ user, t, tk }) {
   const [todayRec, setTodayRec] = useState(null)
   const [clocking, setClocking] = useState(false)
   const [time, setTime] = useState(new Date())
+  const [pendingProfiles, setPendingProfiles] = useState([])
   const td = todayStr()
 
   useEffect(() => {
@@ -27,10 +28,11 @@ export default function Dashboard({ user, t, tk }) {
       try {
         const from = `${y}-${pad(m)}-01`, to = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`
         if (isA) {
-          const [emps, atts, lr] = await Promise.all([
+          const [emps, atts, lr, pending] = await Promise.all([
             sbGet("employees?is_active=eq.true&select=id", tk),
             sbGet(`attendance_records?work_date=gte.${from}&work_date=lte.${to}&select=employee_id,work_minutes,clock_in`, tk),
             sbGet("leave_requests?status=eq.申請中&select=id", tk),
+            sbGet("employees?is_active=eq.true&or=(contract_start_date.is.null,my_number.is.null)&select=id,name,employment_type,hire_date,contract_start_date,my_number,company_id&order=hire_date.desc", tk),
           ])
           setStats({
             empCount: emps.length,
@@ -38,6 +40,7 @@ export default function Dashboard({ user, t, tk }) {
             totalOT: (atts.reduce((s, a) => s + Math.max(Number(a.work_minutes || 0) - 480, 0), 0) / 60).toFixed(1),
             pending: lr.length,
           })
+          setPendingProfiles(pending || [])
         } else {
           const [atts, lb, lr] = await Promise.all([
             sbGet(`attendance_records?employee_id=eq.${user.id}&work_date=gte.${from}&work_date=lte.${to}&select=work_minutes,clock_in,note`, tk),
@@ -119,18 +122,51 @@ export default function Dashboard({ user, t, tk }) {
     </div>
   )
 
-  if (isA) return (
-    <div>
-      <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>管理面板</h2>
-      <TimeDisplay />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
-        <Card label="员工数" value={`${stats.empCount}人`} />
-        <Card label="本月出勤" value={`${stats.todayWorkers}人`} color={t.gn} />
-        <Card label="待审批" value={`${stats.pending}件`} color={stats.pending > 0 ? t.wn : t.gn} />
-        <Card label="全员加班合计" value={`${stats.totalOT}h`} color={parseFloat(stats.totalOT) > 100 ? t.rd : t.wn} />
+  if (isA) {
+    const COMPS = { 1: "世家学舍", 2: "紫陽花教育" }
+    return (
+      <div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>管理面板</h2>
+        <TimeDisplay />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
+          <Card label="员工数" value={`${stats.empCount}人`} />
+          <Card label="本月出勤" value={`${stats.todayWorkers}人`} color={t.gn} />
+          <Card label="待审批" value={`${stats.pending}件`} color={stats.pending > 0 ? t.wn : t.gn} />
+          <Card label="待完善档案" value={`${pendingProfiles.length}人`} color={pendingProfiles.length > 0 ? t.wn : t.gn} />
+          <Card label="全员加班合计" value={`${stats.totalOT}h`} color={parseFloat(stats.totalOT) > 100 ? t.rd : t.wn} />
+        </div>
+        {pendingProfiles.length > 0 && (
+          <div style={{ background: t.bgC, borderRadius: 12, border: `1px solid ${t.bd}`, padding: "16px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: t.tx }}>新入职 · 待完善档案</div>
+                <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>自助注册后，这些员工仍缺少合同日期或 My Number。请在"人事档案"中补齐。</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {pendingProfiles.map((p) => {
+                const needs = []
+                if (!p.contract_start_date) needs.push("合同日期")
+                if (!p.my_number) needs.push("My Number")
+                return (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, border: `1px solid ${t.bl}`, background: `${t.wn}05` }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 6, background: t.wn }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: t.tx, fontWeight: 600 }}>{p.name}</div>
+                      <div style={{ fontSize: 10, color: t.tm, marginTop: 1 }}>
+                        {p.employment_type} · {COMPS[p.company_id] || "—"} · 入职 {p.hire_date || "—"}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10, color: t.wn, fontWeight: 600, whiteSpace: "nowrap" }}>缺：{needs.join("、")}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  )
+    )
+  }
 
   const pct = stats.targetH > 0 ? Math.min((stats.totalW / stats.targetH) * 100, 150) : 0
   const barColor = pct >= 95 ? t.gn : pct >= 80 ? t.wn : t.rd
