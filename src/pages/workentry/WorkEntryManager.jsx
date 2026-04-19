@@ -310,21 +310,29 @@ export default function WorkEntryManager({ user, t, tk }) {
           <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto", marginBottom: 16 }}>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bd}` }}><span style={{ fontSize: 13, fontWeight: 600, color: t.tx }}>签单提成</span></div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 550 }}>
-              <thead><tr style={{ background: t.bgH }}>{["日期", "第N个", "学生名字", "学费", "提成率(%)", "提成金额", ""].map((h, i) => <th key={i} style={{ padding: "8px 8px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: t.bgH }}>{[
+                { l: "日期", a: "left", w: 130 },
+                { l: "第N个", a: "center", w: 60 },
+                { l: "学生名字", a: "left" },
+                { l: "学费", a: "right", w: 110 },
+                { l: "提成率", a: "right", w: 80 },
+                { l: "提成金额", a: "right", w: 110 },
+                { l: "", a: "right", w: 70 },
+              ].map((h, i) => <th key={i} style={{ padding: "10px 14px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: h.a, borderBottom: `1px solid ${t.bd}`, width: h.w, letterSpacing: 0.3 }}>{h.l}</th>)}</tr></thead>
               <tbody>{commRows.map(r => { const ed = r._isNew || editingKeys.has(r._key); return (
                 <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.entry_date}</span>}</td>
-                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed ? <input type="number" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} placeholder="1" style={{ ...iS, width: 45, textAlign: "center" }} /> : <span>{r.seq_number}</span>}</td>
-                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed ? <input type="text" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} placeholder="学生姓名" style={{ ...iS, width: 100, fontFamily: "inherit" }} /> : <span style={{ fontSize: 11 }}>{r.student_name}</span>}</td>
-                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed ? <input type="number" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} placeholder="0" style={{ ...iS, width: 90, textAlign: "right" }} /> : <span>¥{Number(r.tuition_amount || 0).toLocaleString()}</span>}</td>
-                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{ed ? <input type="number" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} placeholder="0" style={{ ...iS, width: 55, textAlign: "right" }} /> : <span>{r.commission_rate}%</span>}</td>
-                  <td style={{ padding: "6px 8px", fontSize: 12, fontWeight: 600, color: "#EC4899", textAlign: "center" }}>{r.commission_amount > 0 ? `¥${r.commission_amount.toLocaleString()}` : ""}</td>
-                  <td style={{ padding: "6px 8px", width: 60 }}>{actBtns(r, true)}</td>
+                  <td style={{ padding: "6px 14px", textAlign: "left" }}>{ed ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.entry_date}</span>}</td>
+                  <td style={{ padding: "6px 14px", textAlign: "center" }}>{ed ? <input type="number" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} placeholder="1" style={{ ...iS, width: 45, textAlign: "center" }} /> : <span>{r.seq_number}</span>}</td>
+                  <td style={{ padding: "6px 14px", textAlign: "left" }}>{ed ? <input type="text" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} placeholder="学生姓名" style={{ ...iS, width: "100%", maxWidth: 180, fontFamily: "inherit" }} /> : <span style={{ fontSize: 12, fontWeight: 500, color: t.tx }}>{r.student_name}</span>}</td>
+                  <td style={{ padding: "6px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{ed ? <input type="number" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} placeholder="0" style={{ ...iS, width: 100, textAlign: "right" }} /> : <span>¥{Number(r.tuition_amount || 0).toLocaleString()}</span>}</td>
+                  <td style={{ padding: "6px 14px", textAlign: "right", color: t.tm, fontVariantNumeric: "tabular-nums" }}>{ed ? <input type="number" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} placeholder="0" style={{ ...iS, width: 65, textAlign: "right" }} /> : <span>{r.commission_rate}%</span>}</td>
+                  <td style={{ padding: "6px 14px", fontSize: 13, fontWeight: 600, color: "#EC4899", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.commission_amount > 0 ? `¥${r.commission_amount.toLocaleString()}` : ""}</td>
+                  <td style={{ padding: "6px 14px", textAlign: "right" }}>{actBtns(r, true)}</td>
                 </tr>
               )})}</tbody>
               <tfoot><tr style={{ borderTop: `2px solid ${t.bd}` }}>
-                <td colSpan={5} style={{ padding: "10px 8px" }}><button onClick={addCommRows} style={{ background: "none", border: `1px dashed ${t.bd}`, borderRadius: 6, padding: "4px 12px", color: t.ac, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><Plus size={12} /> 添加</button></td>
-                <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 700, color: "#EC4899", textAlign: "center" }}>¥{totalComm.toLocaleString()}</td>
+                <td colSpan={5} style={{ padding: "10px 14px" }}><button onClick={addCommRows} style={{ background: "none", border: `1px dashed ${t.bd}`, borderRadius: 6, padding: "4px 12px", color: t.ac, fontSize: 11, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}><Plus size={12} /> 添加</button></td>
+                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, color: "#EC4899", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>¥{totalComm.toLocaleString()}</td>
                 <td></td>
               </tr></tfoot>
             </table>
