@@ -383,11 +383,11 @@ export default function AttendanceList({ user, t, tk }) {
       {/* ====== 勤怠表 ====== */}
       {ld ? <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div> :
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto", maxHeight: "55vh", marginBottom: 20 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: ed ? 700 : 600, tableLayout: "fixed" }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", width: ed ? 604 : 784 }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 2 }}><tr style={{ background: t.bgH }}>
               {(ed
-                ? [["日期",50],["星期",40],["出勤",70],["休息",70],["休息结束",70],["退勤",70],["备注",undefined]]
-                : [["日期",50],["星期",40],["出勤",75],["休息",75],["休息结束",75],["退勤",75],["劳动时长",75],["固定外加班",75],["备注",undefined]]
+                ? [["日期",56],["星期",48],["出勤",90],["休息",90],["休息结束",90],["退勤",90],["备注",140]]
+                : [["日期",56],["星期",48],["出勤",90],["休息",90],["休息结束",90],["退勤",90],["劳动时长",90],["固定外加班",100],["备注",130]]
               ).map(([h, w], i) => (
                 <th key={i} style={{ padding: "8px 6px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}`, whiteSpace: "nowrap", width: w }}>{h}</th>
               ))}
