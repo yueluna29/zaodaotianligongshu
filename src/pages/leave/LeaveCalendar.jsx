@@ -49,7 +49,10 @@ export default function LeaveCalendar({ t, tk }) {
       sE(e || [])
       sR(r || [])
       const hm = {}
-      ;(h || []).forEach((hd) => { hm[hd.holiday_date] = hd.name })
+      ;(h || []).forEach((hd) => {
+        if (!hm[hd.holiday_date]) hm[hd.holiday_date] = []
+        hm[hd.holiday_date].push({ name: hd.name, country: hd.country || "JP" })
+      })
       sH(hm)
       const sm = {}
       ;(sc || []).forEach((s) => {
@@ -83,13 +86,17 @@ export default function LeaveCalendar({ t, tk }) {
     const sched = scheds[emp.id]?.[wd]
     const isDayOff = emp.days_off && emp.days_off.includes(wd)
     const we = wd === 0 || wd === 6
-    const isH = !!holidays[ds]
+    const isH = (holidays[ds] || []).length > 0
     if (lvReq) return { kind: "leave", lvReq }
     if (swap && swap.swap_type === "休日出勤") return { kind: "swap-work", swap }
     if (we || isH || isDayOff) return { kind: "off" }
     if (sched) return { kind: "work", sched }
     return { kind: "unset" }
   }
+
+  // 节日颜色/标签
+  const holidayColor = (country) => country === "CN" ? t.wn : t.rd
+  const countryBadge = (country) => country === "CN" ? "中" : "日"
 
   // 导航
   const shift = (dir) => {
@@ -114,7 +121,7 @@ export default function LeaveCalendar({ t, tk }) {
   const DayView = () => {
     const d = range.days[0]
     const ds = toDateStr(d)
-    const isH = !!holidays[ds]
+    const hList = holidays[ds] || []
     const HOURS = Array.from({ length: 17 }, (_, i) => i + 7) // 7-23
     const HOUR_W = 48
     const NAME_W = 160
@@ -131,7 +138,15 @@ export default function LeaveCalendar({ t, tk }) {
           <StatCard t={t} label="出勤" value={working.length} total={rows.length} color={t.ac} />
           <StatCard t={t} label="请假" value={onLeave.length} color={t.rd} />
           <StatCard t={t} label="休息" value={resting} color={t.tm} />
-          {isH && <div style={{ padding: "12px 14px", borderRadius: 10, background: `${t.rd}10`, border: `1px solid ${t.rd}30` }}><div style={{ fontSize: 10, color: t.rd, fontWeight: 600 }}>祝日</div><div style={{ fontSize: 12, color: t.rd, marginTop: 2 }}>{holidays[ds]}</div></div>}
+          {hList.map((h, i) => {
+            const c = holidayColor(h.country)
+            return (
+              <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: `${c}10`, border: `1px solid ${c}30` }}>
+                <div style={{ fontSize: 10, color: c, fontWeight: 600 }}>祝日 · {h.country === "CN" ? "中国" : "日本"}</div>
+                <div style={{ fontSize: 13, color: c, marginTop: 2, fontWeight: 500 }}>{h.name}</div>
+              </div>
+            )
+          })}
         </div>
 
         {/* 时间轴 */}
@@ -213,13 +228,18 @@ export default function LeaveCalendar({ t, tk }) {
               {range.days.map((d, i) => {
                 const ds = toDateStr(d)
                 const we = d.getDay() === 0 || d.getDay() === 6
-                const isH = !!holidays[ds]
+                const hList = holidays[ds] || []
+                const isH = hList.length > 0
                 const isToday = ds === todayDs
                 return (
                   <th key={i} style={{ padding: "8px 4px", textAlign: "center", fontWeight: 500, borderBottom: `1px solid ${t.bd}`, background: isToday ? `${t.ac}10` : (isH ? `${t.rd}08` : we ? t.we : "transparent") }}>
                     <div style={{ fontSize: 9, color: (we || isH) ? t.rd : t.tm }}>{WEEKDAYS[d.getDay()]}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: isToday ? t.ac : (we || isH) ? t.rd : t.tx, marginTop: 2 }}>{d.getDate()}</div>
-                    {isH && <div style={{ fontSize: 8, color: t.rd, marginTop: 2 }}>{holidays[ds]}</div>}
+                    {hList.map((h, j) => (
+                      <div key={j} style={{ fontSize: 8, color: holidayColor(h.country), marginTop: 2, fontWeight: 600 }}>
+                        {h.name}<span style={{ opacity: 0.6 }}>·{countryBadge(h.country)}</span>
+                      </div>
+                    ))}
                   </th>
                 )
               })}
@@ -282,7 +302,8 @@ export default function LeaveCalendar({ t, tk }) {
           {range.days.map((d) => {
             const ds = toDateStr(d)
             const we = d.getDay() === 0 || d.getDay() === 6
-            const isH = !!holidays[ds]
+            const hList = holidays[ds] || []
+            const isH = hList.length > 0
             const isToday = ds === todayDs
             const rows = emps.map((emp) => ({ emp, s: getStatus(emp, d) }))
             const working = rows.filter((r) => r.s.kind === "work")
@@ -290,11 +311,18 @@ export default function LeaveCalendar({ t, tk }) {
             const leaves = rows.filter((r) => r.s.kind === "leave")
 
             return (
-              <div key={ds} onClick={() => jumpToDay(d)} style={{ minHeight: 110, borderRadius: 8, border: `1px solid ${isToday ? t.ac : t.bl}`, padding: "5px 6px", background: isToday ? `${t.ac}08` : isH ? `${t.rd}08` : we ? t.we : "transparent", cursor: "pointer", transition: "background 0.15s" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <div key={ds} onClick={() => jumpToDay(d)} style={{ minHeight: 120, borderRadius: 8, border: `1px solid ${isToday ? t.ac : t.bl}`, padding: "5px 6px", background: isToday ? `${t.ac}08` : isH ? `${t.rd}06` : we ? t.we : "transparent", cursor: "pointer", transition: "background 0.15s" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: isToday ? t.ac : (we || isH) ? t.rd : t.tx }}>{d.getDate()}</span>
-                  {isH && <span style={{ fontSize: 8, color: t.rd }} title={holidays[ds]}>●</span>}
                 </div>
+                {hList.map((h, i) => {
+                  const c = holidayColor(h.country)
+                  return (
+                    <div key={`h-${i}`} style={{ fontSize: 9, fontWeight: 600, color: c, marginBottom: 3, padding: "1px 4px", borderRadius: 3, background: `${c}12`, borderLeft: `2px solid ${c}`, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${h.name} (${h.country === "CN" ? "中国" : "日本"})`}>
+                      {h.name}<span style={{ opacity: 0.55, marginLeft: 2 }}>·{countryBadge(h.country)}</span>
+                    </div>
+                  )
+                })}
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                   {working.length > 0 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 5px", borderRadius: 3, background: `${t.ac}15`, color: t.ac, fontWeight: 600 }}>
@@ -352,7 +380,8 @@ export default function LeaveCalendar({ t, tk }) {
           <Legend t={t} color={t.ac} label="出勤" />
           <Legend t={t} color="#8B5CF6" label="休日出勤" />
           {LEAVE_TYPES.slice(0, 4).map((lt) => <Legend key={lt.v} color={lt.c} label={lt.l} t={t} />)}
-          <Legend t={t} color={t.rd} label="祝日" round />
+          <Legend t={t} color={t.rd} label="日本祝日" round />
+          <Legend t={t} color={t.wn} label="中国节日" round />
         </div>
       </div>
 
