@@ -122,12 +122,14 @@ export default function Dashboard({ user, t, tk }) {
     </div>
   )
 
+  const canClock = user.employment_type === "正社員" || user.employment_type === "契約社員"
+
   if (isA) {
     const COMPS = { 1: "世家学舍", 2: "紫陽花教育" }
     return (
       <div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>管理面板</h2>
-        <TimeDisplay />
+        {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
           <Card label="员工数" value={`${stats.empCount}人`} />
           <Card label="本月出勤" value={`${stats.todayWorkers}人`} color={t.gn} />
@@ -170,7 +172,6 @@ export default function Dashboard({ user, t, tk }) {
 
   const pct = stats.targetH > 0 ? Math.min((stats.totalW / stats.targetH) * 100, 150) : 0
   const barColor = pct >= 95 ? t.gn : pct >= 80 ? t.wn : t.rd
-  const canClock = user.employment_type === "正社員" || user.employment_type === "契約社員"
 
   return (
     <div>
