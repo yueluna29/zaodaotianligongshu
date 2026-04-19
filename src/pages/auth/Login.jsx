@@ -1,20 +1,30 @@
 import { useState } from "react"
 import { sbAuth, sbGet } from "../../api/supabase"
 
+const INVITE_CODE = "wsdst"
+const ID_DOMAIN = "juku.local"
+const ID_PATTERN = /^[a-zA-Z0-9]{4,20}$/
+
 export default function Login({ onAuth, theme, t, toggleTheme }) {
   const [mode, setMode] = useState("login")
-  const [email, setEmail] = useState("")
+  const [loginId, setLoginId] = useState("")
   const [pass, setPass] = useState("")
   const [name, setName] = useState("")
+  const [realEmail, setRealEmail] = useState("")
+  const [invite, setInvite] = useState("")
   const [ld, setLd] = useState(false)
   const [err, setErr] = useState("")
   const [msg, setMsg] = useState("")
 
+  const fakeEmail = (id) => `${id.toLowerCase()}@${ID_DOMAIN}`
+
   const login = async () => {
+    const id = loginId.trim().toLowerCase()
+    if (!id) { setErr("请输入登录ID"); return }
     setLd(true); setErr("")
     try {
-      const r = await sbAuth("token?grant_type=password", { email, password: pass })
-      if (r.error || !r.access_token) { setErr(r.error_description || r.error?.message || r.error || "登录失败"); setLd(false); return }
+      const r = await sbAuth("token?grant_type=password", { email: fakeEmail(id), password: pass })
+      if (r.error || !r.access_token) { setErr("登录ID或密码错误"); setLd(false); return }
       const e = await sbGet(`employees?auth_user_id=eq.${r.user?.id}&select=*`, r.access_token)
       if (!e?.length) { setErr("未找到社员信息"); setLd(false); return }
       onAuth({ ...e[0], token: r.access_token })
@@ -23,17 +33,33 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
   }
 
   const reg = async () => {
+    const id = loginId.trim().toLowerCase()
     if (!name.trim()) { setErr("请输入姓名"); return }
+    if (!ID_PATTERN.test(id)) { setErr("登录ID只能是4-20位英文字母或数字"); return }
+    if (pass.length < 6) { setErr("密码至少6位"); return }
+    if (invite.trim() !== INVITE_CODE) { setErr("注册码错误"); return }
     setLd(true); setErr("")
     try {
-      const r = await sbAuth("signup", { email, password: pass, data: { name: name.trim() } })
-      if (r.error || r.error_description) { setErr(r.error_description || r.error?.message || r.error || "注册失败"); setLd(false); return }
+      const r = await sbAuth("signup", {
+        email: fakeEmail(id),
+        password: pass,
+        data: {
+          name: name.trim(),
+          login_id: id,
+          real_email: realEmail.trim() || null,
+        },
+      })
+      if (r.error || r.error_description) {
+        const raw = r.error_description || r.error?.message || r.error || "注册失败"
+        const hint = /already registered|exists|duplicate/i.test(String(raw)) ? "该登录ID已被使用，请换一个" : raw
+        setErr(hint); setLd(false); return
+      }
       if (r.access_token) {
         await new Promise((r) => setTimeout(r, 1500))
         const e = await sbGet(`employees?auth_user_id=eq.${r.user?.id}&select=*`, r.access_token)
         if (e?.length) onAuth({ ...e[0], token: r.access_token })
         else { setMsg("注册完成！请登录"); setMode("login") }
-      } else { setMsg("确认邮件已发送"); setMode("login") }
+      } else { setMsg("注册完成！请登录"); setMode("login") }
     } catch (e) { setErr(e.message) }
     setLd(false)
   }
@@ -53,8 +79,10 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
         {msg && <div style={{ background: `${t.gn}12`, border: `1px solid ${t.gn}30`, borderRadius: 8, padding: "8px 14px", marginBottom: 12, fontSize: 12, color: t.gn }}>{msg}</div>}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "register" && <input placeholder="姓名" value={name} onChange={(e) => setName(e.target.value)} style={iS} />}
-          <input placeholder="邮箱" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={iS} />
+          <input placeholder={mode === "register" ? "登录ID (4-20位英文/数字)" : "登录ID"} value={loginId} onChange={(e) => setLoginId(e.target.value)} autoCapitalize="none" autoCorrect="off" style={iS} />
           <input placeholder="密码" type="password" value={pass} onChange={(e) => setPass(e.target.value)} style={iS} onKeyDown={(e) => e.key === "Enter" && (mode === "login" ? login() : reg())} />
+          {mode === "register" && <input placeholder="邮箱 (选填，用于找回密码)" type="email" value={realEmail} onChange={(e) => setRealEmail(e.target.value)} style={iS} />}
+          {mode === "register" && <input placeholder="注册码" value={invite} onChange={(e) => setInvite(e.target.value)} style={iS} />}
           <button onClick={mode === "login" ? login : reg} disabled={ld} style={{ padding: 13, borderRadius: 10, border: "none", background: `linear-gradient(135deg,${t.ac},${t.ah})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: ld ? "wait" : "pointer", opacity: ld ? 0.7 : 1 }}>{ld ? "..." : mode === "login" ? "登录" : "注册"}</button>
         </div>
         <div style={{ textAlign: "center", marginTop: 16 }}>
