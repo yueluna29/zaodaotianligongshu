@@ -89,23 +89,23 @@ export default function Dashboard({ user, t, tk }) {
     </button>
   )
 
-  const ClockSection = ({ size }) => (
-    <div style={{ background: t.bgC, borderRadius: 16, padding: "24px 20px", border: `1px solid ${t.bd}`, marginBottom: 16, textAlign: "center", display: "none" /* 打卡按钮隐藏待命 */ }}>
+  const ClockSection = ({ size = 96 }) => (
+    <div style={{ background: t.bgC, borderRadius: 16, padding: "24px 20px", border: `1px solid ${t.bd}`, marginBottom: 16, textAlign: "center" }}>
       <div style={{ fontSize: 12, color: t.tm, marginBottom: 4 }}>{time.getFullYear()}年{m}月{time.getDate()}日（{WEEKDAYS[time.getDay()]}）</div>
       <div style={{ fontSize: 42, fontWeight: 200, color: t.tx, fontFamily: "monospace", marginBottom: 16 }}>{pad(time.getHours())}:{pad(time.getMinutes())}:{pad(time.getSeconds())}</div>
       {ci && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 16, fontSize: 12, color: t.ts, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 16, fontSize: 12, color: t.ts, marginBottom: 16, flexWrap: "wrap" }}>
           <span>出勤 {ci?.slice(0, 5)}</span>
           {bs && <span>休息 {bs?.slice(0, 5)}{be ? `~${be?.slice(0, 5)}` : " 中..."}</span>}
           {co && <span>退勤 {co?.slice(0, 5)}</span>}
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
         {!ci ? <ClockBtn onClick={() => clock("in")} icon="☀️" label="出勤" bg={`linear-gradient(135deg,${t.ac},${t.ah})`} size={size} /> :
           co ? <div><span style={{ fontSize: 28 }}>✅</span><div style={{ fontSize: 13, color: t.gn, marginTop: 4 }}>辛苦了</div></div> : <>
-            {!onBreak && !be && <ClockBtn onClick={() => clock("bs")} icon="☕" label="休息" bg="transparent" border={`3px solid ${t.wn}`} color={t.wn} size={size - 20} />}
-            {onBreak && <ClockBtn onClick={() => clock("be")} icon="💪" label="回来" bg="transparent" border={`3px solid ${t.gn}`} color={t.gn} size={size - 20} />}
-            {!onBreak && <ClockBtn onClick={() => clock("out")} icon="🌙" label="退勤" bg="linear-gradient(135deg,#7C3AED,#6D28D9)" size={size - 20} />}
+            {!onBreak && !be && <ClockBtn onClick={() => clock("bs")} icon="☕" label="开始休息" bg="transparent" border={`3px solid ${t.wn}`} color={t.wn} size={size - 8} />}
+            {onBreak && <ClockBtn onClick={() => clock("be")} icon="💪" label="休息结束" bg="transparent" border={`3px solid ${t.gn}`} color={t.gn} size={size - 8} />}
+            {!onBreak && <ClockBtn onClick={() => clock("out")} icon="🌙" label="退勤" bg="linear-gradient(135deg,#7C3AED,#6D28D9)" size={size - 8} />}
           </>}
       </div>
     </div>
@@ -134,11 +134,12 @@ export default function Dashboard({ user, t, tk }) {
 
   const pct = stats.targetH > 0 ? Math.min((stats.totalW / stats.targetH) * 100, 150) : 0
   const barColor = pct >= 95 ? t.gn : pct >= 80 ? t.wn : t.rd
+  const canClock = user.employment_type === "正社員" || user.employment_type === "契約社員"
 
   return (
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>首页</h2>
-      <TimeDisplay />
+      {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
         <Card label="本月出勤" value={`${stats.wd}天`} />
         <Card label="本月工时" value={fmtMinutes(stats.totalW)} color={t.gn} />
