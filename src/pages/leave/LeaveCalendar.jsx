@@ -1,26 +1,44 @@
 import { useState, useEffect, useMemo } from "react"
 import { sbGet } from "../../api/supabase"
-import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad } from "../../config/constants"
+import { LEAVE_TYPES, WEEKDAYS, daysInMonth, pad } from "../../config/constants"
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 
+const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const startOfWeek = (d) => { const r = new Date(d); r.setDate(r.getDate() - r.getDay()); r.setHours(0, 0, 0, 0); return r }
+const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+const parseTime = (s) => { if (!s) return 0; const [h, m] = s.split(":").map(Number); return h + m / 60 }
+
 export default function LeaveCalendar({ t, tk }) {
-  const now = new Date()
-  const [y, sY] = useState(now.getFullYear())
-  const [m, sM] = useState(now.getMonth() + 1)
+  const [mode, sMode] = useState("day") // "day" | "week" | "month"
+  const [cursor, sCursor] = useState(new Date())
   const [emps, sE] = useState([])
   const [reqs, sR] = useState([])
   const [holidays, sH] = useState({})
   const [scheds, setScheds] = useState({})
   const [swaps, setSwaps] = useState([])
   const [ld, sLd] = useState(true)
-  const [mode, sMode] = useState("table")
-  const days = daysInMonth(y, m)
+
+  // 计算当前视图的日期范围
+  const range = useMemo(() => {
+    if (mode === "day") {
+      return { from: toDateStr(cursor), to: toDateStr(cursor), days: [new Date(cursor)] }
+    }
+    if (mode === "week") {
+      const s = startOfWeek(cursor)
+      const ds = Array.from({ length: 7 }, (_, i) => addDays(s, i))
+      return { from: toDateStr(ds[0]), to: toDateStr(ds[6]), days: ds }
+    }
+    // month
+    const y = cursor.getFullYear(), m = cursor.getMonth() + 1
+    const dim = daysInMonth(y, m)
+    const ds = Array.from({ length: dim }, (_, i) => new Date(y, m - 1, i + 1))
+    return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(dim)}`, days: ds }
+  }, [mode, cursor])
 
   useEffect(() => {
     (async () => {
       sLd(true)
-      const from = `${y}-${pad(m)}-01`
-      const to = `${y}-${pad(m)}-${pad(days)}`
+      const { from, to } = range
       const [e, r, h, sc, sw] = await Promise.all([
         sbGet("employees?is_active=eq.true&order=name", tk),
         sbGet(`leave_requests?status=eq.承認&leave_date=gte.${from}&leave_date=lte.${to}&select=*`, tk),
@@ -33,7 +51,6 @@ export default function LeaveCalendar({ t, tk }) {
       const hm = {}
       ;(h || []).forEach((hd) => { hm[hd.holiday_date] = hd.name })
       sH(hm)
-      // 排班按 employee_id -> day_of_week 索引
       const sm = {}
       ;(sc || []).forEach((s) => {
         if (!sm[s.employee_id]) sm[s.employee_id] = {}
@@ -43,14 +60,7 @@ export default function LeaveCalendar({ t, tk }) {
       setSwaps(sw || [])
       sLd(false)
     })()
-  }, [y, m, days, tk])
-
-  const chg = (d) => {
-    let nm = m + d, ny = y
-    if (nm > 12) { nm = 1; ny++ }
-    else if (nm < 1) { nm = 12; ny-- }
-    sY(ny); sM(nm)
-  }
+  }, [range, tk])
 
   const rm = useMemo(() => {
     const mp = {}
@@ -64,108 +74,202 @@ export default function LeaveCalendar({ t, tk }) {
     return mp
   }, [swaps])
 
-  if (ld) return <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
+  // 某员工某天的状态
+  const getStatus = (emp, date) => {
+    const ds = toDateStr(date)
+    const wd = date.getDay()
+    const lvReq = rm[`${emp.id}-${ds}`]
+    const swap = swapMap[`${emp.id}-${ds}`]
+    const sched = scheds[emp.id]?.[wd]
+    const isDayOff = emp.days_off && emp.days_off.includes(wd)
+    const we = wd === 0 || wd === 6
+    const isH = !!holidays[ds]
+    if (lvReq) return { kind: "leave", lvReq }
+    if (swap && swap.swap_type === "休日出勤") return { kind: "swap-work", swap }
+    if (we || isH || isDayOff) return { kind: "off" }
+    if (sched) return { kind: "work", sched }
+    return { kind: "unset" }
+  }
 
-  // ========== 表格版 ==========
-  const TableView = () => (
-    <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, minWidth: 700 }}>
-        <thead>
-          <tr style={{ background: t.bgH }}>
-            <th style={{ padding: "6px 10px", color: t.tm, fontWeight: 500, textAlign: "left", position: "sticky", left: 0, background: t.bgS, zIndex: 1, borderBottom: `1px solid ${t.bd}`, minWidth: 80 }}>社员</th>
-            {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
-              const ds = `${y}-${pad(m)}-${pad(d)}`
-              const we = isWeekend(y, m, d)
-              const isH = !!holidays[ds]
-              return (
-                <th key={d} style={{ padding: "3px 1px", color: (we || isH) ? t.rd : t.tm, textAlign: "center", minWidth: 32, borderBottom: `1px solid ${t.bd}`, background: isH ? `${t.rd}10` : we ? t.we : "transparent" }} title={holidays[ds] || ""}>
-                  <div style={{ fontSize: 8 }}>{WEEKDAYS[weekday(y, m, d)]}</div>
-                  <div>{d}</div>
-                  {isH && <div style={{ width: 4, height: 4, borderRadius: 4, background: t.rd, margin: "1px auto 0" }} />}
-                </th>
-              )
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {emps.map((emp) => (
-            <tr key={emp.id} style={{ borderBottom: `1px solid ${t.bl}` }}>
-              <td style={{ padding: "6px 10px", color: t.tx, fontWeight: 500, position: "sticky", left: 0, background: t.bgC, zIndex: 1, fontSize: 11 }}>
-                {emp.name || emp.email}
-                {emp.days_off && emp.days_off.length > 0 && (
-                  <div style={{ fontSize: 7, color: t.td }}>休:{emp.days_off.map((d) => WEEKDAYS[d]).join("")}</div>
-                )}
-              </td>
-              {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
-                const ds = `${y}-${pad(m)}-${pad(d)}`
-                const lvReq = rm[`${emp.id}-${ds}`]
-                const lv = lvReq?.leave_type
-                const lt = LEAVE_TYPES.find((l) => l.v === lv)
-                const we = isWeekend(y, m, d)
+  // 导航
+  const shift = (dir) => {
+    const n = new Date(cursor)
+    if (mode === "day") n.setDate(n.getDate() + dir)
+    else if (mode === "week") n.setDate(n.getDate() + 7 * dir)
+    else n.setMonth(n.getMonth() + dir)
+    sCursor(n)
+  }
+  const goToday = () => sCursor(new Date())
+
+  const labelOfCursor = () => {
+    if (mode === "day") return `${cursor.getFullYear()}年${cursor.getMonth() + 1}月${cursor.getDate()}日 (${WEEKDAYS[cursor.getDay()]})`
+    if (mode === "week") {
+      const s = startOfWeek(cursor), e = addDays(s, 6)
+      return `${s.getMonth() + 1}月${s.getDate()}日 ~ ${e.getMonth() + 1}月${e.getDate()}日`
+    }
+    return `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`
+  }
+
+  // ========== 今日视图（时间轴） ==========
+  const DayView = () => {
+    const d = range.days[0]
+    const ds = toDateStr(d)
+    const isH = !!holidays[ds]
+    const HOURS = Array.from({ length: 17 }, (_, i) => i + 7) // 7-23
+    const HOUR_W = 48
+    const NAME_W = 160
+    const rows = emps.map((emp) => ({ emp, s: getStatus(emp, d) }))
+    const working = rows.filter((r) => r.s.kind === "work" || r.s.kind === "swap-work")
+    const onLeave = rows.filter((r) => r.s.kind === "leave")
+    const resting = rows.length - working.length - onLeave.length
+    const isToday = ds === toDateStr(new Date())
+
+    return (
+      <div>
+        {/* 概览 */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10, marginBottom: 14 }}>
+          <StatCard t={t} label="出勤" value={working.length} total={rows.length} color={t.ac} />
+          <StatCard t={t} label="请假" value={onLeave.length} color={t.rd} />
+          <StatCard t={t} label="休息" value={resting} color={t.tm} />
+          {isH && <div style={{ padding: "12px 14px", borderRadius: 10, background: `${t.rd}10`, border: `1px solid ${t.rd}30` }}><div style={{ fontSize: 10, color: t.rd, fontWeight: 600 }}>祝日</div><div style={{ fontSize: 12, color: t.rd, marginTop: 2 }}>{holidays[ds]}</div></div>}
+        </div>
+
+        {/* 时间轴 */}
+        <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
+          <div style={{ minWidth: NAME_W + HOURS.length * HOUR_W }}>
+            {/* 小时表头 */}
+            <div style={{ display: "flex", borderBottom: `1px solid ${t.bd}`, background: t.bgH, position: "sticky", top: 0, zIndex: 2 }}>
+              <div style={{ width: NAME_W, padding: "10px 14px", fontSize: 11, color: t.tm, fontWeight: 500, borderRight: `1px solid ${t.bd}` }}>社员 <span style={{ color: t.td }}>({rows.length})</span></div>
+              <div style={{ display: "flex", flex: 1 }}>
+                {HOURS.map((h) => (
+                  <div key={h} style={{ width: HOUR_W, textAlign: "center", padding: "10px 0", fontSize: 10, color: t.tm, borderLeft: `1px dashed ${t.bl}` }}>{h}:00</div>
+                ))}
+              </div>
+            </div>
+
+            {/* 员工行 */}
+            {rows.map(({ emp, s }) => (
+              <div key={emp.id} style={{ display: "flex", borderBottom: `1px solid ${t.bl}`, minHeight: 46, background: isToday ? "transparent" : "transparent" }}>
+                <div style={{ width: NAME_W, padding: "12px 14px", fontSize: 12, color: t.tx, fontWeight: 500, borderRight: `1px solid ${t.bl}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <span>{emp.name || emp.email}</span>
+                  {emp.department && <span style={{ fontSize: 9, color: t.tm, marginTop: 2 }}>{emp.department}</span>}
+                </div>
+                <div style={{ position: "relative", flex: 1, height: 46 }}>
+                  {/* 网格线 */}
+                  {HOURS.map((h) => (
+                    <div key={h} style={{ position: "absolute", left: (h - 7) * HOUR_W, top: 0, bottom: 0, borderLeft: `1px dashed ${t.bl}` }} />
+                  ))}
+                  {/* 当前时间指示（仅今天） */}
+                  {isToday && (() => {
+                    const now = new Date()
+                    const nowH = now.getHours() + now.getMinutes() / 60
+                    if (nowH < 7 || nowH > 23) return null
+                    return <div style={{ position: "absolute", left: (nowH - 7) * HOUR_W, top: 0, bottom: 0, borderLeft: `2px solid ${t.rd}`, opacity: 0.7 }} />
+                  })()}
+                  {/* 班次条 */}
+                  {s.kind === "work" && s.sched && (() => {
+                    const sh = parseTime(s.sched.start), eh = parseTime(s.sched.end)
+                    return (
+                      <div style={{ position: "absolute", left: (sh - 7) * HOUR_W + 2, top: 6, bottom: 6, width: (eh - sh) * HOUR_W - 4, borderRadius: 6, background: `${t.ac}22`, border: `1px solid ${t.ac}`, padding: "0 10px", display: "flex", alignItems: "center", fontSize: 11, color: t.ac, fontWeight: 600 }}>
+                        {s.sched.start} – {s.sched.end}
+                      </div>
+                    )
+                  })()}
+                  {s.kind === "swap-work" && (
+                    <div style={{ position: "absolute", left: 4, top: 6, bottom: 6, right: 4, borderRadius: 6, background: "#8B5CF622", border: "1px solid #8B5CF6", padding: "0 10px", display: "flex", alignItems: "center", fontSize: 11, color: "#8B5CF6", fontWeight: 600 }}>休日出勤</div>
+                  )}
+                  {s.kind === "leave" && (() => {
+                    const lt = LEAVE_TYPES.find((l) => l.v === s.lvReq.leave_type)
+                    return (
+                      <div style={{ position: "absolute", left: 4, top: 6, bottom: 6, right: 4, borderRadius: 6, background: `${lt?.c || t.tm}20`, border: `1px solid ${lt?.c || t.tm}`, padding: "0 10px", display: "flex", alignItems: "center", fontSize: 11, color: lt?.c || t.tm, fontWeight: 600 }}>
+                        {lt?.l || s.lvReq.leave_type}{s.lvReq.is_half_day ? " (半休)" : ""}
+                      </div>
+                    )
+                  })()}
+                  {s.kind === "off" && (
+                    <div style={{ position: "absolute", left: 10, top: 0, bottom: 0, display: "flex", alignItems: "center", fontSize: 11, color: t.td }}>休</div>
+                  )}
+                  {s.kind === "unset" && (
+                    <div style={{ position: "absolute", left: 10, top: 0, bottom: 0, display: "flex", alignItems: "center", fontSize: 11, color: t.td }}>—</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ========== 周视图 ==========
+  const WeekView = () => {
+    const todayDs = toDateStr(new Date())
+    return (
+      <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+          <thead>
+            <tr style={{ background: t.bgH }}>
+              <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: t.tm, fontWeight: 500, borderBottom: `1px solid ${t.bd}`, minWidth: 140, position: "sticky", left: 0, background: t.bgH, zIndex: 1 }}>社员</th>
+              {range.days.map((d, i) => {
+                const ds = toDateStr(d)
+                const we = d.getDay() === 0 || d.getDay() === 6
                 const isH = !!holidays[ds]
-                const wdNum = weekday(y, m, d)
-                const isDayOff = emp.days_off && emp.days_off.includes(wdNum) && !we
-                const sched = scheds[emp.id]?.[wdNum]
-                const swap = swapMap[`${emp.id}-${ds}`]
-
-                // 有请假记录
-                if (lt) {
-                  return (
-                    <td key={d} style={{ padding: "2px 1px", textAlign: "center", background: isH ? `${t.rd}08` : we ? t.we : "transparent" }}>
-                      <div style={{ width: 28, minHeight: 24, borderRadius: 4, background: lt.c, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, color: "#fff", fontWeight: 700, flexDirection: "column", lineHeight: 1.2 }}>
-                        {lt.l[0]}
-                        {lvReq?.is_half_day && <span style={{ fontSize: 6 }}>半</span>}
-                      </div>
-                    </td>
-                  )
-                }
-
-                // 换休出勤日
-                if (swap && swap.swap_type === "休日出勤") {
-                  return (
-                    <td key={d} style={{ padding: "2px 1px", textAlign: "center", background: `#8B5CF608` }}>
-                      <div style={{ width: 28, minHeight: 24, borderRadius: 4, background: "#8B5CF6", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, color: "#fff", fontWeight: 700 }}>出勤</div>
-                    </td>
-                  )
-                }
-
-                // 定休日或周末
-                if (we || isDayOff || isH) {
-                  return (
-                    <td key={d} style={{ padding: "2px 1px", textAlign: "center", background: isH ? `${t.rd}08` : we ? t.we : `${t.tm}08` }}>
-                      <div style={{ fontSize: 7, color: t.td }}>休</div>
-                    </td>
-                  )
-                }
-
-                // 正常工作日：显示排班时间
-                if (sched) {
-                  return (
-                    <td key={d} style={{ padding: "2px 1px", textAlign: "center" }}>
-                      <div style={{ fontSize: 7, color: t.ac, fontWeight: 600, lineHeight: 1.4 }}>
-                        {sched.start}<br />{sched.end}
-                      </div>
-                    </td>
-                  )
-                }
-
-                // 工作日但无排班数据
+                const isToday = ds === todayDs
                 return (
-                  <td key={d} style={{ padding: "2px 1px", textAlign: "center" }}>
-                    <div style={{ fontSize: 7, color: t.td }}>—</div>
-                  </td>
+                  <th key={i} style={{ padding: "8px 4px", textAlign: "center", fontWeight: 500, borderBottom: `1px solid ${t.bd}`, background: isToday ? `${t.ac}10` : (isH ? `${t.rd}08` : we ? t.we : "transparent") }}>
+                    <div style={{ fontSize: 9, color: (we || isH) ? t.rd : t.tm }}>{WEEKDAYS[d.getDay()]}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: isToday ? t.ac : (we || isH) ? t.rd : t.tx, marginTop: 2 }}>{d.getDate()}</div>
+                    {isH && <div style={{ fontSize: 8, color: t.rd, marginTop: 2 }}>{holidays[ds]}</div>}
+                  </th>
                 )
               })}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
+          </thead>
+          <tbody>
+            {emps.map((emp) => (
+              <tr key={emp.id} style={{ borderBottom: `1px solid ${t.bl}` }}>
+                <td style={{ padding: "10px 14px", fontSize: 12, color: t.tx, fontWeight: 500, position: "sticky", left: 0, background: t.bgC, zIndex: 1, borderRight: `1px solid ${t.bl}` }}>
+                  {emp.name || emp.email}
+                  {emp.department && <div style={{ fontSize: 9, color: t.tm, marginTop: 2 }}>{emp.department}</div>}
+                </td>
+                {range.days.map((d, i) => {
+                  const s = getStatus(emp, d)
+                  let cell
+                  if (s.kind === "leave") {
+                    const lt = LEAVE_TYPES.find((l) => l.v === s.lvReq.leave_type)
+                    cell = <div style={{ padding: "6px 4px", borderRadius: 6, background: `${lt?.c || t.tm}18`, color: lt?.c || t.tm, fontSize: 10, fontWeight: 600, textAlign: "center" }}>{lt?.l || s.lvReq.leave_type}{s.lvReq.is_half_day ? "半" : ""}</div>
+                  } else if (s.kind === "swap-work") {
+                    cell = <div style={{ padding: "6px 4px", borderRadius: 6, background: "#8B5CF618", color: "#8B5CF6", fontSize: 10, fontWeight: 600, textAlign: "center" }}>休出</div>
+                  } else if (s.kind === "off") {
+                    cell = <div style={{ textAlign: "center", fontSize: 10, color: t.td }}>休</div>
+                  } else if (s.kind === "work") {
+                    cell = (
+                      <div style={{ padding: "5px 4px", borderRadius: 6, background: `${t.ac}15`, border: `1px solid ${t.ac}30`, fontSize: 10, color: t.ac, fontWeight: 600, textAlign: "center", lineHeight: 1.35 }}>
+                        <div>{s.sched.start}</div>
+                        <div>{s.sched.end}</div>
+                      </div>
+                    )
+                  } else {
+                    cell = <div style={{ textAlign: "center", fontSize: 10, color: t.td }}>—</div>
+                  }
+                  return <td key={i} style={{ padding: "6px 5px", verticalAlign: "middle", minWidth: 86 }}>{cell}</td>
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
-  // ========== 月历版 ==========
-  const GridView = () => {
-    const firstDayOfWeek = weekday(y, m, 1)
+  // ========== 月视图 ==========
+  const MonthView = () => {
+    const y = cursor.getFullYear(), m = cursor.getMonth() + 1
+    const firstDayOfWeek = new Date(y, m - 1, 1).getDay()
+    const todayDs = toDateStr(new Date())
+
+    const jumpToDay = (d) => { sCursor(new Date(d)); sMode("day") }
+
     return (
       <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, padding: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 8 }}>
@@ -174,61 +278,44 @@ export default function LeaveCalendar({ t, tk }) {
           ))}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
-          {Array.from({ length: firstDayOfWeek }, (_, i) => (
-            <div key={`empty-${i}`} />
-          ))}
-          {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
-            const ds = `${y}-${pad(m)}-${pad(d)}`
-            const we = isWeekend(y, m, d)
+          {Array.from({ length: firstDayOfWeek }, (_, i) => <div key={`e-${i}`} />)}
+          {range.days.map((d) => {
+            const ds = toDateStr(d)
+            const we = d.getDay() === 0 || d.getDay() === 6
             const isH = !!holidays[ds]
-            const wdNum = weekday(y, m, d)
-            const dayLeaves = emps
-              .map((emp) => {
-                const lvReq = rm[`${emp.id}-${ds}`]
-                return lvReq ? { name: emp.name, type: lvReq.leave_type, isHalf: lvReq.is_half_day } : null
-              })
-              .filter(Boolean)
-            const dayWorkers = emps.filter((emp) => {
-              const isDayOff = emp.days_off && emp.days_off.includes(wdNum)
-              return !we && !isH && !isDayOff && scheds[emp.id]?.[wdNum] && !rm[`${emp.id}-${ds}`]
-            })
-            const daySwaps = emps.filter((emp) => {
-              const swap = swapMap[`${emp.id}-${ds}`]
-              return swap && swap.swap_type === "休日出勤"
-            })
+            const isToday = ds === todayDs
+            const rows = emps.map((emp) => ({ emp, s: getStatus(emp, d) }))
+            const working = rows.filter((r) => r.s.kind === "work")
+            const swapping = rows.filter((r) => r.s.kind === "swap-work")
+            const leaves = rows.filter((r) => r.s.kind === "leave")
 
             return (
-              <div key={d} style={{ minHeight: 70, borderRadius: 6, border: `1px solid ${t.bl}`, padding: "3px 5px", background: isH ? `${t.rd}08` : we ? t.we : "transparent" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: (we || isH) ? t.rd : t.tx }}>{d}</span>
-                  {isH && <span style={{ fontSize: 7, color: t.rd }} title={holidays[ds]}>●</span>}
+              <div key={ds} onClick={() => jumpToDay(d)} style={{ minHeight: 92, borderRadius: 8, border: `1px solid ${isToday ? t.ac : t.bl}`, padding: "4px 6px", background: isToday ? `${t.ac}08` : isH ? `${t.rd}08` : we ? t.we : "transparent", cursor: "pointer", transition: "background 0.15s" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: isToday ? t.ac : (we || isH) ? t.rd : t.tx }}>{d.getDate()}</span>
+                  {isH && <span style={{ fontSize: 8, color: t.rd }} title={holidays[ds]}>●</span>}
                 </div>
-                {/* 出勤的人 */}
-                {dayWorkers.slice(0, 2).map((emp, i) => {
-                  const sc = scheds[emp.id]?.[wdNum]
-                  return (
-                    <div key={`w-${i}`} style={{ fontSize: 8, padding: "1px 3px", borderRadius: 2, background: `${t.ac}15`, color: t.ac, marginBottom: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                      {emp.name?.slice(0, 3)} {sc?.start}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {working.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 4px", borderRadius: 3, background: `${t.ac}15`, color: t.ac, fontWeight: 600 }}>
+                      <span style={{ width: 4, height: 4, borderRadius: 4, background: t.ac }} />出勤 {working.length}
                     </div>
-                  )
-                })}
-                {dayWorkers.length > 2 && <div style={{ fontSize: 7, color: t.tm }}>+{dayWorkers.length - 2}出勤</div>}
-                {/* 换休出勤 */}
-                {daySwaps.map((emp, i) => (
-                  <div key={`s-${i}`} style={{ fontSize: 8, padding: "1px 3px", borderRadius: 2, background: "#8B5CF620", color: "#8B5CF6", marginBottom: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                    {emp.name?.slice(0, 3)} 出勤
-                  </div>
-                ))}
-                {/* 请假的人 */}
-                {dayLeaves.slice(0, 2).map((l, i) => {
-                  const lt = LEAVE_TYPES.find((x) => x.v === l.type)
-                  return (
-                    <div key={`l-${i}`} style={{ fontSize: 8, padding: "1px 3px", borderRadius: 2, background: lt?.c || t.tm, color: "#fff", marginBottom: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                      {l.name?.slice(0, 3)} {lt?.l?.[0]}{l.isHalf ? "半" : ""}
+                  )}
+                  {swapping.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 4px", borderRadius: 3, background: "#8B5CF615", color: "#8B5CF6", fontWeight: 600 }}>
+                      <span style={{ width: 4, height: 4, borderRadius: 4, background: "#8B5CF6" }} />休出 {swapping.length}
                     </div>
-                  )
-                })}
-                {dayLeaves.length > 2 && <div style={{ fontSize: 7, color: t.tm }}>+{dayLeaves.length - 2}休</div>}
+                  )}
+                  {leaves.slice(0, 2).map((l, i) => {
+                    const lt = LEAVE_TYPES.find((x) => x.v === l.s.lvReq.leave_type)
+                    return (
+                      <div key={i} style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: lt?.c || t.tm, color: "#fff", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                        {l.emp.name?.slice(0, 3)} {lt?.l?.[0]}{l.s.lvReq.is_half_day ? "半" : ""}
+                      </div>
+                    )
+                  })}
+                  {leaves.length > 2 && <div style={{ fontSize: 8, color: t.tm }}>+{leaves.length - 2}休</div>}
+                </div>
               </div>
             )
           })}
@@ -237,45 +324,59 @@ export default function LeaveCalendar({ t, tk }) {
     )
   }
 
-  // ========== 主渲染 ==========
+  // ==================== 主渲染 ====================
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <CalendarDays size={20} strokeWidth={1.8} color={t.tx} />
           <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0 }}>出勤/休假日历</h2>
-          <button onClick={() => sMode("table")} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${mode === "table" ? t.ac : t.bd}`, background: mode === "table" ? `${t.ac}15` : "transparent", color: mode === "table" ? t.ac : t.ts, fontSize: 10, cursor: "pointer" }}>表格</button>
-          <button onClick={() => sMode("grid")} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${mode === "grid" ? t.ac : t.bd}`, background: mode === "grid" ? `${t.ac}15` : "transparent", color: mode === "grid" ? t.ac : t.ts, fontSize: 10, cursor: "pointer" }}>月历</button>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={() => chg(-1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronLeft size={14} /></button>
-          <span style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{y}年{m}月</span>
-          <button onClick={() => chg(1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronRight size={14} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {[["day", "今日"], ["week", "周视图"], ["month", "月历"]].map(([v, l]) => (
+            <button key={v} onClick={() => sMode(v)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${mode === v ? t.ac : t.bd}`, background: mode === v ? `${t.ac}15` : "transparent", color: mode === v ? t.ac : t.ts, fontSize: 11, fontWeight: mode === v ? 600 : 400, cursor: "pointer" }}>{l}</button>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 2, background: t.ac }} />
-          <span style={{ fontSize: 10, color: t.ts }}>出勤</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => shift(-1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronLeft size={14} /></button>
+          <span style={{ fontSize: 14, fontWeight: 600, color: t.tx, minWidth: 180, textAlign: "center" }}>{labelOfCursor()}</span>
+          <button onClick={() => shift(1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronRight size={14} /></button>
+          <button onClick={goToday} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 11, cursor: "pointer" }}>今天</button>
         </div>
-        {LEAVE_TYPES.slice(0, 4).map((lt) => (
-          <div key={lt.v} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: lt.c }} />
-            <span style={{ fontSize: 10, color: t.ts }}>{lt.l}</span>
-          </div>
-        ))}
-        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 2, background: "#8B5CF6" }} />
-          <span style={{ fontSize: 10, color: t.ts }}>休日出勤</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 8, background: t.rd }} />
-          <span style={{ fontSize: 10, color: t.ts }}>祝日</span>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Legend t={t} color={t.ac} label="出勤" />
+          <Legend t={t} color="#8B5CF6" label="休日出勤" />
+          {LEAVE_TYPES.slice(0, 4).map((lt) => <Legend key={lt.v} color={lt.c} label={lt.l} t={t} />)}
+          <Legend t={t} color={t.rd} label="祝日" round />
         </div>
       </div>
 
-      {mode === "table" ? <TableView /> : <GridView />}
+      {ld ? (
+        <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
+      ) : mode === "day" ? <DayView /> : mode === "week" ? <WeekView /> : <MonthView />}
+    </div>
+  )
+}
+
+function StatCard({ t, label, value, total, color }) {
+  return (
+    <div style={{ padding: "12px 14px", borderRadius: 10, background: `${color}08`, border: `1px solid ${color}25` }}>
+      <div style={{ fontSize: 10, color: t.tm, fontWeight: 500, letterSpacing: 0.3 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color, marginTop: 4, lineHeight: 1 }}>
+        {value}{total !== undefined && <span style={{ fontSize: 11, color: t.tm, fontWeight: 400 }}> / {total}</span>}
+      </div>
+    </div>
+  )
+}
+
+function Legend({ t, color, label, round }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <div style={{ width: 8, height: 8, borderRadius: round ? 8 : 2, background: color }} />
+      <span style={{ fontSize: 10, color: t.ts }}>{label}</span>
     </div>
   )
 }
