@@ -178,16 +178,24 @@ export default function EmployeeManager({ user, t, tk }) {
   // ========== 样式与工具 ==========
   const iS = { padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box", width: "100%" }
   const lockS = { ...iS, opacity: 0.5, cursor: "not-allowed" }
-  const secTitle = (text) => <div style={{ fontSize: 14, fontWeight: 700, color: t.ac, margin: "20px 0 10px", paddingBottom: 6, borderBottom: `2px solid ${t.ac}22` }}>{text}</div>
-  const fieldLabel = (text) => <div style={{ fontSize: 9, color: t.tm, marginBottom: 3 }}>{text}</div>
-  const readField = (label, value) => (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 9, color: t.tm }}>{label}</div>
-      <div style={{ fontSize: 13, color: t.tx, marginTop: 2 }}>{value || <span style={{ color: t.td }}>—</span>}</div>
+  const secTitle = (text) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "24px 0 14px", paddingBottom: 10, borderBottom: `1px solid ${t.bd}` }}>
+      <div style={{ width: 3, height: 18, background: t.ac, borderRadius: 2 }} />
+      <span style={{ fontSize: 15, fontWeight: 700, color: t.tx }}>{text}</span>
     </div>
   )
-  const g4 = { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 10 }
-  const g2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }
+  const fieldLabel = (text) => <div style={{ fontSize: 10, color: t.tm, marginBottom: 4, fontWeight: 500 }}>{text}</div>
+  const readField = (label, value) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 10, color: t.tm, marginBottom: 4, fontWeight: 500, letterSpacing: 0.3 }}>{label}</div>
+      <div style={{ fontSize: 13, color: t.tx, fontWeight: 500 }}>{value || <span style={{ color: t.td, fontWeight: 400 }}>—</span>}</div>
+    </div>
+  )
+  const chip = (color, label) => (
+    <span style={{ padding: "3px 10px", borderRadius: 12, fontSize: 10, fontWeight: 600, background: `${color}15`, color, border: `1px solid ${color}30` }}>{label}</span>
+  )
+  const g4 = { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 4 }
+  const g2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 4 }
 
   const filtered = emps
     .filter((e) => filter === "all" || e.employment_type === filter)
@@ -201,6 +209,8 @@ export default function EmployeeManager({ user, t, tk }) {
     const empType = editing ? fm.employment_type : (e.employment_type || "正社員")
     const isHourly = empType === "アルバイト" || empType === "外部講師"
     const isExpiring = !creating && e.residence_expiry && new Date(e.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
+    const yearsOfService = (!creating && e.hire_date) ? ((new Date() - new Date(e.hire_date)) / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1) : null
+    const contractExpiring = !creating && e.contract_end_date && new Date(e.contract_end_date) < new Date(new Date().getTime() + 60 * 24 * 60 * 60 * 1000)
     // admin-only 字段的样式
     const aS = isAdmin ? iS : lockS
     const aD = !isAdmin
@@ -209,13 +219,61 @@ export default function EmployeeManager({ user, t, tk }) {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
           {isAdmin && <button onClick={() => { sSelected(null); sEditing(false); sCreating(false) }} style={{ padding: "5px 14px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 11, cursor: "pointer" }}>← 返回列表</button>}
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0, flex: 1, marginLeft: 8 }}>{creating ? "新增社员" : `${e.name || e.email} 的档案`}</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0, flex: 1, marginLeft: 8 }}>{creating ? "新增社员" : "人事档案"}</h2>
           {(isAdmin || e.id === user.id) && !editing && !creating && <button onClick={() => startEdit(e)} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>编辑档案</button>}
           {editing && <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => { if (creating) { sSelected(null); sCreating(false) } sEditing(false) }} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
             <button onClick={save} disabled={saving} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.gn, color: "#fff", fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "保存中..." : "保存"}</button>
           </div>}
         </div>
+
+        {/* ====== 档案头部名片 ====== */}
+        {!creating && (
+          <div style={{ background: t.bgC, borderRadius: 12, padding: "20px 24px", border: `1px solid ${t.bd}`, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+              <div style={{ width: 64, height: 64, borderRadius: "50%", background: `linear-gradient(135deg, ${t.ac}, ${t.ac}99)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 700, flexShrink: 0, letterSpacing: 0 }}>
+                {(e.name || e.email || "?").slice(0, 1).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: t.tx, lineHeight: 1.2 }}>{e.name || e.email || "—"}</div>
+                <div style={{ fontSize: 11, color: t.tm, marginTop: 4, minHeight: 14 }}>{[e.furigana, e.pinyin].filter(Boolean).join(" ・ ")}</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                  {e.company_id && chip(t.wn, COMPANIES.find(c => c.id === e.company_id)?.name)}
+                  {e.employment_type && chip(t.gn, e.employment_type)}
+                  {e.department && chip(t.ac, e.department)}
+                  {e.role === "admin" && chip("#8B5CF6", "管理者")}
+                  {e.is_teacher && chip(t.ts, "兼任教师")}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 10, color: t.tm, fontWeight: 500, letterSpacing: 0.3 }}>入职日期</div>
+                  <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, marginTop: 3 }}>{e.hire_date || "—"}</div>
+                  {yearsOfService && <div style={{ fontSize: 10, color: t.ac, marginTop: 2, fontWeight: 500 }}>在职 {yearsOfService} 年</div>}
+                </div>
+                {e.phone && <div>
+                  <div style={{ fontSize: 10, color: t.tm, fontWeight: 500, letterSpacing: 0.3 }}>联系方式</div>
+                  <div style={{ fontSize: 12, color: t.tx, marginTop: 3 }}>{e.phone}</div>
+                  {e.email && <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>{e.email}</div>}
+                </div>}
+              </div>
+            </div>
+            {(isExpiring || contractExpiring) && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
+                {isExpiring && (
+                  <div style={{ padding: "8px 12px", borderRadius: 8, background: `${t.rd}10`, border: `1px solid ${t.rd}40`, fontSize: 11, color: t.rd, fontWeight: 500 }}>
+                    在留期限即将过期 · {e.residence_expiry}
+                  </div>
+                )}
+                {contractExpiring && (
+                  <div style={{ padding: "8px 12px", borderRadius: 8, background: `${t.wn}10`, border: `1px solid ${t.wn}40`, fontSize: 11, color: t.wn, fontWeight: 500 }}>
+                    合同即将到期 · {e.contract_end_date}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ background: t.bgC, borderRadius: 12, padding: "20px 24px", border: `1px solid ${t.bd}` }}>
 
@@ -297,10 +355,9 @@ export default function EmployeeManager({ user, t, tk }) {
             <div style={g4}>
               {readField("在留资格", e.residence_status)}
               {readField("在留卡号码", e.residence_card_number)}
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 9, color: t.tm }}>在留期限</div>
-                <div style={{ fontSize: 13, color: isExpiring ? t.rd : t.tx, marginTop: 2, fontWeight: isExpiring ? 700 : 400 }}>{e.residence_expiry || <span style={{ color: t.td }}>—</span>}{isExpiring && " (即将过期)"}</div>
-              </div>
+              {readField("在留期限", e.residence_expiry && (isExpiring
+                ? <span style={{ color: t.rd, fontWeight: 700 }}>{e.residence_expiry} (即将过期)</span>
+                : e.residence_expiry))}
               {readField("国籍/地域", e.nationality)}
             </div>
             <div style={g4}>
@@ -331,21 +388,16 @@ export default function EmployeeManager({ user, t, tk }) {
               <div>{fieldLabel("合同开始日")}<input type="date" value={fm.contract_start_date} onChange={(ev) => sFm((p) => ({ ...p, contract_start_date: ev.target.value }))} disabled={isHourly ? false : aD} style={isHourly ? iS : aS} /></div>
               <div>{fieldLabel("合同结束日")}<input type="date" value={fm.contract_end_date} onChange={(ev) => sFm((p) => ({ ...p, contract_end_date: ev.target.value }))} disabled={isHourly ? false : aD} style={isHourly ? iS : aS} /></div>
             </div>
-            {!isHourly && (
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 11, color: t.ts, cursor: isAdmin ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 4, opacity: aD ? 0.5 : 1 }}>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 6, marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: `${t.ac}05`, border: `1px solid ${t.bd}` }}>
+              {!isHourly && (
+                <label style={{ fontSize: 12, color: t.ts, cursor: isAdmin ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 6, opacity: aD ? 0.5 : 1 }}>
                   <input type="checkbox" checked={fm.has_dependent_deduction} onChange={(ev) => sFm((p) => ({ ...p, has_dependent_deduction: ev.target.checked }))} disabled={aD} />扶养控除
                 </label>
-                <label style={{ fontSize: 11, color: isAdmin ? t.ts : t.td, cursor: isAdmin ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 4, opacity: !isAdmin ? 0.5 : 1 }}>
-                  <input type="checkbox" checked={fm.has_commission} onChange={(ev) => sFm((p) => ({ ...p, has_commission: ev.target.checked }))} disabled={!isAdmin} />签单提成
-                </label>
-              </div>
-            )}
-            <div style={{ marginTop: 10, marginBottom: 10 }}>
-            <label style={{ fontSize: 11, color: isAdmin ? t.ts : t.td, cursor: isAdmin ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 4, opacity: !isAdmin ? 0.5 : 1 }}>
-              <input type="checkbox" checked={fm.has_commission} onChange={(ev) => sFm((p) => ({ ...p, has_commission: ev.target.checked }))} disabled={!isAdmin} />签单提成
-            </label>
-          </div>
+              )}
+              <label style={{ fontSize: 12, color: isAdmin ? t.ts : t.td, cursor: isAdmin ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 6, opacity: !isAdmin ? 0.5 : 1 }}>
+                <input type="checkbox" checked={fm.has_commission} onChange={(ev) => sFm((p) => ({ ...p, has_commission: ev.target.checked }))} disabled={!isAdmin} />签单提成
+              </label>
+            </div>
           </>) : (<>
             <div style={g4}>
               {!isHourly && readField("提成率", `${((e.commission_rate || 0) * 100).toFixed(0)}%`)}
