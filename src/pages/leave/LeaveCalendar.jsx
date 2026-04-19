@@ -290,31 +290,33 @@ export default function LeaveCalendar({ t, tk }) {
             const leaves = rows.filter((r) => r.s.kind === "leave")
 
             return (
-              <div key={ds} onClick={() => jumpToDay(d)} style={{ minHeight: 92, borderRadius: 8, border: `1px solid ${isToday ? t.ac : t.bl}`, padding: "4px 6px", background: isToday ? `${t.ac}08` : isH ? `${t.rd}08` : we ? t.we : "transparent", cursor: "pointer", transition: "background 0.15s" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div key={ds} onClick={() => jumpToDay(d)} style={{ minHeight: 110, borderRadius: 8, border: `1px solid ${isToday ? t.ac : t.bl}`, padding: "5px 6px", background: isToday ? `${t.ac}08` : isH ? `${t.rd}08` : we ? t.we : "transparent", cursor: "pointer", transition: "background 0.15s" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: isToday ? t.ac : (we || isH) ? t.rd : t.tx }}>{d.getDate()}</span>
                   {isH && <span style={{ fontSize: 8, color: t.rd }} title={holidays[ds]}>●</span>}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                   {working.length > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 4px", borderRadius: 3, background: `${t.ac}15`, color: t.ac, fontWeight: 600 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 5px", borderRadius: 3, background: `${t.ac}15`, color: t.ac, fontWeight: 600 }}>
                       <span style={{ width: 4, height: 4, borderRadius: 4, background: t.ac }} />出勤 {working.length}
                     </div>
                   )}
                   {swapping.length > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 4px", borderRadius: 3, background: "#8B5CF615", color: "#8B5CF6", fontWeight: 600 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 5px", borderRadius: 3, background: "#8B5CF615", color: "#8B5CF6", fontWeight: 600 }}>
                       <span style={{ width: 4, height: 4, borderRadius: 4, background: "#8B5CF6" }} />休出 {swapping.length}
                     </div>
                   )}
-                  {leaves.slice(0, 2).map((l, i) => {
+                  {leaves.slice(0, 3).map((l, i) => {
                     const lt = LEAVE_TYPES.find((x) => x.v === l.s.lvReq.leave_type)
+                    const c = lt?.c || t.tm
                     return (
-                      <div key={i} style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: lt?.c || t.tm, color: "#fff", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                        {l.emp.name?.slice(0, 3)} {lt?.l?.[0]}{l.s.lvReq.is_half_day ? "半" : ""}
+                      <div key={i} style={{ padding: "2px 5px", borderRadius: 4, background: `${c}15`, borderLeft: `2px solid ${c}`, lineHeight: 1.25 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: t.tx, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{l.emp.name}</div>
+                        <div style={{ fontSize: 8, color: c, fontWeight: 600 }}>{lt?.l || l.s.lvReq.leave_type}{l.s.lvReq.is_half_day ? "(半)" : ""}</div>
                       </div>
                     )
                   })}
-                  {leaves.length > 2 && <div style={{ fontSize: 8, color: t.tm }}>+{leaves.length - 2}休</div>}
+                  {leaves.length > 3 && <div style={{ fontSize: 8, color: t.tm, paddingLeft: 4 }}>+{leaves.length - 3} 人请假</div>}
                 </div>
               </div>
             )
