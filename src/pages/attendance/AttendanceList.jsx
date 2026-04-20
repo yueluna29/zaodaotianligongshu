@@ -276,7 +276,7 @@ export default function AttendanceList({ user, t, tk }) {
     if (!r) return
     sSv(true)
     if (r._isNew) {
-      await sbPost("transportation_claims", { employee_id: user.id, claim_date: r.claim_date, route: r.route || null, round_trip: r.round_trip, amount: parseFloat(r.amount), note: r.note || null }, tk)
+      await sbPost("transportation_claims", { employee_id: user.id, claim_date: r.claim_date, route: r.route || null, round_trip: r.round_trip, amount: parseFloat(r.amount), note: r.note || null, status: "記録済み" }, tk)
     } else {
       await sbPatch(`transportation_claims?id=eq.${r.id}`, { claim_date: r.claim_date, route: r.route || null, round_trip: r.round_trip, amount: parseFloat(r.amount), note: r.note || null }, tk)
     }
