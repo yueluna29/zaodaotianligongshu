@@ -9,6 +9,19 @@ export const LEAVE_TYPES = [
 
 export const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"]
 
+export const COMPANIES = [
+  { id: 1, name: "世家学舍", country: "JP" },
+  { id: 2, name: "紫陽花教育", country: "JP" },
+  { id: 3, name: "早稻大连", country: "CN" },
+  { id: 4, name: "早理金华", country: "CN" },
+]
+export const isChinaCompany = (id) => COMPANIES.find((c) => c.id === id)?.country === "CN"
+export const EMP_TYPES_JP = ["正社員", "契約社員", "アルバイト", "外部講師"]
+export const EMP_TYPES_CN = ["正社员", "兼职"]
+export const empTypesFor = (companyId) => isChinaCompany(companyId) ? EMP_TYPES_CN : EMP_TYPES_JP
+export const isFullTime = (et) => et === "正社員" || et === "契約社員" || et === "正社员"
+export const isHourly = (et) => et === "アルバイト" || et === "外部講師" || et === "兼职"
+
 export const daysInMonth = (y, m) => new Date(y, m, 0).getDate()
 export const weekday = (y, m, d) => new Date(y, m - 1, d).getDay()
 export const isWeekend = (y, m, d) => {

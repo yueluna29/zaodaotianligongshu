@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays } from "../../config/constants"
+import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays, isHourly as empIsHourly, isFullTime as empIsFullTime, COMPANIES } from "../../config/constants"
 
 export default function Dashboard({ user, t, tk }) {
   const isA = user.role === "admin"
-  const isHourly = user.employment_type === "アルバイト" || user.employment_type === "外部講師"
+  const isHourly = empIsHourly(user.employment_type)
   const now = new Date()
   const y = now.getFullYear(), m = now.getMonth() + 1
   const [stats, setStats] = useState(null)
@@ -162,7 +162,7 @@ export default function Dashboard({ user, t, tk }) {
     </div>
   )
 
-  const canClock = user.employment_type === "正社員" || user.employment_type === "契約社員"
+  const canClock = empIsFullTime(user.employment_type)
 
   const kindStyle = (k) => k === "warning" ? { c: t.wn, bg: `${t.wn}10`, bd: `${t.wn}40` } : k === "success" ? { c: t.gn, bg: `${t.gn}10`, bd: `${t.gn}40` } : { c: t.ac, bg: `${t.ac}08`, bd: `${t.ac}30` }
   const AnnoSection = () => (
@@ -231,7 +231,7 @@ export default function Dashboard({ user, t, tk }) {
   )
 
   if (isA) {
-    const COMPS = { 1: "世家学舍", 2: "紫陽花教育" }
+    const COMPS = Object.fromEntries(COMPANIES.map(c => [c.id, c.name]))
     return (
       <div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>管理面板</h2>

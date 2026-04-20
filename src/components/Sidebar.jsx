@@ -1,9 +1,10 @@
 import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
+import { isHourly as empIsHourly } from "../config/constants"
 
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge }) {
   const isA = user.role === "admin"
   const et = user.employment_type || "正社員"
-  const isHourly = et === "アルバイト" || et === "外部講師"
+  const isHourly = empIsHourly(et)
 
   const items = [
     { id: "home", l: "首页", ic: Home, show: true },

@@ -189,7 +189,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   // ==================== ADMIN 列表模式 ====================
   if (isAdmin && !selectedEmp) {
     const filteredEmps = allEmps.filter(e => {
-      if (e.employment_type === "正社員") return false
+      if (e.employment_type === "正社員" || e.employment_type === "正社员") return false
       if (!deptFilter) return true
       return e.department === deptFilter
     })

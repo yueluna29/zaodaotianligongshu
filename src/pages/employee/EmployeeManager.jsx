@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
-import { WEEKDAYS } from "../../config/constants"
+import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly } from "../../config/constants"
 import { Users } from "lucide-react"
 import PayRateSection from "../../components/PayRateSection"
 
-const EMP_TYPES = ["正社員", "契約社員", "アルバイト", "外部講師"]
-const COMPANIES = [{ id: 1, name: "世家学舍" }, { id: 2, name: "紫陽花教育" }]
+const EMP_TYPES_ALL = [...EMP_TYPES_JP, ...EMP_TYPES_CN]
 const DEPTS_FULL = ["教务", "咨询", "宣传", "财务"]
 const DEPTS_BAITO = ["大学院", "学部", "文书", "语言类"]
 const REGIONS = ["日本", "中国"]
-const isFullTime = (et) => et === "正社員" || et === "契約社員"
 const deptListFor = (et) => isFullTime(et) ? DEPTS_FULL : DEPTS_BAITO
 const SUBJECTS = ["物理", "数学", "机械工学", "电气电子", "情报科学", "土木建筑", "生命理工", "材料化学", "环境工学", "体育学", "大学院文科", "经营工学", "EJU数学", "EJU理科", "日语", "英语", "班主任"]
 const GENDERS = ["男", "女"]
@@ -28,7 +26,7 @@ const emptyForm = () => ({
   region: "",
   commission_rate: "0", fixed_overtime_hours: "20", payment_method: "银行转账",
   transport_method: "实报实销", transport_amount: "0", transport_cap: "20000",
-  dependents_count: "0", my_number: "", contract_start_date: "", contract_end_date: "",
+  dependents_count: "0", my_number: "", id_card_number: "", contract_start_date: "", contract_end_date: "",
   bank_name: "", bank_branch: "", bank_account_type: "普通",
   bank_account_number: "", bank_account_holder: "",
   days_off: [0, 6], available_days: [], remarks: "",
@@ -113,6 +111,7 @@ export default function EmployeeManager({ user, t, tk }) {
       transport_amount: String(emp.transport_amount || 0),
       transport_cap: String(emp.transport_cap || 20000),
       dependents_count: String(emp.dependents_count || 0), my_number: emp.my_number || "",
+      id_card_number: emp.id_card_number || "",
       contract_start_date: emp.contract_start_date || "", contract_end_date: emp.contract_end_date || "",
       bank_name: emp.bank_name || "", bank_branch: emp.bank_branch || "",
       bank_account_type: emp.bank_account_type || "普通",
@@ -212,7 +211,9 @@ export default function EmployeeManager({ user, t, tk }) {
   if (selected) {
     const e = creating ? {} : selected
     const empType = editing ? fm.employment_type : (e.employment_type || "正社員")
-    const isHourly = empType === "アルバイト" || empType === "外部講師"
+    const isHourly = empIsHourly(empType)
+    const cid = editing ? fm.company_id : e.company_id
+    const isCN = isChinaCompany(cid)
     const isExpiring = !creating && e.residence_expiry && new Date(e.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
     const yearsOfService = (!creating && e.hire_date) ? ((new Date() - new Date(e.hire_date)) / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1) : null
     const contractExpiring = !creating && e.contract_end_date && new Date(e.contract_end_date) < new Date(new Date().getTime() + 60 * 24 * 60 * 60 * 1000)
@@ -293,8 +294,12 @@ export default function EmployeeManager({ user, t, tk }) {
           {secTitle("1. 归属与状态")}
           {editing ? (
             <div style={g4}>
-              <div>{fieldLabel("所属公司")}<select value={fm.company_id} onChange={(ev) => sFm((p) => ({ ...p, company_id: Number(ev.target.value) }))} disabled={aD} style={aS}>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              <div>{fieldLabel("工作类型")}<select value={fm.employment_type} onChange={(ev) => sFm((p) => ({ ...p, employment_type: ev.target.value }))} disabled={aD} style={aS}>{EMP_TYPES.map((tp) => <option key={tp} value={tp}>{tp}</option>)}</select></div>
+              <div>{fieldLabel("所属公司")}<select value={fm.company_id} onChange={(ev) => {
+                const nextId = Number(ev.target.value)
+                const nextTypes = empTypesFor(nextId)
+                sFm((p) => ({ ...p, company_id: nextId, employment_type: nextTypes.includes(p.employment_type) ? p.employment_type : nextTypes[0] }))
+              }} disabled={aD} style={aS}>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div>{fieldLabel("工作类型")}<select value={fm.employment_type} onChange={(ev) => sFm((p) => ({ ...p, employment_type: ev.target.value }))} disabled={aD} style={aS}>{empTypesFor(fm.company_id).map((tp) => <option key={tp} value={tp}>{tp}</option>)}</select></div>
               <div>{fieldLabel("入职日期")}<input type="date" value={fm.hire_date} onChange={(ev) => sFm((p) => ({ ...p, hire_date: ev.target.value }))} disabled={aD} style={aS} /></div>
               <div>{fieldLabel("权限")}<select value={fm.role} onChange={(ev) => sFm((p) => ({ ...p, role: ev.target.value }))} disabled={aD} style={aS}><option value="staff">社员</option><option value="admin">管理者</option></select></div>
             </div>
@@ -309,7 +314,24 @@ export default function EmployeeManager({ user, t, tk }) {
 
           {/* ====== 2. 基本信息（可编辑） ====== */}
           {secTitle("2. 基本信息")}
-          {editing ? (<>
+          {editing ? (isCN ? (<>
+            <div style={g4}>
+              <div>{fieldLabel("姓名 *")}<input value={fm.name} onChange={(ev) => sFm((p) => ({ ...p, name: ev.target.value }))} style={iS} placeholder="姓 名" /></div>
+              <div>{fieldLabel("拼音 (Pinyin)")}<input value={fm.pinyin} onChange={(ev) => sFm((p) => ({ ...p, pinyin: ev.target.value }))} style={iS} placeholder="Xing Ming" /></div>
+              <div>{fieldLabel("电话号码")}<input value={fm.phone} onChange={(ev) => sFm((p) => ({ ...p, phone: ev.target.value }))} style={iS} /></div>
+              <div>{fieldLabel("邮箱 *")}<input type="email" value={fm.email} onChange={(ev) => sFm((p) => ({ ...p, email: ev.target.value }))} style={iS} /></div>
+            </div>
+            <div style={g4}>
+              <div>{fieldLabel("身份证号码")}<input value={fm.id_card_number} onChange={(ev) => sFm((p) => ({ ...p, id_card_number: ev.target.value }))} style={iS} placeholder="18 位身份证号" /></div>
+              <div>{fieldLabel("出生年月日")}<input type="date" value={fm.birth_date} onChange={(ev) => sFm((p) => ({ ...p, birth_date: ev.target.value }))} style={iS} /></div>
+              <div>{fieldLabel("性别")}<select value={fm.gender} onChange={(ev) => sFm((p) => ({ ...p, gender: ev.target.value }))} style={iS}><option value="">—</option>{GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+              <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}><label style={{ fontSize: 11, color: t.ts, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={fm.is_teacher} onChange={(ev) => sFm((p) => ({ ...p, is_teacher: ev.target.checked }))} />兼任教师</label></div>
+            </div>
+            <div style={{ marginBottom: 10 }}>{fieldLabel(`负责部门${isFullTime(fm.employment_type) ? "（教务/咨询/宣传/财务）" : "（大学院/学部/文书/语言类）"}`)}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{deptListFor(fm.employment_type).map((d) => <button type="button" key={d} onClick={() => sFm((p) => ({ ...p, department: p.department === d ? "" : d }))} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${fm.department === d ? t.ac : t.bd}`, background: fm.department === d ? `${t.ac}15` : "transparent", color: fm.department === d ? t.ac : t.ts, fontSize: 11, cursor: "pointer" }}>{d}</button>)}</div></div>
+            <div style={{ marginBottom: 10 }}>{fieldLabel("担任科目 (多选)")}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{SUBJECTS.map((s) => <button type="button" key={s} onClick={() => toggleArr("subjects", s)} style={{ padding: "3px 8px", borderRadius: 14, border: `1px solid ${(fm.subjects || []).includes(s) ? t.gn : t.bd}`, background: (fm.subjects || []).includes(s) ? `${t.gn}15` : "transparent", color: (fm.subjects || []).includes(s) ? t.gn : t.ts, fontSize: 10, cursor: "pointer" }}>{s}</button>)}</div></div>
+            <div style={{ marginBottom: 10 }}>{fieldLabel("住址")}<input value={fm.address} onChange={(ev) => sFm((p) => ({ ...p, address: ev.target.value }))} style={iS} /></div>
+            <div>{fieldLabel("备注")}<input value={fm.remarks} onChange={(ev) => sFm((p) => ({ ...p, remarks: ev.target.value }))} style={iS} /></div>
+          </>) : (<>
             <div style={g4}>
               <div>{fieldLabel("汉字姓名 *")}<input value={fm.name} onChange={(ev) => sFm((p) => ({ ...p, name: ev.target.value }))} style={iS} placeholder="姓 名" /></div>
               <div>{fieldLabel("假名 (Furigana)")}<input value={fm.furigana} onChange={(ev) => sFm((p) => ({ ...p, furigana: ev.target.value }))} style={iS} placeholder="セイ メイ" /></div>
@@ -332,6 +354,25 @@ export default function EmployeeManager({ user, t, tk }) {
               <div>{fieldLabel("邮编")}<input value={fm.postal_code} onChange={(ev) => sFm((p) => ({ ...p, postal_code: ev.target.value }))} style={iS} placeholder="123-4567" /></div>
             </div>
             <div>{fieldLabel("备注")}<input value={fm.remarks} onChange={(ev) => sFm((p) => ({ ...p, remarks: ev.target.value }))} style={iS} /></div>
+          </>)) : (isCN ? (<>
+            <div style={g4}>
+              {readField("姓名", e.name)}
+              {readField("拼音", e.pinyin)}
+              {readField("电话", e.phone)}
+              {readField("邮箱", e.email)}
+            </div>
+            <div style={g4}>
+              {readField("身份证号码", e.id_card_number)}
+              {readField("出生年月日", e.birth_date)}
+              {readField("性别", e.gender)}
+              {readField("兼任教师", e.is_teacher ? "是" : "否")}
+            </div>
+            <div style={g4}>
+              {readField("负责部门", e.department)}
+              {readField("担任科目", (e.subjects || []).length > 0 ? e.subjects.join("、") : null)}
+              <div style={{ gridColumn: "span 2" }}>{readField("住址", e.address)}</div>
+            </div>
+            <div>{readField("备注", e.remarks)}</div>
           </>) : (<>
             <div style={g4}>
               {readField("汉字姓名", e.name)}
@@ -349,38 +390,40 @@ export default function EmployeeManager({ user, t, tk }) {
               {readField("住址", e.address ? `〒${e.postal_code || ""} ${e.address}` : null)}
               {readField("备注", e.remarks)}
             </div>
-          </>)}
+          </>))}
 
-          {/* ====== 3. 外国人雇佣状况（可编辑） ====== */}
-          {secTitle("3. 外国人雇佣状况")}
-          {editing ? (<>
-            <div style={g4}>
-              <div>{fieldLabel("在留资格")}<input value={fm.residence_status} onChange={(ev) => sFm((p) => ({ ...p, residence_status: ev.target.value }))} style={iS} placeholder="按在留卡如实填写" /></div>
-              <div>{fieldLabel("在留卡号码")}<input value={fm.residence_card_number} onChange={(ev) => sFm((p) => ({ ...p, residence_card_number: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("在留期限")}<input type="date" value={fm.residence_expiry} onChange={(ev) => sFm((p) => ({ ...p, residence_expiry: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("国籍/地域")}<input value={fm.nationality} onChange={(ev) => sFm((p) => ({ ...p, nationality: ev.target.value }))} style={iS} /></div>
-            </div>
-            <div style={g4}>
-              <div>{fieldLabel("出生年月日")}<input type="date" value={fm.birth_date} onChange={(ev) => sFm((p) => ({ ...p, birth_date: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("性别")}<select value={fm.gender} onChange={(ev) => sFm((p) => ({ ...p, gender: ev.target.value }))} style={iS}><option value="">—</option>{GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
-              <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}><label style={{ fontSize: 11, color: t.ts, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={fm.has_extra_work_permit} onChange={(ev) => sFm((p) => ({ ...p, has_extra_work_permit: ev.target.checked }))} />资格外许可有无</label></div>
-              <div />
-            </div>
-          </>) : (<>
-            <div style={g4}>
-              {readField("在留资格", e.residence_status)}
-              {readField("在留卡号码", e.residence_card_number)}
-              {readField("在留期限", e.residence_expiry && (isExpiring
-                ? <span style={{ color: t.rd, fontWeight: 700 }}>{e.residence_expiry} (即将过期)</span>
-                : e.residence_expiry))}
-              {readField("国籍/地域", e.nationality)}
-            </div>
-            <div style={g4}>
-              {readField("出生年月日", e.birth_date)}
-              {readField("性别", e.gender)}
-              {readField("资格外许可", e.has_extra_work_permit ? "有" : "无")}
-              <div />
-            </div>
+          {/* ====== 3. 外国人雇佣状况（中国公司隐藏） ====== */}
+          {!isCN && (<>
+            {secTitle("3. 外国人雇佣状况")}
+            {editing ? (<>
+              <div style={g4}>
+                <div>{fieldLabel("在留资格")}<input value={fm.residence_status} onChange={(ev) => sFm((p) => ({ ...p, residence_status: ev.target.value }))} style={iS} placeholder="按在留卡如实填写" /></div>
+                <div>{fieldLabel("在留卡号码")}<input value={fm.residence_card_number} onChange={(ev) => sFm((p) => ({ ...p, residence_card_number: ev.target.value }))} style={iS} /></div>
+                <div>{fieldLabel("在留期限")}<input type="date" value={fm.residence_expiry} onChange={(ev) => sFm((p) => ({ ...p, residence_expiry: ev.target.value }))} style={iS} /></div>
+                <div>{fieldLabel("国籍/地域")}<input value={fm.nationality} onChange={(ev) => sFm((p) => ({ ...p, nationality: ev.target.value }))} style={iS} /></div>
+              </div>
+              <div style={g4}>
+                <div>{fieldLabel("出生年月日")}<input type="date" value={fm.birth_date} onChange={(ev) => sFm((p) => ({ ...p, birth_date: ev.target.value }))} style={iS} /></div>
+                <div>{fieldLabel("性别")}<select value={fm.gender} onChange={(ev) => sFm((p) => ({ ...p, gender: ev.target.value }))} style={iS}><option value="">—</option>{GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+                <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}><label style={{ fontSize: 11, color: t.ts, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={fm.has_extra_work_permit} onChange={(ev) => sFm((p) => ({ ...p, has_extra_work_permit: ev.target.checked }))} />资格外许可有无</label></div>
+                <div />
+              </div>
+            </>) : (<>
+              <div style={g4}>
+                {readField("在留资格", e.residence_status)}
+                {readField("在留卡号码", e.residence_card_number)}
+                {readField("在留期限", e.residence_expiry && (isExpiring
+                  ? <span style={{ color: t.rd, fontWeight: 700 }}>{e.residence_expiry} (即将过期)</span>
+                  : e.residence_expiry))}
+                {readField("国籍/地域", e.nationality)}
+              </div>
+              <div style={g4}>
+                {readField("出生年月日", e.birth_date)}
+                {readField("性别", e.gender)}
+                {readField("资格外许可", e.has_extra_work_permit ? "有" : "无")}
+                <div />
+              </div>
+            </>)}
           </>)}
 
           {/* ====== 4. 薪资与税务（根据类型不同权限不同） ====== */}
@@ -431,26 +474,42 @@ export default function EmployeeManager({ user, t, tk }) {
 
           {/* ====== 5. 银行信息（可编辑） ====== */}
           {secTitle("5. 银行信息")}
-          {editing ? (
-            <div style={g4}>
-              <div>{fieldLabel("银行名称")}<input value={fm.bank_name} onChange={(ev) => sFm((p) => ({ ...p, bank_name: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("支店名")}<input value={fm.bank_branch} onChange={(ev) => sFm((p) => ({ ...p, bank_branch: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("账户类型")}<select value={fm.bank_account_type} onChange={(ev) => sFm((p) => ({ ...p, bank_account_type: ev.target.value }))} style={iS}>{ACCT_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
-              <div>{fieldLabel("账号")}<input value={fm.bank_account_number} onChange={(ev) => sFm((p) => ({ ...p, bank_account_number: ev.target.value }))} style={iS} /></div>
-            </div>
-          ) : (
-            <div style={g4}>
-              {readField("银行", e.bank_name)}
-              {readField("支店", e.bank_branch)}
-              {readField("类型", e.bank_account_type)}
-              {readField("账号", e.bank_account_number)}
-            </div>
-          )}
-          {editing ? (
-            <div style={{ marginBottom: 10 }}>{fieldLabel("户名 (カナ)")}<input value={fm.bank_account_holder} onChange={(ev) => sFm((p) => ({ ...p, bank_account_holder: ev.target.value }))} style={{ ...iS, maxWidth: 300 }} placeholder="ヤマダ タロウ" /></div>
-          ) : (
-            <div>{readField("户名", e.bank_account_holder)}</div>
-          )}
+          {isCN ? (
+            editing ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                <div>{fieldLabel("开户名")}<input value={fm.bank_account_holder} onChange={(ev) => sFm((p) => ({ ...p, bank_account_holder: ev.target.value }))} style={iS} placeholder="张三" /></div>
+                <div>{fieldLabel("开户银行")}<input value={fm.bank_name} onChange={(ev) => sFm((p) => ({ ...p, bank_name: ev.target.value }))} style={iS} placeholder="中国工商银行大连支行" /></div>
+                <div>{fieldLabel("账户号码")}<input value={fm.bank_account_number} onChange={(ev) => sFm((p) => ({ ...p, bank_account_number: ev.target.value }))} style={iS} /></div>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                {readField("开户名", e.bank_account_holder)}
+                {readField("开户银行", e.bank_name)}
+                {readField("账户号码", e.bank_account_number)}
+              </div>
+            )
+          ) : (<>
+            {editing ? (
+              <div style={g4}>
+                <div>{fieldLabel("银行名称")}<input value={fm.bank_name} onChange={(ev) => sFm((p) => ({ ...p, bank_name: ev.target.value }))} style={iS} /></div>
+                <div>{fieldLabel("支店名")}<input value={fm.bank_branch} onChange={(ev) => sFm((p) => ({ ...p, bank_branch: ev.target.value }))} style={iS} /></div>
+                <div>{fieldLabel("账户类型")}<select value={fm.bank_account_type} onChange={(ev) => sFm((p) => ({ ...p, bank_account_type: ev.target.value }))} style={iS}>{ACCT_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+                <div>{fieldLabel("账号")}<input value={fm.bank_account_number} onChange={(ev) => sFm((p) => ({ ...p, bank_account_number: ev.target.value }))} style={iS} /></div>
+              </div>
+            ) : (
+              <div style={g4}>
+                {readField("银行", e.bank_name)}
+                {readField("支店", e.bank_branch)}
+                {readField("类型", e.bank_account_type)}
+                {readField("账号", e.bank_account_number)}
+              </div>
+            )}
+            {editing ? (
+              <div style={{ marginBottom: 10 }}>{fieldLabel("户名 (カナ)")}<input value={fm.bank_account_holder} onChange={(ev) => sFm((p) => ({ ...p, bank_account_holder: ev.target.value }))} style={{ ...iS, maxWidth: 300 }} placeholder="ヤマダ タロウ" /></div>
+            ) : (
+              <div>{readField("户名", e.bank_account_holder)}</div>
+            )}
+          </>)}
 
           {/* ====== 6. 排班设定 ====== */}
           {!creating && (<>
@@ -495,8 +554,8 @@ export default function EmployeeManager({ user, t, tk }) {
             )}
           </>)}
 
-          {/* ====== 7. 时薪配置（正社員隐藏） ====== */}
-          {!creating && empType !== "正社員" && (<>
+          {/* ====== 7. 时薪配置（正社員/正社员隐藏） ====== */}
+          {!creating && empType !== "正社員" && empType !== "正社员" && (<>
             {secTitle("7. 时薪配置")}
             <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} allEmps={emps} />
           </>)}
@@ -550,7 +609,7 @@ export default function EmployeeManager({ user, t, tk }) {
           <button key={c.id} onClick={() => sCompanyFilter(companyFilter === c.id ? "all" : c.id)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${companyFilter === c.id ? t.wn : t.bd}`, background: companyFilter === c.id ? `${t.wn}15` : "transparent", color: companyFilter === c.id ? t.wn : t.ts, fontSize: 10, cursor: "pointer", fontWeight: companyFilter === c.id ? 600 : 400 }}>{c.name}</button>
         ))}
         <div style={{ width: 1, height: 16, background: t.bd }} />
-        {["all", ...EMP_TYPES].map((f) => (
+        {["all", ...EMP_TYPES_ALL].map((f) => (
           <button key={f} onClick={() => sFilter(f)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${filter === f ? t.ac : t.bd}`, background: filter === f ? `${t.ac}15` : "transparent", color: filter === f ? t.ac : t.ts, fontSize: 10, cursor: "pointer", fontWeight: filter === f ? 600 : 400 }}>{f === "all" ? "全部" : f}</button>
         ))}
       </div>

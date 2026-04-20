@@ -1,9 +1,10 @@
 import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
+import { isHourly as empIsHourly } from "../config/constants"
 
 export default function MobileNav({ user, view, onNav, t, badge }) {
   const isA = user.role === "admin"
   const et = user.employment_type || "正社員"
-  const isHourly = et === "アルバイト" || et === "外部講師"
+  const isHourly = empIsHourly(et)
 
   const all = [
     { id: "home", ic: Home, l: "首页", show: true },

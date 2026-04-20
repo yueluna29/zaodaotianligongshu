@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { pad, todayStr, fmtYen } from "../../config/constants"
+import { pad, todayStr, fmtYen, isHourly } from "../../config/constants"
 
 export default function WorkEntries({ user, t, tk }) {
   const now = new Date()
@@ -27,7 +27,7 @@ export default function WorkEntries({ user, t, tk }) {
 
     if (isA && !allEmps.length) {
       const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name,employment_type", tk)
-      sAllEmps((emps || []).filter((e) => e.employment_type === "外部講師" || e.employment_type === "アルバイト"))
+      sAllEmps((emps || []).filter((e) => isHourly(e.employment_type)))
     }
     sLd(false)
   }, [y, m, selectedEmp, tk, isA])
