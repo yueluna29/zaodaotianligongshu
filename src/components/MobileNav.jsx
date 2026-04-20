@@ -10,7 +10,7 @@ export default function MobileNav({ user, view, onNav, t, badge }) {
     { id: "att", ic: ClipboardList, l: "勤怠", show: !isHourly || isA },
     { id: "work", ic: Clock, l: "报表", show: isHourly || isA },
     { id: "empmgr", ic: Users, l: "档案", show: true },
-    { id: "cal", ic: CalendarDays, l: "日历", show: true },
+    { id: "cal", ic: CalendarDays, l: "日历", show: !isHourly || isA },
     { id: "approve", ic: CheckCircle, l: "审批", show: isA },
     { id: "report", ic: BarChart3, l: "月报", show: isA },
   ]

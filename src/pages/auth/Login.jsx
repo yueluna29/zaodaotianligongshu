@@ -9,10 +9,12 @@ const SUBJECTS = ["物理", "数学", "机械工学", "电气电子", "情报科
 const GENDERS = ["男", "女"]
 const ACCT_TYPES = ["普通", "当座"]
 
-// 邀请 token -> 可选的雇佣类型列表。发给员工时附带对应链接。
+// 邀请 token -> { 可选雇佣类型, 所属公司 id }。每家公司各两条链接。
 const INVITE_TOKENS = {
-  "full-wsdst2026": ["正社員", "契約社員"],
-  "pt-wsdst2026": ["アルバイト", "外部講師"],
+  "full-wsdst2026": { types: ["正社員", "契約社員"], company_id: 1 }, // 世家学舍 正/契
+  "pt-wsdst2026":   { types: ["アルバイト", "外部講師"], company_id: 1 }, // 世家学舍 バイト/外部
+  "full-zyh2026":   { types: ["正社員", "契約社員"], company_id: 2 }, // 紫陽花教育 正/契
+  "pt-zyh2026":     { types: ["アルバイト", "外部講師"], company_id: 2 }, // 紫陽花教育 バイト/外部
 }
 
 const emptyForm = () => ({
@@ -30,6 +32,7 @@ const emptyForm = () => ({
 
 export default function Login({ onAuth, theme, t, toggleTheme }) {
   const [allowedTypes, setAllowedTypes] = useState(null) // 数组 or null
+  const [lockedCompanyId, setLockedCompanyId] = useState(null) // 邀请链接锁定的公司 id
   const [mode, setMode] = useState("login") // "login" | "register"
   const [step, setStep] = useState(1)
   const [fm, setFm] = useState(emptyForm())
@@ -42,9 +45,10 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
     const params = new URLSearchParams(window.location.search)
     const tok = params.get("invite")
     if (tok && INVITE_TOKENS[tok]) {
-      const types = INVITE_TOKENS[tok]
+      const { types, company_id } = INVITE_TOKENS[tok]
       setAllowedTypes(types)
-      setFm((p) => ({ ...p, employment_type: types[0] }))
+      setLockedCompanyId(company_id)
+      setFm((p) => ({ ...p, employment_type: types[0], company_id }))
       setMode("register")
     }
   }, [])
@@ -217,7 +221,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
       <div>
         <div style={{ fontSize: 11, color: t.tm, marginBottom: 12 }}>工作信息（雇佣类型由邀请链接决定）。</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {field("所属公司", <select value={fm.company_id} onChange={(e) => up("company_id", Number(e.target.value))} style={iS}>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>, true)}
+          {field("所属公司", <select value={fm.company_id} onChange={(e) => up("company_id", Number(e.target.value))} style={iS} disabled={lockedCompanyId != null}>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>, true)}
           {field("雇佣类型", <select value={fm.employment_type} onChange={(e) => up("employment_type", e.target.value)} style={iS} disabled={!allowedTypes}>{(allowedTypes || []).map((tp) => <option key={tp} value={tp}>{tp}</option>)}</select>, true)}
           {field("入职日期", <input type="date" value={fm.hire_date} onChange={(e) => up("hire_date", e.target.value)} style={iS} />, true)}
           {field("部门", <select value={fm.department} onChange={(e) => up("department", e.target.value)} style={iS}><option value="">—</option>{DEPTS.map((d) => <option key={d} value={d}>{d}</option>)}</select>)}
@@ -296,7 +300,10 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
             {mode === "login" ? "登录" : `新员工入职登记 · ${stepTitle} (${step}/4)`}
           </p>
           {mode === "register" && allowedTypes && (
-            <div style={{ fontSize: 10, color: t.ts, marginTop: 4 }}>可注册类型：{allowedTypes.join(" / ")}</div>
+            <div style={{ fontSize: 10, color: t.ts, marginTop: 4 }}>
+              {lockedCompanyId != null && <>所属公司：{COMPANIES.find(c => c.id === lockedCompanyId)?.name} · </>}
+              可注册类型：{allowedTypes.join(" / ")}
+            </div>
           )}
         </div>
 

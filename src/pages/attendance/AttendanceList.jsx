@@ -383,7 +383,7 @@ export default function AttendanceList({ user, t, tk }) {
       {/* ====== 勤怠表 ====== */}
       {ld ? <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div> :
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto", maxHeight: "55vh", marginBottom: 20 }}>
-          <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", width: ed ? 604 : 784 }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", width: "100%", minWidth: ed ? 604 : 784 }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 2 }}><tr style={{ background: t.bgH }}>
               {(ed
                 ? [["日期",56],["星期",48],["出勤",90],["休息",90],["休息结束",90],["退勤",90],["备注",140]]

@@ -11,7 +11,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
     { id: "work", l: "工资报表", ic: Clock, show: isHourly || isA },
     { id: "empmgr", l: "人事档案", ic: Users, show: true },
     { id: "approve", l: "承认中心", ic: CheckCircle, show: isA },
-    { id: "cal", l: "休假日历", ic: CalendarDays, show: true },
+    { id: "cal", l: "休假日历", ic: CalendarDays, show: !isHourly || isA },
     { id: "report", l: "月度报告", ic: BarChart3, show: isA },
   ]
 
