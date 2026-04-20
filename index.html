@@ -13,6 +13,58 @@ body{font-family:'Noto Sans JP','Noto Sans SC','PingFang SC','Hiragino Sans GB',
 input,select,button,textarea{font-family:inherit}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:rgba(128,128,128,.3);border-radius:3px}
+
+/* ========== Home (admin) glass design ========== */
+.home-ambient{position:absolute;width:50%;height:50%;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0}
+.home-ambient-tl{top:-10%;left:-10%;background:rgba(191,219,254,.35)}
+.home-ambient-br{bottom:-10%;right:-10%;background:rgba(153,246,228,.3)}
+
+.glass-card{background:rgba(255,255,255,.62);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.9);border-radius:24px;box-shadow:0 20px 50px -20px rgba(30,64,175,.06);transition:border-color .25s,box-shadow .25s}
+.glass-card.hv-emerald:hover{border-color:rgba(209,250,229,.9)}
+.glass-card.hv-rose:hover{border-color:rgba(255,228,230,.9)}
+.glass-card.hv-amber:hover{border-color:rgba(254,243,199,.9)}
+
+.stat-card{padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;min-height:110px}
+.stat-label{font-size:11px;font-weight:600;letter-spacing:.12em;color:#94a3b8}
+.stat-value{font-size:28px;font-weight:300;line-height:1}
+.stat-value.em{color:#10b981}
+.stat-value.rose{color:#f43f5e}
+.stat-value.amber{color:#f59e0b}
+.stat-sub{font-size:10px;color:#94a3b8;letter-spacing:.05em}
+
+.home-chip{padding:3px 8px;background:rgba(254,243,199,.5);border:1px solid rgba(253,230,138,.5);border-radius:6px;font-size:10px;color:rgba(180,83,9,.8)}
+
+.clock-glow{position:absolute;inset:-14px;border-radius:50%;filter:blur(22px);background:rgba(226,232,240,.35);transition:all .7s;z-index:0}
+.clock-btn{position:relative;border-radius:50%;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:all .45s;cursor:pointer;box-shadow:0 8px 30px -6px rgba(15,23,42,.06);color:#94a3b8;font-family:inherit}
+.clock-btn:hover:not(:disabled){box-shadow:0 8px 30px -6px rgba(59,130,246,.18);color:#3b82f6;border-color:rgba(219,234,254,.9)}
+.clock-btn:hover:not(:disabled) .clock-icon{transform:scale(1.08)}
+.clock-btn:active:not(:disabled){transform:scale(.96)}
+.clock-btn[disabled]{cursor:wait;opacity:.7}
+.clock-icon{transition:transform .45s}
+.clock-label{font-size:11px;letter-spacing:.22em;font-weight:500}
+.clock-btn.ac:hover:not(:disabled){color:#3b82f6;border-color:rgba(147,197,253,.6)}
+.clock-btn.wn:hover:not(:disabled){color:#f59e0b;border-color:rgba(253,230,138,.6)}
+.clock-btn.gn:hover:not(:disabled){color:#10b981;border-color:rgba(167,243,208,.6)}
+.clock-btn.pp:hover:not(:disabled){color:#7c3aed;border-color:rgba(196,181,253,.6)}
+.clock-btn-lg{width:128px;height:128px}
+.clock-btn-md{width:96px;height:96px}
+
+.home-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;background:rgba(255,247,237,.55);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(254,215,170,.7);border-radius:16px;cursor:pointer;transition:background .2s,border-color .2s,transform .15s;color:inherit;font-family:inherit;width:100%;text-align:left}
+.home-banner:hover{background:rgba(255,237,213,.6);border-color:rgba(253,186,116,.7)}
+.home-banner:active{transform:scale(.995)}
+
+.icon-btn{padding:9px;background:rgba(255,255,255,.65);border:1px solid rgba(226,232,240,.6);border-radius:999px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);cursor:pointer;position:relative;transition:all .2s;color:#94a3b8;display:flex;align-items:center;justify-content:center}
+.icon-btn:hover{background:#fff;color:#3b82f6}
+.icon-btn:active{transform:scale(.95)}
+
+.pill-btn{padding:8px 18px;background:rgba(59,130,246,.9);color:#fff;border:none;border-radius:999px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 15px rgba(59,130,246,.18);transition:all .2s}
+.pill-btn:hover{background:#2563eb;box-shadow:0 4px 20px rgba(59,130,246,.28)}
+.pill-btn:active{transform:scale(.97)}
+.pill-btn.ghost{background:transparent;color:#64748b;border:1px solid rgba(148,163,184,.4);box-shadow:none}
+.pill-btn.ghost:hover{background:rgba(248,250,252,.8);color:#334155;box-shadow:none}
+
+.bell-dot{position:absolute;top:7px;right:7px;width:7px;height:7px;background:#fb7185;border-radius:50%;animation:bell-pulse 1.6s ease-in-out infinite}
+@keyframes bell-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.25)}}
 </style>
 </head>
 <body><div id="root"></div>

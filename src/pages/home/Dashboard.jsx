@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays, isHourly as empIsHourly, isFullTime as empIsFullTime, COMPANIES, fmtDateW } from "../../config/constants"
-import { Bell } from "lucide-react"
+import { Bell, Plus, Users, AlertCircle, FileText, ChevronRight, Fingerprint, Coffee, Zap, Moon, Check } from "lucide-react"
 
 const LAST_SEEN_KEY = "kintai_last_seen_anno_at"
 
@@ -120,6 +120,9 @@ export default function Dashboard({ user, t, tk, onNav }) {
             expectedToday: expectedToday.length,
             clockedInCount: clockedInIds.size,
             absentCount,
+            pendingLeave: pendL?.length || 0,
+            pendingSwap: pendS?.length || 0,
+            pendingTrans: pendTc?.length || 0,
             totalPending: (pendL?.length || 0) + (pendS?.length || 0) + (pendTc?.length || 0),
           })
           setPendingProfiles(pending || [])
@@ -307,34 +310,172 @@ export default function Dashboard({ user, t, tk, onNav }) {
   )
 
   if (isA) {
-    return (
-      <div>
-        <Header title="管理面板" />
-        {annoShow && <PublishForm />}
-        <Toast />
-        {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
+    const stateLabel = (() => {
+      if (!ci) return "Current Status · 未打卡"
+      if (co) return `已退勤 ${co.slice(0, 5)} · 辛苦了`
+      if (bs && !be) return `休息中 ${bs.slice(0, 5)}~`
+      if (bs && be) return `已出勤 ${ci.slice(0, 5)} · 休憩 ${bs.slice(0, 5)}-${be.slice(0, 5)}`
+      return `已出勤 ${ci.slice(0, 5)}`
+    })()
 
-        <div style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: t.tx, margin: "0 0 10px" }}>勤怠概览</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10 }}>
-            <Card label="已打卡人数" value={`${stats.clockedInCount}人`} sub={`今日应出勤 ${stats.expectedToday}人`} color={t.gn} />
-            <Card label="异常考勤" value={`${stats.absentCount}条`} sub="未打卡且无请假" color={stats.absentCount > 0 ? t.rd : t.gn} />
-            <Card label="待审批" value={`${stats.totalPending}件`} sub="请假 / 换休 / 交通费" color={stats.totalPending > 0 ? t.wn : t.gn} />
-          </div>
+    const clockButtons = (() => {
+      if (!canClock) return null
+      if (clocking) return <button disabled className="clock-btn clock-btn-lg ac"><Fingerprint size={36} strokeWidth={1} className="clock-icon" /><span className="clock-label">处理中</span></button>
+      if (!ci) return (
+        <div style={{ position: "relative" }}>
+          <div className="clock-glow" />
+          <button onClick={() => clock("in")} className="clock-btn clock-btn-lg ac"><Fingerprint size={40} strokeWidth={1} className="clock-icon" /><span className="clock-label">出勤</span></button>
         </div>
+      )
+      if (co) return <div style={{ color: "#10b981", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}><Check size={40} strokeWidth={1.4} /><span style={{ fontSize: 12, letterSpacing: ".2em" }}>辛苦了</span></div>
+      if (onBreak) return <button onClick={() => clock("be")} className="clock-btn clock-btn-md gn"><Zap size={28} strokeWidth={1.2} className="clock-icon" /><span className="clock-label">休息结束</span></button>
+      return (
+        <>
+          {!be && <button onClick={() => clock("bs")} className="clock-btn clock-btn-md wn"><Coffee size={26} strokeWidth={1.2} className="clock-icon" /><span className="clock-label">开始休息</span></button>}
+          <button onClick={() => clock("out")} className="clock-btn clock-btn-md pp"><Moon size={26} strokeWidth={1.2} className="clock-icon" /><span className="clock-label">退勤</span></button>
+        </>
+      )
+    })()
 
-        {pendingProfiles.length > 0 && (
-          <button onClick={() => onNav && onNav("empmgr")} style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.wn}40`, background: `${t.wn}08`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 8, background: t.wn }} />
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: t.tx }}>还有 {pendingProfiles.length} 个档案待完善</div>
-                <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>新员工缺合同日期或 My Number，请在「人事档案」中补齐</div>
+    return (
+      <div style={{ position: "relative", minHeight: "100%" }}>
+        <div className="home-ambient home-ambient-tl" />
+        <div className="home-ambient home-ambient-br" />
+
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto" }}>
+          <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ color: "rgba(59,130,246,.8)", fontSize: 11, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>早稲田理工塾</div>
+              <h1 style={{ fontSize: 20, fontWeight: 500, color: "#1e293b", marginTop: 4, letterSpacing: ".04em" }}>勤怠管理面板</h1>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", position: "relative" }}>
+              <button className="icon-btn" onClick={() => bellOpen ? setBellOpen(false) : openBell()} aria-label="通知">
+                <Bell size={18} strokeWidth={1.6} />
+                {unreadAnnos.length > 0 && <span className="bell-dot" />}
+              </button>
+              <button className="pill-btn" onClick={() => { setBellOpen(false); if (annoShow) resetAnnoForm(); else setAnnoShow(true) }}>
+                <Plus size={14} strokeWidth={2} /> {annoShow ? "关闭" : "发布通知"}
+              </button>
+              {bellOpen && (
+                <>
+                  <div onClick={() => setBellOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                  <div style={{ position: "absolute", top: "calc(100% + 10px)", right: 0, width: 340, maxWidth: "92vw", maxHeight: 420, overflowY: "auto", background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 12, boxShadow: "0 16px 48px rgba(15,23,42,.18)", zIndex: 50 }}>
+                    <div style={{ padding: "12px 14px", borderBottom: `1px solid ${t.bl}`, fontSize: 13, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 6 }}>
+                      <Bell size={14} strokeWidth={1.7} color={t.ac} /> 通知（{annos.length}）
+                    </div>
+                    {annos.length === 0 ? (
+                      <div style={{ padding: 24, textAlign: "center", fontSize: 11, color: t.tm }}>暂无通知</div>
+                    ) : annos.map((a) => {
+                      const s = kindStyle(a.kind)
+                      return (
+                        <div key={a.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${t.bl}`, borderLeft: `3px solid ${s.c}`, background: s.bg }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: s.c }}>{a.title}</div>
+                          {a.body && <div style={{ fontSize: 11, color: t.ts, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{a.body}</div>}
+                          <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>{fmtDateW(a.created_at)}{a.expires_at && ` · 到期 ${fmtDateW(a.expires_at)}`}</div>
+                          <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                            <button onClick={() => editAnno(a)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>编辑</button>
+                            <button onClick={() => delAnno(a.id)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>删除</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          </header>
+
+          {annoShow && <PublishForm />}
+          <Toast />
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            {/* 打卡主面板 */}
+            <div className="glass-card" style={{ gridColumn: "span 4", padding: "30px 36px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 500, letterSpacing: ".05em", marginBottom: 6 }}>
+                  {time.getFullYear()}年{m}月{time.getDate()}日 {WEEKDAYS[time.getDay()]}曜日
+                </div>
+                <div style={{ fontSize: 54, fontWeight: 300, color: "#334155", letterSpacing: ".05em", fontFamily: "monospace", lineHeight: 1, marginBottom: 10 }}>
+                  {pad(time.getHours())}:{pad(time.getMinutes())}:{pad(time.getSeconds())}
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: 11, letterSpacing: ".15em", textTransform: "uppercase" }}>
+                  {stateLabel}
+                </div>
+              </div>
+              {clockButtons && (
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", minHeight: 128, alignItems: "center" }}>
+                  {clockButtons}
+                </div>
+              )}
+            </div>
+
+            {/* 已打卡 */}
+            <div className="glass-card stat-card hv-emerald">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="stat-label">已打卡人数</span>
+                <Users size={16} color="rgba(16,185,129,.7)" strokeWidth={1.5} />
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span className="stat-value em">{stats.clockedInCount}</span>
+                  <span className="stat-sub">/{stats.expectedToday}</span>
+                </div>
+                <div className="stat-sub">应出勤</div>
               </div>
             </div>
-            <span style={{ fontSize: 11, color: t.wn, fontWeight: 600, whiteSpace: "nowrap" }}>去人事档案补齐</span>
-          </button>
-        )}
+
+            {/* 异常考勤 */}
+            <div className="glass-card stat-card hv-rose">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="stat-label">异常考勤</span>
+                <AlertCircle size={16} color="rgba(244,63,94,.7)" strokeWidth={1.5} />
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span className="stat-value rose">{stats.absentCount}</span>
+                  <span className="stat-sub">条</span>
+                </div>
+                <div className="stat-sub">未打卡且无请假</div>
+              </div>
+            </div>
+
+            {/* 待审批 */}
+            <div className="glass-card stat-card hv-amber" style={{ gridColumn: "span 2" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="stat-label">待审批事项</span>
+                <FileText size={16} color="rgba(245,158,11,.7)" strokeWidth={1.5} />
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span className="stat-value amber">{stats.totalPending}</span>
+                  <span className="stat-sub">件</span>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <span className="home-chip">请假 {stats.pendingLeave}</span>
+                  <span className="home-chip">换休 {stats.pendingSwap}</span>
+                  <span className="home-chip">交通 {stats.pendingTrans}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {pendingProfiles.length > 0 && (
+            <button onClick={() => onNav && onNav("empmgr")} className="home-banner" style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(254,215,170,.5)", border: "1px solid rgba(254,215,170,.8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fb923c" }}>
+                  <AlertCircle size={14} strokeWidth={2} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(234,88,12,.9)", letterSpacing: ".02em" }}>{pendingProfiles.length} 个档案待完善</div>
+                  <div style={{ fontSize: 11, color: "rgba(249,115,22,.7)", marginTop: 2 }}>新员工合同或 My Number 缺失</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", color: "rgba(249,115,22,.8)", fontSize: 12, fontWeight: 500, letterSpacing: ".08em", whiteSpace: "nowrap" }}>
+                前往处理 <ChevronRight size={14} />
+              </div>
+            </button>
+          )}
+        </div>
       </div>
     )
   }
