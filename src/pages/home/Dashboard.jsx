@@ -338,11 +338,8 @@ export default function Dashboard({ user, t, tk, onNav }) {
     })()
 
     return (
-      <div style={{ position: "relative", minHeight: "100%", overflow: "hidden" }}>
-        <div className="home-ambient home-ambient-tl" />
-        <div className="home-ambient home-ambient-br" />
-
-        <div style={{ position: "relative", zIndex: 1 }}>
+      <div>
+        <div>
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
             <div>
               <div style={{ color: "rgba(59,130,246,.8)", fontSize: 11, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>早稲田理工塾</div>
@@ -512,11 +509,8 @@ export default function Dashboard({ user, t, tk, onNav }) {
   })()
 
   return (
-    <div style={{ position: "relative", minHeight: "100%", overflow: "hidden" }}>
-      <div className="home-ambient home-ambient-tl" />
-      <div className="home-ambient home-ambient-br" />
-
-      <div style={{ position: "relative", zIndex: 1 }}>
+    <div>
+      <div>
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={{ color: "rgba(59,130,246,.8)", fontSize: 11, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>早稲田理工塾</div>

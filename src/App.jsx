@@ -77,20 +77,24 @@ export default function App() {
   return (
     <div style={{ display: "flex", height: "100vh", background: t.bg, color: t.tx, overflow: "hidden" }}>
       {!mobile && <Sidebar user={user} view={view} onNav={setView} onLogout={logout} t={t} theme={theme} toggleTheme={toggleTheme} badge={badge} />}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: mobile ? "16px 14px 80px" : "24px 28px" }}>
-        {mobile && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>勤怠管理</div>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", position: "relative" }}>
+        <div className="home-ambient home-ambient-tl" />
+        <div className="home-ambient home-ambient-br" />
+        <div style={{ position: "relative", zIndex: 1, padding: mobile ? "16px 14px 80px" : "24px 28px", minHeight: "100%", boxSizing: "border-box" }}>
+          {mobile && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>勤怠管理</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
+                <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
-              <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
-            </div>
-          </div>
-        )}
-        {pages[view] || <Dashboard user={user} t={t} tk={user.token} />}
+          )}
+          {pages[view] || <Dashboard user={user} t={t} tk={user.token} />}
+        </div>
       </div>
       {mobile && <MobileNav user={user} view={view} onNav={setView} t={t} badge={badge} />}
     </div>
