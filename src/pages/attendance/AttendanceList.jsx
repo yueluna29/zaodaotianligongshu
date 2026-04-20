@@ -81,7 +81,7 @@ export default function AttendanceList({ user, t, tk }) {
       sbGet(`transportation_claims?employee_id=eq.${user.id}&claim_date=gte.${from}&claim_date=lte.${to}&order=claim_date&select=*`, tk),
       user.has_commission ? sbGet(`commission_entries?employee_id=eq.${user.id}&entry_date=gte.${from}&entry_date=lte.${to}&order=entry_date,seq_number&select=*`, tk) : Promise.resolve([]),
       sbGet(`leave_requests?employee_id=eq.${(isAdmin && leaveViewEmp) ? leaveViewEmp : user.id}&order=leave_date.desc&select=*`, tk),
-      sbGet(`day_swap_requests?employee_id=eq.${user.id}&order=created_at.desc&select=*`, tk),
+      sbGet(`day_swap_requests?employee_id=eq.${(isAdmin && leaveViewEmp) ? leaveViewEmp : user.id}&order=created_at.desc&select=*`, tk),
       sbGet(`leave_requests?employee_id=eq.${user.id}&status=eq.承認&leave_type=eq.有休&select=leave_date,is_half_day`, tk),
       sbGet(`day_swap_requests?employee_id=eq.${user.id}&swap_type=eq.休日出勤&compensation_type=eq.換休&status=eq.承認&select=id,swap_date`, tk),
       sbGet(`expense_claims?employee_id=eq.${user.id}&order=claim_date.desc&select=*`, tk),
@@ -185,7 +185,7 @@ export default function AttendanceList({ user, t, tk }) {
       } else {
         for (const date of histFm.dates) {
           await sbPost("leave_requests", {
-            employee_id: user.id, leave_type: "有休", leave_date: date,
+            employee_id: (isAdmin && leaveViewEmp) ? leaveViewEmp : user.id, leave_type: "有休", leave_date: date,
             reason: histFm.reason || null, is_half_day: histFm.is_half_day,
             status: "承認", approved_at: new Date().toISOString(),
           }, tk)
@@ -201,7 +201,7 @@ export default function AttendanceList({ user, t, tk }) {
         }, tk)
       } else {
         await sbPost("day_swap_requests", {
-          employee_id: user.id, swap_type: "休日出勤", compensation_type: "代休",
+          employee_id: (isAdmin && leaveViewEmp) ? leaveViewEmp : user.id, swap_type: "休日出勤", compensation_type: "代休",
           original_date: histFm.work_date, swap_date: histFm.dates[0],
           reason: histFm.reason || null,
           status: "承認", approved_at: new Date().toISOString(), is_confirmed: true,
@@ -257,7 +257,11 @@ export default function AttendanceList({ user, t, tk }) {
     setSwapEditId(r.id); setSwapShow(true); setTab("swap")
   }
 
-  const delSwap = async (id) => { if (!confirm("确定要取消这条申请吗？")) return; await sbDel(`day_swap_requests?id=eq.${id}`, tk); await load() }
+  const delSwap = async (id, status) => {
+    const msg = status === "申請中" ? "确定要取消这条申请吗？" : "确定要删除这条已批准的换休记录吗？此操作不可撤销。"
+    if (!confirm(msg)) return
+    await sbDel(`day_swap_requests?id=eq.${id}`, tk); await load()
+  }
 
   // ==================== 交通费（逐行保存） ====================
   const updateTrans = (key, field, value) => setTransRows(prev => prev.map(r => r._key === key ? { ...r, [field]: value, _dirty: true } : r))
@@ -564,19 +568,21 @@ export default function AttendanceList({ user, t, tk }) {
         </div>
       )}
 
+      {/* ====== 管理者切换查看员工（适用于假期管理所有子tab） ====== */}
+      {mainTab === "leave" && isAdmin && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: `#8B5CF608`, border: `1px solid #8B5CF625`, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, color: "#8B5CF6", fontWeight: 600 }}>管理者 · 查看 / 编辑</span>
+          <select value={leaveViewEmp} onChange={(e) => setLeaveViewEmp(e.target.value)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 11, minWidth: 160 }}>
+            <option value="">本人 ({user.name})</option>
+            {allEmps.filter(e => e.id !== user.id).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+          {leaveViewEmp && <span style={{ fontSize: 10, color: t.tm }}>当前在管理 <strong style={{ color: t.tx }}>{allEmps.find(e => e.id === leaveViewEmp)?.name}</strong> 的有休 / 换休记录（编辑保存到该员工名下）</span>}
+        </div>
+      )}
+
       {/* ====== 假期申请 Tab ====== */}
       {mainTab === "leave" && tab === "leave" && (
         <div>
-          {isAdmin && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", borderRadius: 8, background: `#8B5CF608`, border: `1px solid #8B5CF625` }}>
-              <span style={{ fontSize: 11, color: "#8B5CF6", fontWeight: 600 }}>管理者 · 查看历史记录</span>
-              <select value={leaveViewEmp} onChange={(e) => setLeaveViewEmp(e.target.value)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 11, minWidth: 160 }}>
-                <option value="">本人 ({user.name})</option>
-                {allEmps.filter(e => e.id !== user.id).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
-              {leaveViewEmp && <span style={{ fontSize: 10, color: t.tm }}>当前查看：{allEmps.find(e => e.id === leaveViewEmp)?.name} 的有休记录</span>}
-            </div>
-          )}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={() => {
               if (leaveShow) { resetLeaveForm(); return }
@@ -660,7 +666,7 @@ export default function AttendanceList({ user, t, tk }) {
             这里补录<strong style={{ color: t.tx }}>已经休过</strong>的有休 / 代休（无需审批，会自动算入余额）。新申请请到「假期申请」或「换休管理」tab。
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-            <button onClick={() => { if (histShow) resetHistForm(); else setHistShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: histShow ? `1px solid ${t.bd}` : "none", background: histShow ? "transparent" : t.ac, color: histShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{histShow ? "✕ 关闭" : <><Plus size={14} /> 记录</>}</button>
+            <button onClick={() => { if (histShow) resetHistForm(); else setHistShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: histShow ? `1px solid ${t.bd}` : "none", background: histShow ? "transparent" : t.ac, color: histShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{histShow ? "✕ 关闭" : <><Plus size={14} /> {leaveViewEmp ? `给 ${allEmps.find(e => e.id === leaveViewEmp)?.name} 记录` : "记录"}</>}</button>
           </div>
 
           {histShow && (
@@ -756,7 +762,11 @@ export default function AttendanceList({ user, t, tk }) {
       {mainTab === "leave" && tab === "swap" && (
         <div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-            <button onClick={() => { if (swapShow) resetSwapForm(); else setSwapShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: swapShow ? `1px solid ${t.bd}` : "none", background: swapShow ? "transparent" : t.ac, color: swapShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{swapShow ? "✕ 关闭" : "+ 新申请"}</button>
+            <button onClick={() => {
+              if (swapShow) { resetSwapForm(); return }
+              setSwapShow(true)
+              if (isAdmin && leaveViewEmp) { setSwapHistMode(true); setSelEmp(leaveViewEmp) }
+            }} style={{ padding: "8px 18px", borderRadius: 8, border: swapShow ? `1px solid ${t.bd}` : "none", background: swapShow ? "transparent" : t.ac, color: swapShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{swapShow ? "✕ 关闭" : leaveViewEmp ? `+ 给 ${allEmps.find(e => e.id === leaveViewEmp)?.name} 录入历史` : "+ 新申请"}</button>
           </div>
 
           {swapShow && (
@@ -830,10 +840,12 @@ export default function AttendanceList({ user, t, tk }) {
                     {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {isPending && <>
+                    {(isPending || isAdmin) && (
                       <button onClick={() => startSwapEdit(r)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
-                      <button onClick={() => delSwap(r.id)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>取消</button>
-                    </>}
+                    )}
+                    {(isPending || isAdmin) && (
+                      <button onClick={() => delSwap(r.id, r.status)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>{isPending ? "取消" : "删除"}</button>
+                    )}
                     <span style={statusBadge(r.status)}>{r.status}</span>
                   </div>
                 </div>
