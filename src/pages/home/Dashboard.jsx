@@ -332,7 +332,7 @@ export default function Dashboard({ user, t, tk, onNav }) {
                 <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>新员工缺合同日期或 My Number，请在「人事档案」中补齐</div>
               </div>
             </div>
-            <span style={{ fontSize: 11, color: t.wn, fontWeight: 600, whiteSpace: "nowrap", textDecoration: "underline" }}>去人事档案补齐</span>
+            <span style={{ fontSize: 11, color: t.wn, fontWeight: 600, whiteSpace: "nowrap" }}>去人事档案补齐</span>
           </button>
         )}
       </div>
