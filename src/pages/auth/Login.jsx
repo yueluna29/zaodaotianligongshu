@@ -316,11 +316,11 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
           </>
         ) : (
           <>
-            <StepProgress />
-            {step === 1 && <Step1 />}
-            {step === 2 && <Step2 />}
-            {step === 3 && <Step3 />}
-            {step === 4 && <Step4 />}
+            {StepProgress()}
+            {step === 1 && Step1()}
+            {step === 2 && Step2()}
+            {step === 3 && Step3()}
+            {step === 4 && Step4()}
             <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
               {step > 1 && <button onClick={prev} disabled={ld} style={{ padding: "11px 18px", borderRadius: 10, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>← 上一步</button>}
               <div style={{ flex: 1 }} />
