@@ -72,11 +72,18 @@ export default function AttendanceList({ user, t, tk }) {
   const [expEditId, setExpEditId] = useState(null)
   const [expFm, setExpFm] = useState({ claim_date: todayStr(), category: "教材费", amount: "", note: "" })
 
+  // ====== 固定交通费 & 变更申请 ======
+  const [myTransAmount, setMyTransAmount] = useState(0)
+  const [myTransChangeReqs, setMyTransChangeReqs] = useState([])
+  const [transChangeShow, setTransChangeShow] = useState(false)
+  const [transChangeFm, setTransChangeFm] = useState({ requested_amount: "", effective_from: "", reason: "" })
+  const [transChangeSub, setTransChangeSub] = useState(false)
+
   // ==================== 数据加载 ====================
   const load = useCallback(async () => {
     sLd(true)
     const from = `${y}-${pad(m)}-01`, to = `${y}-${pad(m)}-${pad(days)}`
-    const [attData, trData, cmData, lvData, swData, usedReqs, compReqs, expData] = await Promise.all([
+    const [attData, trData, cmData, lvData, swData, usedReqs, compReqs, expData, meData, myTChg] = await Promise.all([
       sbGet(`attendance_records?employee_id=eq.${user.id}&work_date=gte.${from}&work_date=lte.${to}&order=work_date`, tk),
       sbGet(`transportation_claims?employee_id=eq.${user.id}&claim_date=gte.${from}&claim_date=lte.${to}&order=claim_date&select=*`, tk),
       user.has_commission ? sbGet(`commission_entries?employee_id=eq.${user.id}&entry_date=gte.${from}&entry_date=lte.${to}&order=entry_date,seq_number&select=*`, tk) : Promise.resolve([]),
@@ -85,6 +92,8 @@ export default function AttendanceList({ user, t, tk }) {
       sbGet(`leave_requests?employee_id=eq.${user.id}&status=eq.承認&leave_type=eq.有休&select=leave_date,is_half_day`, tk),
       sbGet(`day_swap_requests?employee_id=eq.${user.id}&swap_type=eq.休日出勤&compensation_type=eq.換休&status=eq.承認&select=id,swap_date`, tk),
       sbGet(`expense_claims?employee_id=eq.${user.id}&order=claim_date.desc&select=*`, tk),
+      sbGet(`employees?id=eq.${user.id}&select=transport_amount`, tk),
+      sbGet(`transport_change_requests?employee_id=eq.${user.id}&order=created_at.desc&select=*`, tk),
     ])
 
     const mp = {}; (attData || []).forEach((r) => { mp[r.work_date] = r }); sRecs(mp)
@@ -101,6 +110,8 @@ export default function AttendanceList({ user, t, tk }) {
 
     setSwapReqs(swData || [])
     setExpRecs(expData || [])
+    setMyTransAmount(Number(meData?.[0]?.transport_amount || 0))
+    setMyTransChangeReqs(myTChg || [])
 
     if (isAdmin && !allEmps.length) {
       const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name", tk)
@@ -268,6 +279,35 @@ export default function AttendanceList({ user, t, tk }) {
   const addTransRows = () => setTransRows(prev => [...prev, ...Array.from({ length: 2 }, mkTrans)])
   const removeTrans = (key) => setTransRows(prev => prev.filter(r => r._key !== key))
   const delTrans = async (id) => { if (!confirm("确定删除？")) return; await sbDel(`transportation_claims?id=eq.${id}`, tk); await load() }
+
+  // ====== 固定交通费：首次设置 / 变更申请 ======
+  const pendingTransChange = myTransChangeReqs.find(r => r.status === "申請中")
+  const submitTransChange = async () => {
+    const amt = parseFloat(transChangeFm.requested_amount)
+    if (!(amt >= 0) || !transChangeFm.effective_from) return
+    setTransChangeSub(true)
+    if (myTransAmount === 0) {
+      // 首次设置 — 直接更新，不走审批
+      await sbPatch(`employees?id=eq.${user.id}`, { transport_amount: amt, transport_method: "固定" }, tk)
+    } else {
+      await sbPost("transport_change_requests", {
+        employee_id: user.id,
+        previous_amount: myTransAmount,
+        requested_amount: amt,
+        effective_from: transChangeFm.effective_from,
+        reason: transChangeFm.reason || null,
+      }, tk)
+    }
+    setTransChangeFm({ requested_amount: "", effective_from: "", reason: "" })
+    setTransChangeShow(false)
+    await load()
+    setTransChangeSub(false)
+  }
+  const cancelTransChange = async (id) => {
+    if (!confirm("撤回这条变更申请？")) return
+    await sbDel(`transport_change_requests?id=eq.${id}`, tk)
+    await load()
+  }
   const toggleEdit = (key) => setEditingKeys(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
   const cancelEdit = (key) => { setEditingKeys(prev => { const n = new Set(prev); n.delete(key); return n }); load() }
 
@@ -913,7 +953,68 @@ export default function AttendanceList({ user, t, tk }) {
       
       {/* ====== 交通費 Tab ====== */}
       {mainTab === "expense" && tab === "transport" && (
-        <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
+        <>
+          {/* ===== 固定月額（正/契用） ===== */}
+          <div style={{ background: t.bgC, borderRadius: 10, padding: 16, border: `1px solid ${t.bd}`, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: t.tm, marginBottom: 4 }}>固定交通费（月額 · 通勤定期代等）</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#8B5CF6" }}>¥{myTransAmount.toLocaleString()}<span style={{ fontSize: 11, color: t.tm, fontWeight: 400, marginLeft: 6 }}>/ 月</span></div>
+                {myTransAmount === 0 && <div style={{ fontSize: 10, color: t.wn, marginTop: 4 }}>尚未设置。首次设置无需审批，直接保存即可。</div>}
+              </div>
+              {!transChangeShow ? (
+                pendingTransChange ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                    <span style={{ fontSize: 11, color: t.wn, fontWeight: 600 }}>已有变更申请待审批</span>
+                    <span style={{ fontSize: 10, color: t.tm, fontFamily: "monospace" }}>¥{Number(pendingTransChange.previous_amount).toLocaleString()} → <strong style={{ color: t.ac }}>¥{Number(pendingTransChange.requested_amount).toLocaleString()}</strong>（{pendingTransChange.effective_from} 起）</span>
+                    <button onClick={() => cancelTransChange(pendingTransChange.id)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>撤回申请</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setTransChangeFm({ requested_amount: String(myTransAmount || ""), effective_from: `${y}-${pad(m)}-01`, reason: "" }); setTransChangeShow(true) }} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{myTransAmount === 0 ? "首次设置" : "申请变更"}</button>
+                )
+              ) : null}
+            </div>
+
+            {transChangeShow && (
+              <div style={{ marginTop: 14, padding: 14, borderRadius: 8, background: `${t.ac}08`, border: `1px solid ${t.ac}30` }}>
+                <h4 style={{ fontSize: 12, fontWeight: 600, color: t.tx, margin: "0 0 10px" }}>{myTransAmount === 0 ? "首次设置固定交通费" : "申请变更固定交通费"}</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{myTransAmount === 0 ? "金額 (円 / 月)" : "新金額 (円 / 月)"}</label>
+                    <input type="number" value={transChangeFm.requested_amount} onChange={(e) => setTransChangeFm(p => ({ ...p, requested_amount: e.target.value }))} placeholder="例: 18000" style={fmS} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{myTransAmount === 0 ? "起算月" : "生效月"}</label>
+                    <input type="date" value={transChangeFm.effective_from} onChange={(e) => setTransChangeFm(p => ({ ...p, effective_from: e.target.value }))} style={fmS} />
+                  </div>
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>理由 / 备注{myTransAmount === 0 ? "（选填）" : ""}</label>
+                  <input value={transChangeFm.reason} onChange={(e) => setTransChangeFm(p => ({ ...p, reason: e.target.value }))} placeholder="例：搬家/路线变更" style={fmS} />
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={submitTransChange} disabled={transChangeSub || !transChangeFm.requested_amount || !transChangeFm.effective_from} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: transChangeSub ? 0.5 : 1 }}>{transChangeSub ? "提交中..." : myTransAmount === 0 ? "保存" : "提交申请"}</button>
+                  <button onClick={() => setTransChangeShow(false)} style={{ padding: "8px 18px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
+                </div>
+              </div>
+            )}
+
+            {myTransChangeReqs.filter(r => r.status !== "申請中").length > 0 && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${t.bl}` }}>
+                <div style={{ fontSize: 10, color: t.tm, marginBottom: 6 }}>变更历史</div>
+                {myTransChangeReqs.filter(r => r.status !== "申請中").slice(0, 5).map(r => (
+                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 10, color: t.ts, fontFamily: "monospace" }}>
+                    <span>¥{Number(r.previous_amount).toLocaleString()} → ¥{Number(r.requested_amount).toLocaleString()} ({r.effective_from}起)</span>
+                    <span style={{ color: r.status === "承認" ? t.gn : t.rd, fontWeight: 600 }}>{r.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ===== 临时交通费表格（原有） ===== */}
+          <div style={{ fontSize: 11, color: t.tm, marginBottom: 8, padding: "0 4px" }}>临时交通费（固定月額以外的单次出行）</div>
+          <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead><tr style={{ background: t.bgH }}>{["日期", "路线", "往返", "金额", "备注", ""].map((h, i) => <th key={i} style={{ padding: "8px 8px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
             <tbody>{transRows.map(r => {
@@ -957,7 +1058,8 @@ export default function AttendanceList({ user, t, tk }) {
               <td colSpan={2}></td>
             </tr></tfoot>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* ====== 报销登记 Tab ====== */}

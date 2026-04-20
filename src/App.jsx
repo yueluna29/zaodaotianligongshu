@@ -38,11 +38,12 @@ export default function App() {
   useEffect(() => {
     if (!user || user.role !== "admin") return
     const poll = async () => {
-      const [lr, sw] = await Promise.all([
+      const [lr, sw, tc] = await Promise.all([
         sbGet("leave_requests?status=eq.申請中&select=id", user.token),
         sbGet("day_swap_requests?status=eq.申請中&select=id", user.token),
+        sbGet("transport_change_requests?status=eq.申請中&select=id", user.token),
       ])
-      setBadge((lr?.length || 0) + (sw?.length || 0))
+      setBadge((lr?.length || 0) + (sw?.length || 0) + (tc?.length || 0))
     }
     poll()
     const iv = setInterval(poll, 30000)

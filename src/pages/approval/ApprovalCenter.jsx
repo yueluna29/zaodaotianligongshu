@@ -1,35 +1,46 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPatch } from "../../api/supabase"
 import { LEAVE_TYPES } from "../../config/constants"
-import { Palmtree, ArrowLeftRight, CheckCircle } from "lucide-react"
+import { Palmtree, ArrowLeftRight, CheckCircle, Train } from "lucide-react"
 
 export default function ApprovalCenter({ t, tk }) {
   const [lr, sLr] = useState([])
   const [sw, sSw] = useState([])
+  const [tcr, sTcr] = useState([])
   const [emps, sEmps] = useState({})
   const [ld, sLd] = useState(true)
-  const [tab, setTab] = useState("leave") // "leave" | "swap"
+  const [tab, setTab] = useState("leave") // "leave" | "swap" | "trans"
 
   const load = useCallback(async () => {
     sLd(true)
-    const [r, s, e] = await Promise.all([
+    const [r, s, tc, e] = await Promise.all([
       sbGet("leave_requests?order=created_at.desc&select=*", tk),
       sbGet("day_swap_requests?order=created_at.desc&select=*", tk),
+      sbGet("transport_change_requests?order=created_at.desc&select=*", tk),
       sbGet("employees?select=id,name,email", tk),
     ])
     const em = {}; (e || []).forEach((emp) => { em[emp.id] = emp })
-    sLr(r || []); sSw(s || []); sEmps(em); sLd(false)
+    sLr(r || []); sSw(s || []); sTcr(tc || []); sEmps(em); sLd(false)
   }, [tk])
 
   useEffect(() => { load() }, [load])
 
   const actL = async (id, s) => { await sbPatch(`leave_requests?id=eq.${id}`, { status: s, approved_at: new Date().toISOString() }, tk); await load() }
   const actS = async (id, s) => { await sbPatch(`day_swap_requests?id=eq.${id}`, { status: s, approved_at: new Date().toISOString() }, tk); await load() }
+  const actTc = async (r, s) => {
+    if (s === "承認") {
+      await sbPatch(`employees?id=eq.${r.employee_id}`, { transport_amount: r.requested_amount, transport_method: "固定" }, tk)
+    }
+    await sbPatch(`transport_change_requests?id=eq.${r.id}`, { status: s, approved_at: new Date().toISOString() }, tk)
+    await load()
+  }
 
   const pendL = lr.filter((r) => r.status === "申請中")
   const pendS = sw.filter((r) => r.status === "申請中")
+  const pendTc = tcr.filter((r) => r.status === "申請中")
   const doneL = lr.filter((r) => r.status !== "申請中").slice(0, 30)
   const doneS = sw.filter((r) => r.status !== "申請中").slice(0, 30)
+  const doneTc = tcr.filter((r) => r.status !== "申請中").slice(0, 30)
 
   if (ld) return <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
 
@@ -66,6 +77,7 @@ export default function ApprovalCenter({ t, tk }) {
   const tabsDef = [
     { key: "leave", label: "休假申请", icon: Palmtree, badge: pendL.length },
     { key: "swap", label: "换休申请", icon: ArrowLeftRight, badge: pendS.length },
+    { key: "trans", label: "交通费变更", icon: Train, badge: pendTc.length },
   ]
 
   return (
@@ -73,7 +85,7 @@ export default function ApprovalCenter({ t, tk }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 16px" }}>
         <CheckCircle size={20} strokeWidth={1.8} color={t.tx} />
         <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0 }}>承认中心</h2>
-        <span style={{ fontSize: 12, fontWeight: 400, color: t.wn }}>待审批: {pendL.length + pendS.length}件</span>
+        <span style={{ fontSize: 12, fontWeight: 400, color: t.wn }}>待审批: {pendL.length + pendS.length + pendTc.length}件</span>
       </div>
 
       {/* ====== 顶层 tab 切换 ====== */}
@@ -108,6 +120,51 @@ export default function ApprovalCenter({ t, tk }) {
               <h3 style={{ fontSize: 13, fontWeight: 600, color: t.ts, margin: "0 0 8px" }}>最近已处理（{doneL.length}件）</h3>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {doneL.map((r) => <Row key={r.id} name={emps[r.employee_id]?.name || "?"} badge={leaveBadge(r)} date={r.leave_date} detail={r.reason} status={r.status} />)}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === "trans" && (
+        <div>
+          {pendTc.length > 0 ? (
+            <>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: t.ts, margin: "0 0 8px" }}>待审批（{pendTc.length}件）</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+                {pendTc.map((r) => (
+                  <div key={r.id} style={{ background: t.bgC, borderRadius: 10, padding: "12px 16px", border: `1px solid ${t.wn}33`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: t.tx }}>{emps[r.employee_id]?.name || "?"}</span>
+                      <span style={{ fontSize: 12, fontFamily: "monospace", color: t.ts }}>¥{Number(r.previous_amount).toLocaleString()} → <strong style={{ color: t.ac }}>¥{Number(r.requested_amount).toLocaleString()}</strong></span>
+                      <span style={{ fontSize: 10, color: t.tm }}>{r.effective_from} 起</span>
+                      {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => actTc(r, "承認")} style={{ padding: "5px 14px", borderRadius: 6, border: "none", background: t.gn, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>批准并更新</button>
+                      <button onClick={() => actTc(r, "却下")} style={{ padding: "5px 14px", borderRadius: 6, border: `1px solid ${t.rd}44`, background: "transparent", color: t.rd, fontSize: 11, cursor: "pointer" }}>驳回</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: "14px 16px", borderRadius: 8, background: `${t.gn}10`, border: `1px solid ${t.gn}30`, color: t.gn, fontSize: 12, marginBottom: 20 }}>暂无待审批的交通费变更</div>
+          )}
+          {doneTc.length > 0 && (
+            <>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: t.ts, margin: "0 0 8px" }}>最近已处理（{doneTc.length}件）</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {doneTc.map((r) => (
+                  <div key={r.id} style={{ background: t.bgC, borderRadius: 10, padding: "12px 16px", border: `1px solid ${t.bd}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: t.tx }}>{emps[r.employee_id]?.name || "?"}</span>
+                      <span style={{ fontSize: 12, fontFamily: "monospace", color: t.ts }}>¥{Number(r.previous_amount).toLocaleString()} → ¥{Number(r.requested_amount).toLocaleString()}</span>
+                      <span style={{ fontSize: 10, color: t.tm }}>{r.effective_from} 起</span>
+                    </div>
+                    <span style={{ padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: r.status === "承認" ? t.gn : t.rd, background: (r.status === "承認" ? `${t.gn}` : `${t.rd}`) + "15" }}>{r.status}</span>
+                  </div>
+                ))}
               </div>
             </>
           )}
