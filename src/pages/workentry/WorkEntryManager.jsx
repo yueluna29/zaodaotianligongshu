@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, Pencil, ArrowLeft } from "lucide-react"
+import { fmtDateW } from "../../config/constants"
 
 const DEPTS = ["大学院", "学部", "文书", "语言类"]
 const mkWork = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, _type: "work", work_date: "", business_type: "", start_time: "", end_time: "", work_minutes: 0, hourly_rate: 0, transport_fee: "", subtotal: 0, student_name: "", course_name: "", other_expense: 0, other_expense_note: "" })
@@ -288,7 +289,7 @@ export default function WorkEntryManager({ user, t, tk }) {
             <tbody>
               {workRows.map(r => { const ed = r._isNew || editingKeys.has(r._key); const hrs = r.work_minutes > 0 ? (r.work_minutes / 60).toFixed(2) : ""; return (
                 <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                  <td style={{ padding: "4px 3px", textAlign: "center" }}>{ed ? <input type="date" value={r.work_date} onChange={e => updateRow(r._key, "work_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.work_date}</span>}</td>
+                  <td style={{ padding: "4px 3px", textAlign: "center" }}>{ed ? <input type="date" value={r.work_date} onChange={e => updateRow(r._key, "work_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{fmtDateW(r.work_date)}</span>}</td>
                   <td style={{ padding: "4px 3px", textAlign: "center" }}>{ed ? <select value={r.business_type} onChange={e => updateRow(r._key, "business_type", e.target.value)} style={{ ...selS, width: 105 }}><option value="">选择</option>{rates.map(rt => <option key={rt.business_type} value={rt.business_type}>{rt.business_type}</option>)}</select> : <span style={{ fontSize: 11, color: "#8B5CF6", fontWeight: 600 }}>{r.business_type}</span>}</td>
                   <td style={{ padding: "4px 3px", textAlign: "center" }}>{ed ? <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.start_time} onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; updateRow(r._key, "start_time", v) }} style={{ ...iS, width: 55, textAlign: "center" }} /> : <span style={{ ...roS, color: t.ts }}>{r.start_time}</span>}</td>
                   <td style={{ padding: "4px 3px", textAlign: "center" }}>{ed ? <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.end_time} onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; updateRow(r._key, "end_time", v) }} style={{ ...iS, width: 55, textAlign: "center" }} /> : <span style={{ ...roS, color: t.ts }}>{r.end_time}</span>}</td>
@@ -320,7 +321,7 @@ export default function WorkEntryManager({ user, t, tk }) {
             <thead><tr style={{ background: t.bgH }}>{["日期", "金额", "报销说明", ""].map((h, i) => <th key={i} style={{ padding: "8px 10px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
             <tbody>{expRows.map(r => { const ed = r._isNew || editingKeys.has(r._key); return (
               <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                <td style={{ padding: "6px 10px", textAlign: "center" }}>{ed ? <input type="date" value={r.work_date} onChange={e => updateRow(r._key, "work_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.work_date}</span>}</td>
+                <td style={{ padding: "6px 10px", textAlign: "center" }}>{ed ? <input type="date" value={r.work_date} onChange={e => updateRow(r._key, "work_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{fmtDateW(r.work_date)}</span>}</td>
                 <td style={{ padding: "6px 10px", textAlign: "center" }}>{ed ? <input type="number" value={r.other_expense} onChange={e => updateRow(r._key, "other_expense", e.target.value)} placeholder="0" style={{ ...iS, width: 100, textAlign: "right" }} /> : <span style={{ fontSize: 12, fontWeight: 600, color: t.wn }}>¥{Number(r.other_expense || 0).toLocaleString()}</span>}</td>
                 <td style={{ padding: "6px 10px" }}>{ed ? <input type="text" value={r.other_expense_note} onChange={e => updateRow(r._key, "other_expense_note", e.target.value)} placeholder="报销说明" style={{ ...iS, width: "100%", fontFamily: "inherit" }} /> : <span style={{ fontSize: 11, color: t.ts }}>{r.other_expense_note}</span>}</td>
                 <td style={{ padding: "6px 10px", width: 60 }}>{actBtns(r, false)}</td>
@@ -350,7 +351,7 @@ export default function WorkEntryManager({ user, t, tk }) {
               ].map((h, i) => <th key={i} style={{ padding: "10px 14px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: h.a, borderBottom: `1px solid ${t.bd}`, width: h.w, letterSpacing: 0.3 }}>{h.l}</th>)}</tr></thead>
               <tbody>{commRows.map(r => { const ed = r._isNew || editingKeys.has(r._key); return (
                 <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                  <td style={{ padding: "6px 14px", textAlign: "left" }}>{ed ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.entry_date}</span>}</td>
+                  <td style={{ padding: "6px 14px", textAlign: "left" }}>{ed ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{fmtDateW(r.entry_date)}</span>}</td>
                   <td style={{ padding: "6px 14px", textAlign: "center" }}>{ed ? <input type="number" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} placeholder="1" style={{ ...iS, width: 45, textAlign: "center" }} /> : <span>{r.seq_number}</span>}</td>
                   <td style={{ padding: "6px 14px", textAlign: "left" }}>{ed ? <input type="text" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} placeholder="学生姓名" style={{ ...iS, width: "100%", maxWidth: 180, fontFamily: "inherit" }} /> : <span style={{ fontSize: 12, fontWeight: 500, color: t.tx }}>{r.student_name}</span>}</td>
                   <td style={{ padding: "6px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{ed ? <input type="number" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} placeholder="0" style={{ ...iS, width: 100, textAlign: "right" }} /> : <span>¥{Number(r.tuition_amount || 0).toLocaleString()}</span>}</td>

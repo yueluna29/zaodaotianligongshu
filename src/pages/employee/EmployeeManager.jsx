@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
-import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly } from "../../config/constants"
+import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW } from "../../config/constants"
 import { Users } from "lucide-react"
 import PayRateSection from "../../components/PayRateSection"
 
@@ -261,7 +261,7 @@ export default function EmployeeManager({ user, t, tk }) {
               <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
                 <div>
                   <div style={{ fontSize: 10, color: t.tm, fontWeight: 500, letterSpacing: 0.3 }}>入职日期</div>
-                  <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, marginTop: 3 }}>{e.hire_date || "—"}</div>
+                  <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, marginTop: 3 }}>{e.hire_date ? fmtDateW(e.hire_date) : "—"}</div>
                   {yearsOfService && <div style={{ fontSize: 10, color: t.ac, marginTop: 2, fontWeight: 500 }}>在职 {yearsOfService} 年</div>}
                 </div>
                 {e.phone && <div>
@@ -275,12 +275,12 @@ export default function EmployeeManager({ user, t, tk }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
                 {isExpiring && (
                   <div style={{ padding: "8px 12px", borderRadius: 8, background: `${t.rd}10`, border: `1px solid ${t.rd}40`, fontSize: 11, color: t.rd, fontWeight: 500 }}>
-                    在留期限即将过期 · {e.residence_expiry}
+                    在留期限即将过期 · {fmtDateW(e.residence_expiry)}
                   </div>
                 )}
                 {contractExpiring && (
                   <div style={{ padding: "8px 12px", borderRadius: 8, background: `${t.wn}10`, border: `1px solid ${t.wn}40`, fontSize: 11, color: t.wn, fontWeight: 500 }}>
-                    合同即将到期 · {e.contract_end_date}
+                    合同即将到期 · {fmtDateW(e.contract_end_date)}
                   </div>
                 )}
               </div>
@@ -307,7 +307,7 @@ export default function EmployeeManager({ user, t, tk }) {
             <div style={g4}>
               {readField("所属公司", COMPANIES.find((c) => c.id === e.company_id)?.name)}
               {readField("工作类型", e.employment_type)}
-              {readField("入职日期", e.hire_date)}
+              {readField("入职日期", e.hire_date && fmtDateW(e.hire_date))}
               {readField("权限", e.role === "admin" ? "管理者" : "社员")}
             </div>
           )}
@@ -363,7 +363,7 @@ export default function EmployeeManager({ user, t, tk }) {
             </div>
             <div style={g4}>
               {readField("身份证号码", e.id_card_number)}
-              {readField("出生年月日", e.birth_date)}
+              {readField("出生年月日", e.birth_date && fmtDateW(e.birth_date))}
               {readField("性别", e.gender)}
               {readField("兼任教师", e.is_teacher ? "是" : "否")}
             </div>
@@ -413,12 +413,12 @@ export default function EmployeeManager({ user, t, tk }) {
                 {readField("在留资格", e.residence_status)}
                 {readField("在留卡号码", e.residence_card_number)}
                 {readField("在留期限", e.residence_expiry && (isExpiring
-                  ? <span style={{ color: t.rd, fontWeight: 700 }}>{e.residence_expiry} (即将过期)</span>
-                  : e.residence_expiry))}
+                  ? <span style={{ color: t.rd, fontWeight: 700 }}>{fmtDateW(e.residence_expiry)} (即将过期)</span>
+                  : fmtDateW(e.residence_expiry)))}
                 {readField("国籍/地域", e.nationality)}
               </div>
               <div style={g4}>
-                {readField("出生年月日", e.birth_date)}
+                {readField("出生年月日", e.birth_date && fmtDateW(e.birth_date))}
                 {readField("性别", e.gender)}
                 {readField("资格外许可", e.has_extra_work_permit ? "有" : "无")}
                 <div />
@@ -466,7 +466,7 @@ export default function EmployeeManager({ user, t, tk }) {
             <div style={g4}>
               {readField("扶养人数", e.dependents_count)}
               {readField("My Number", e.my_number)}
-              {readField("合同期间", e.contract_start_date ? `${e.contract_start_date} ~ ${e.contract_end_date || ""}` : null)}
+              {readField("合同期间", e.contract_start_date ? `${fmtDateW(e.contract_start_date)} ~ ${e.contract_end_date ? fmtDateW(e.contract_end_date) : ""}` : null)}
               {readField("签单提成", e.has_commission ? "已开启" : "未开启")}
               {!isHourly && readField("扶养控除", e.has_dependent_deduction ? "有" : "无")}
             </div>
@@ -638,7 +638,7 @@ export default function EmployeeManager({ user, t, tk }) {
                   <td style={{ padding: "10px 12px", color: t.ts }}>{emp.employment_type}</td>
                   <td style={{ padding: "10px 12px" }}>
                     {!isChinaCompany(emp.company_id) && emp.residence_status && <div style={{ fontSize: 11, color: t.ts }}>{emp.residence_status}</div>}
-                    {isExp && <div style={{ fontSize: 10, color: t.rd, fontWeight: 600 }}>即将过期 ({emp.residence_expiry})</div>}
+                    {isExp && <div style={{ fontSize: 10, color: t.rd, fontWeight: 600 }}>即将过期 ({fmtDateW(emp.residence_expiry)})</div>}
                   </td>
                   <td style={{ padding: "10px 12px", textAlign: "right" }}><span style={{ color: t.ac, fontSize: 11, fontWeight: 600 }}>查看档案</span></td>
                 </tr>

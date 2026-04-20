@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes, isFullTime } from "../../config/constants"
+import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes, isFullTime, fmtDateW } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
 import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks, History, Users } from "lucide-react"
@@ -597,7 +597,7 @@ export default function AttendanceList({ user, t, tk }) {
                       <button onClick={() => { setMainTab("leave"); setTab("history"); setLeaveViewEmp(r.emp.id) }} style={{ background: "none", border: "none", padding: 0, color: t.ac, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{r.emp.name}</button>
                     </td>
                     <td style={{ padding: "10px 12px", color: t.ts }}>{r.emp.employment_type}</td>
-                    <td style={{ padding: "10px 12px", color: t.ts, fontFamily: "monospace", fontSize: 11 }}>{r.emp.hire_date || "—"}</td>
+                    <td style={{ padding: "10px 12px", color: t.ts, fontFamily: "monospace", fontSize: 11 }}>{r.emp.hire_date ? fmtDateW(r.emp.hire_date) : "—"}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.paid.currentGrant}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.paid.carryOver}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.paid.used}</td>
@@ -625,7 +625,7 @@ export default function AttendanceList({ user, t, tk }) {
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: sc, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: item.status === "当前" ? 700 : 400, color: item.status === "未到达" ? t.td : t.tx }}>{item.label} — {item.days}天</div>
-                  <div style={{ fontSize: 10, color: t.tm }}>付与: {item.grantDate} → 期限: {item.expiresDate}</div>
+                  <div style={{ fontSize: 10, color: t.tm }}>付与: {fmtDateW(item.grantDate)} → 期限: {fmtDateW(item.expiresDate)}</div>
                 </div>
                 <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 9, fontWeight: 600, color: sc, background: `${sc}18` }}>{item.status}</span>
               </div>
@@ -781,7 +781,7 @@ export default function AttendanceList({ user, t, tk }) {
                 <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{r.leave_type}</span>
-                    <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.leave_date}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
+                    <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.leave_date)}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
                     {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -883,9 +883,9 @@ export default function AttendanceList({ user, t, tk }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{isLeave ? "有休" : "代休"}</span>
                       {isLeave ? (
-                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.leave_date}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
+                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.leave_date)}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
                       ) : (
-                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>休 <strong>{r.swap_date || "—"}</strong> <span style={{ fontSize: 10, color: t.tm }}>(出勤 {r.original_date})</span></span>
+                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>休 <strong>{r.swap_date ? fmtDateW(r.swap_date) : "—"}</strong> <span style={{ fontSize: 10, color: t.tm }}>(出勤 {fmtDateW(r.original_date)})</span></span>
                       )}
                       {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                     </div>
@@ -978,9 +978,9 @@ export default function AttendanceList({ user, t, tk }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: r.swap_type === "休日出勤" ? "#8B5CF6" : "#F59E0B", background: r.swap_type === "休日出勤" ? "#8B5CF620" : "#F59E0B20" }}>{r.swap_type}</span>
                     {r.swap_type === "休日出勤" && <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: r.compensation_type === "換休" ? "#8B5CF6" : t.rd, background: r.compensation_type === "換休" ? "#8B5CF610" : `${t.rd}10` }}>{r.compensation_type}</span>}
-                    <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.original_date}</span>
+                    <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.original_date)}</span>
                     <span style={{ fontSize: 10, color: t.tm }}>→</span>
-                    <span style={{ fontSize: 12, color: r.swap_date ? t.tx : t.td, fontFamily: "monospace" }}>{r.swap_date || "待定"}</span>
+                    <span style={{ fontSize: 12, color: r.swap_date ? t.tx : t.td, fontFamily: "monospace" }}>{r.swap_date ? fmtDateW(r.swap_date) : "待定"}</span>
                     {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1015,7 +1015,7 @@ export default function AttendanceList({ user, t, tk }) {
         : transRows.filter(r => !r._isNew).map(r => (
           <div key={r._key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
             <div style={{ display: "flex", gap: 8, color: t.ts }}>
-              <span style={{ fontFamily: "monospace" }}>{r.claim_date}</span>
+              <span style={{ fontFamily: "monospace" }}>{fmtDateW(r.claim_date)}</span>
               <span>{r.route}</span>
               <span style={{ color: t.td }}>{r.round_trip ? "往返" : "单程"}</span>
             </div>
@@ -1035,7 +1035,7 @@ export default function AttendanceList({ user, t, tk }) {
           : commRows.filter(r => !r._isNew).map(r => (
             <div key={r._key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
               <div style={{ display: "flex", gap: 8, color: t.ts }}>
-                <span style={{ fontFamily: "monospace" }}>{r.entry_date}</span>
+                <span style={{ fontFamily: "monospace" }}>{fmtDateW(r.entry_date)}</span>
                 <span>{r.student_name}</span>
                 <span style={{ color: t.td }}>¥{Number(r.tuition_amount || 0).toLocaleString()} × {r.commission_rate}%</span>
               </div>
@@ -1127,7 +1127,7 @@ export default function AttendanceList({ user, t, tk }) {
               const isEditingExisting = !r._isNew && editingKeys.has(r._key)
               return (
                 <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="date" value={r.claim_date} onChange={e => updateTrans(r._key, "claim_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.claim_date}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="date" value={r.claim_date} onChange={e => updateTrans(r._key, "claim_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{fmtDateW(r.claim_date)}</span>}</td>
                   <td style={{ padding: "6px 8px" }}>{isEd ? <input type="text" value={r.route || ""} onChange={e => updateTrans(r._key, "route", e.target.value)} placeholder="新宿→高田馬場" style={{ ...iS, width: "100%", fontFamily: "inherit" }} /> : <span style={{ fontSize: 11, color: t.tx }}>{r.route}</span>}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center", width: 50 }}>{isEd ? <input type="checkbox" checked={r.round_trip} onChange={e => updateTrans(r._key, "round_trip", e.target.checked)} /> : <span style={{ fontSize: 11, color: t.ts }}>{r.round_trip ? "往返" : "单程"}</span>}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="number" value={r.amount} onChange={e => updateTrans(r._key, "amount", e.target.value)} placeholder="0" style={{ ...iS, width: 80, textAlign: "right" }} /> : <span style={{ fontSize: 12, fontWeight: 600, color: "#8B5CF6" }}>¥{Number(r.amount || 0).toLocaleString()}</span>}</td>
@@ -1195,7 +1195,7 @@ export default function AttendanceList({ user, t, tk }) {
             {!expRecs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无报销记录</div> : expRecs.map(r => (
               <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.claim_date}</span>
+                  <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.claim_date)}</span>
                   <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: t.ac, background: `${t.ac}15` }}>{r.category}</span>
                   {r.note && <span style={{ fontSize: 11, color: t.ts }}>{r.note}</span>}
                 </div>
@@ -1221,7 +1221,7 @@ export default function AttendanceList({ user, t, tk }) {
               const isEditingExisting = !r._isNew && editingKeys.has(r._key)
               return (
                 <tr key={r._key} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{r.entry_date}</span>}</td>
+                  <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...iS, width: 130 }} /> : <span style={roS}>{fmtDateW(r.entry_date)}</span>}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="number" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} placeholder="1" style={{ ...iS, width: 45, textAlign: "center" }} /> : <span style={{ fontSize: 12 }}>{r.seq_number}</span>}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="text" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} placeholder="学生姓名" style={{ ...iS, width: 100, fontFamily: "inherit" }} /> : <span style={{ fontSize: 11 }}>{r.student_name}</span>}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center" }}>{isEd ? <input type="number" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} placeholder="0" style={{ ...iS, width: 90, textAlign: "right" }} /> : <span style={{ fontSize: 12 }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</span>}</td>

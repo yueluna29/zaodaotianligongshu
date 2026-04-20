@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { pad, todayStr, fmtYen, isHourly } from "../../config/constants"
+import { pad, todayStr, fmtYen, isHourly, fmtDateW } from "../../config/constants"
 
 export default function WorkEntries({ user, t, tk }) {
   const now = new Date()
@@ -132,7 +132,7 @@ export default function WorkEntries({ user, t, tk }) {
           {!recs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无工时记录</div> : recs.map((r) => (
             <div key={r.id} style={{ padding: "10px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.work_date}</span>
+                <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.work_date)}</span>
                 <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: "#7C3AED", background: "#7C3AED15" }}>{r.business_type}</span>
                 <span style={{ fontSize: 11, color: t.ts, fontFamily: "monospace" }}>{r.start_time?.slice(0, 5)}~{r.end_time?.slice(0, 5)}</span>
                 <span style={{ fontSize: 10, color: t.tm }}>{r.work_minutes ? `${(r.work_minutes / 60).toFixed(1)}h` : ""}</span>

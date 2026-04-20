@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPatch } from "../../api/supabase"
-import { LEAVE_TYPES } from "../../config/constants"
+import { LEAVE_TYPES, fmtDateW } from "../../config/constants"
 import { Palmtree, ArrowLeftRight, CheckCircle, Train, ChevronDown, ChevronRight, Check, X } from "lucide-react"
 
 const BUCKET_MS = 10 * 60 * 1000
@@ -26,8 +26,8 @@ const groupBy = (items, keyFn) => {
 }
 
 const fmtRange = (dates) => {
-  if (dates.length === 1) return dates[0]
-  return `${dates[0]} → ${dates[dates.length - 1]}`
+  if (dates.length === 1) return fmtDateW(dates[0])
+  return `${fmtDateW(dates[0])} → ${fmtDateW(dates[dates.length - 1])}`
 }
 
 const fmtRelTime = (iso) => {
@@ -321,7 +321,7 @@ export default function ApprovalCenter({ user, t, tk }) {
             <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginTop: 6 }}>
               <span style={{ fontSize: 11, color: t.tm, flexShrink: 0 }}>变更：</span>
               <span style={{ fontSize: 12, fontFamily: "monospace", color: t.ts }}>¥{Number(r.previous_amount).toLocaleString()} → <strong style={{ color: t.ac }}>¥{Number(r.requested_amount).toLocaleString()}</strong></span>
-              <span style={{ fontSize: 10, color: t.tm, marginLeft: 8 }}>{r.effective_from} 起</span>
+              <span style={{ fontSize: 10, color: t.tm, marginLeft: 8 }}>{fmtDateW(r.effective_from)} 起</span>
             </div>
             {r.reason && (
               <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginTop: 4 }}>
@@ -382,7 +382,7 @@ export default function ApprovalCenter({ user, t, tk }) {
                   ? renderBatchCard({
                       group: g,
                       badgeOf: leaveBadge,
-                      getDate: (r) => r.leave_date,
+                      getDate: (r) => fmtDateW(r.leave_date),
                       onBatchOk: approveLeaves,
                       onBatchNo: (ids) => openReject("leave", ids),
                       onItemOk: approveLeaves,
@@ -391,7 +391,7 @@ export default function ApprovalCenter({ user, t, tk }) {
                   : <div key={g.items[0].id}>{renderSingleCard({
                       rec: g.items[0],
                       badge: leaveBadge(g.items[0]),
-                      dateLine: g.items[0].leave_date,
+                      dateLine: fmtDateW(g.items[0].leave_date),
                       isPending: true,
                       onOk: () => approveLeaves(g.items[0].id),
                       onNo: () => openReject("leave", g.items[0].id),
@@ -412,7 +412,7 @@ export default function ApprovalCenter({ user, t, tk }) {
                 {doneL.map((r) => <div key={r.id}>{renderSingleCard({
                   rec: r,
                   badge: leaveBadge(r),
-                  dateLine: r.leave_date,
+                  dateLine: fmtDateW(r.leave_date),
                   isPending: false,
                   approverName: r.approved_by ? emps[r.approved_by]?.name : null,
                 })}</div>)}
@@ -433,7 +433,7 @@ export default function ApprovalCenter({ user, t, tk }) {
                   ? renderBatchCard({
                       group: g,
                       badgeOf: swapBadge,
-                      getDate: (r) => `${r.original_date} → ${r.swap_date || "待定"}`,
+                      getDate: (r) => `${fmtDateW(r.original_date)} → ${r.swap_date ? fmtDateW(r.swap_date) : "待定"}`,
                       onBatchOk: approveSwaps,
                       onBatchNo: (ids) => openReject("swap", ids),
                       onItemOk: approveSwaps,
@@ -442,7 +442,7 @@ export default function ApprovalCenter({ user, t, tk }) {
                   : <div key={g.items[0].id}>{renderSingleCard({
                       rec: g.items[0],
                       badge: swapBadge(g.items[0]),
-                      dateLine: `${g.items[0].original_date} → ${g.items[0].swap_date || "待定"}`,
+                      dateLine: `${fmtDateW(g.items[0].original_date)} → ${g.items[0].swap_date ? fmtDateW(g.items[0].swap_date) : "待定"}`,
                       isPending: true,
                       onOk: () => approveSwaps(g.items[0].id),
                       onNo: () => openReject("swap", g.items[0].id),
@@ -463,7 +463,7 @@ export default function ApprovalCenter({ user, t, tk }) {
                 {doneS.map((r) => <div key={r.id}>{renderSingleCard({
                   rec: r,
                   badge: swapBadge(r),
-                  dateLine: `${r.original_date} → ${r.swap_date || "待定"}`,
+                  dateLine: `${fmtDateW(r.original_date)} → ${r.swap_date ? fmtDateW(r.swap_date) : "待定"}`,
                   isPending: false,
                   approverName: r.approved_by ? emps[r.approved_by]?.name : null,
                 })}</div>)}

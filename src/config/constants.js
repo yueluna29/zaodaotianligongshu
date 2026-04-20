@@ -35,6 +35,14 @@ export const todayStr = () => {
 }
 export const fmtMinutes = (m) => (m > 0 ? `${(m / 60).toFixed(1)}h` : "0h")
 export const fmtYen = (n) => `¥${Math.round(n).toLocaleString()}`
+// "2026-05-05" / ISO → "2026-05-05(火)"；无效或空返回原值
+export const fmtDateW = (s) => {
+  if (!s) return ""
+  const ymd = String(s).slice(0, 10)
+  const d = new Date(String(s).includes("T") ? s : ymd + "T00:00:00")
+  if (isNaN(d.getTime())) return s
+  return `${ymd}(${WEEKDAYS[d.getDay()]})`
+}
 export const workingDays = (y, m) => {
   let c = 0
   for (let d = 1; d <= daysInMonth(y, m); d++) if (!isWeekend(y, m, d)) c++

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays, isHourly as empIsHourly, isFullTime as empIsFullTime, COMPANIES } from "../../config/constants"
+import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays, isHourly as empIsHourly, isFullTime as empIsFullTime, COMPANIES, fmtDateW } from "../../config/constants"
 import { Bell } from "lucide-react"
 
 const LAST_SEEN_KEY = "kintai_last_seen_anno_at"
@@ -235,7 +235,7 @@ export default function Dashboard({ user, t, tk, onNav }) {
                   <div key={a.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${t.bl}`, borderLeft: `3px solid ${s.c}`, background: s.bg }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: s.c }}>{a.title}</div>
                     {a.body && <div style={{ fontSize: 11, color: t.ts, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{a.body}</div>}
-                    <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>{new Date(a.created_at).toLocaleDateString("zh-CN")}{a.expires_at && ` · 到期 ${a.expires_at.slice(0, 10)}`}</div>
+                    <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>{fmtDateW(a.created_at)}{a.expires_at && ` · 到期 ${fmtDateW(a.expires_at)}`}</div>
                     {isA && (
                       <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
                         <button onClick={() => editAnno(a)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>编辑</button>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../api/supabase"
 import { Plus, History, ChevronDown, ChevronUp, Pencil, Trash2, Check, X } from "lucide-react"
+import { fmtDateW } from "../config/constants"
 
 const COMMON_TYPES = [
   "事務",
@@ -170,7 +171,7 @@ export default function PayRateSection({ empId, isAdmin, t, tk }) {
                     <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: "#8B5CF6", background: "#8B5CF620" }}>{r.business_type}</span>
                     <span style={{ fontSize: 20, fontWeight: 700, color: t.ac }}>¥{Number(r.hourly_rate).toLocaleString()}</span>
                     <span style={{ fontSize: 10, color: t.tm }}>/時</span>
-                    <span style={{ fontSize: 9, color: t.td }}>生效: {r.effective_from}</span>
+                    <span style={{ fontSize: 9, color: t.td }}>生效: {fmtDateW(r.effective_from)}</span>
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
                     {isAdmin && (
@@ -224,7 +225,7 @@ export default function PayRateSection({ empId, isAdmin, t, tk }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         {i === 0 && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: `${t.ac}20`, color: t.ac, fontWeight: 700 }}>当前</span>}
                         <span style={{ fontSize: 12, fontWeight: i === 0 ? 700 : 400, color: i === 0 ? t.tx : t.ts }}>¥{Number(h.hourly_rate).toLocaleString()}/時</span>
-                        <span style={{ fontSize: 9, color: t.tm }}>{h.effective_from}</span>
+                        <span style={{ fontSize: 9, color: t.tm }}>{fmtDateW(h.effective_from)}</span>
                         {h.note && <span style={{ fontSize: 9, color: t.td }}>({h.note})</span>}
                       </div>
                       {isAdmin && i !== 0 && (

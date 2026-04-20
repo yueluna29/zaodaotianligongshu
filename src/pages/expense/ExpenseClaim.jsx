@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { todayStr } from "../../config/constants"
+import { todayStr, fmtDateW } from "../../config/constants"
 
 const CATEGORIES = ["教材费", "办公用品", "餐费", "打印费", "通信费", "其他"]
 
@@ -52,7 +52,7 @@ export default function ExpenseClaim({ user, t, tk }) {
           {!recs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无报销记录</div> : recs.map((r) => (
             <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.claim_date}</span>
+                <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.claim_date)}</span>
                 <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: t.ac, background: `${t.ac}15` }}>{r.category}</span>
                 {r.note && <span style={{ fontSize: 11, color: t.ts }}>{r.note}</span>}
               </div>

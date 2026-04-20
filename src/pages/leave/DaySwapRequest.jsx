@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
+import { fmtDateW } from "../../config/constants"
 import DateMultiPicker from "../../components/DateMultiPicker"
 
 export default function DaySwapRequest({ user, t, tk }) {
@@ -245,9 +246,9 @@ export default function DaySwapRequest({ user, t, tk }) {
                       {r.compensation_type}
                     </span>
                   )}
-                  <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.original_date}</span>
+                  <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.original_date)}</span>
                   <span style={{ fontSize: 10, color: t.tm }}>→</span>
-                  <span style={{ fontSize: 12, color: r.swap_date ? t.tx : t.td, fontFamily: "monospace" }}>{r.swap_date || "待定"}</span>
+                  <span style={{ fontSize: 12, color: r.swap_date ? t.tx : t.td, fontFamily: "monospace" }}>{r.swap_date ? fmtDateW(r.swap_date) : "待定"}</span>
                   {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

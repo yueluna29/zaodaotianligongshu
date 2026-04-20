@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { todayStr } from "../../config/constants"
+import { todayStr, fmtDateW } from "../../config/constants"
 
 export default function TransportLog({ user, t, tk }) {
   const [recs, sRecs] = useState([]); const [ld, sLd] = useState(true); const [show, sShow] = useState(false); const [sub, sSub] = useState(false); const [editId, sEditId] = useState(null)
@@ -46,7 +46,7 @@ export default function TransportLog({ user, t, tk }) {
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
           {!recs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无记录</div> : recs.map((r) => (
             <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}><span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.claim_date}</span><span style={{ fontSize: 12, color: t.ts }}>{r.route}</span><span style={{ fontSize: 10, color: t.tm }}>{r.round_trip !== false ? "往返" : "单程"}</span></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}><span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.claim_date)}</span><span style={{ fontSize: 12, color: t.ts }}>{r.route}</span><span style={{ fontSize: 10, color: t.tm }}>{r.round_trip !== false ? "往返" : "单程"}</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 600, color: t.tx }}>¥{Number(r.amount || 0).toLocaleString()}</span>
                 <button onClick={() => startEdit(r)} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>✏️</button>
                 <button onClick={() => del(r.id)} style={{ padding: "3px 8px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>🗑</button>
