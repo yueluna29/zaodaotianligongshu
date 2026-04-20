@@ -303,7 +303,7 @@ export default function LeaveCalendar({ t, tk }) {
             <div key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 600, color: i === 0 || i === 6 ? t.rd : t.tm, padding: 4 }}>{w}</div>
           ))}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, gridAutoRows: mobile ? "84px" : "140px" }}>
           {Array.from({ length: firstDayOfWeek }, (_, i) => <div key={`e-${i}`} />)}
           {range.days.map((d) => {
             const ds = toDateStr(d)
