@@ -60,7 +60,7 @@ export default function App() {
   if (!user) return <Login onAuth={login} theme={theme} t={t} toggleTheme={toggleTheme} />
 
   const pages = {
-    home:    <Dashboard user={user} t={t} tk={user.token} />,
+    home:    <Dashboard user={user} t={t} tk={user.token} onNav={setView} />,
     att:     <AttendanceList user={user} t={t} tk={user.token} />,
     leave:   <LeaveRequest user={user} t={t} tk={user.token} />,
     swap:    <DaySwapRequest user={user} t={t} tk={user.token} />,

@@ -5,7 +5,7 @@ import { Bell } from "lucide-react"
 
 const LAST_SEEN_KEY = "kintai_last_seen_anno_at"
 
-export default function Dashboard({ user, t, tk }) {
+export default function Dashboard({ user, t, tk, onNav }) {
   const isA = user.role === "admin"
   const isHourly = empIsHourly(user.employment_type)
   const now = new Date()
@@ -324,7 +324,7 @@ export default function Dashboard({ user, t, tk }) {
         </div>
 
         {pendingProfiles.length > 0 && (
-          <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.wn}40`, background: `${t.wn}08`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <button onClick={() => onNav && onNav("empmgr")} style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.wn}40`, background: `${t.wn}08`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 8, height: 8, borderRadius: 8, background: t.wn }} />
               <div>
@@ -332,8 +332,8 @@ export default function Dashboard({ user, t, tk }) {
                 <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>新员工缺合同日期或 My Number，请在「人事档案」中补齐</div>
               </div>
             </div>
-            <span style={{ fontSize: 10, color: t.wn, fontWeight: 600, whiteSpace: "nowrap" }}>去人事档案补齐 →</span>
-          </div>
+            <span style={{ fontSize: 11, color: t.wn, fontWeight: 600, whiteSpace: "nowrap", textDecoration: "underline" }}>去人事档案补齐</span>
+          </button>
         )}
       </div>
     )
