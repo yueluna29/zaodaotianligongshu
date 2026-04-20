@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react"
-import { sbGet, sbPost } from "../../api/supabase"
+import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays } from "../../config/constants"
 
 export default function Dashboard({ user, t, tk }) {
   const isA = user.role === "admin"
+  const isHourly = user.employment_type === "アルバイト" || user.employment_type === "外部講師"
   const now = new Date()
   const y = now.getFullYear(), m = now.getMonth() + 1
   const [stats, setStats] = useState(null)
@@ -11,7 +12,46 @@ export default function Dashboard({ user, t, tk }) {
   const [clocking, setClocking] = useState(false)
   const [time, setTime] = useState(new Date())
   const [pendingProfiles, setPendingProfiles] = useState([])
+  const [annos, setAnnos] = useState([])
+  const [annoShow, setAnnoShow] = useState(false)
+  const [annoFm, setAnnoFm] = useState({ title: "", body: "", kind: "info", expires_at: "" })
+  const [annoEditId, setAnnoEditId] = useState(null)
+  const [annoSub, setAnnoSub] = useState(false)
   const td = todayStr()
+
+  const loadAnnos = useCallback(async () => {
+    const nowIso = new Date().toISOString()
+    const rows = await sbGet(`announcements?is_active=eq.true&or=(expires_at.is.null,expires_at.gt.${nowIso})&order=created_at.desc&select=*`, tk)
+    setAnnos(rows || [])
+  }, [tk])
+  useEffect(() => { loadAnnos() }, [loadAnnos])
+
+  const resetAnnoForm = () => { setAnnoFm({ title: "", body: "", kind: "info", expires_at: "" }); setAnnoEditId(null); setAnnoShow(false) }
+  const submitAnno = async () => {
+    if (!annoFm.title.trim()) return
+    setAnnoSub(true)
+    const body = {
+      title: annoFm.title.trim(),
+      body: annoFm.body.trim() || null,
+      kind: annoFm.kind,
+      expires_at: annoFm.expires_at || null,
+    }
+    if (annoEditId) {
+      await sbPatch(`announcements?id=eq.${annoEditId}`, body, tk)
+    } else {
+      await sbPost("announcements", { ...body, created_by: user.id }, tk)
+    }
+    resetAnnoForm(); await loadAnnos(); setAnnoSub(false)
+  }
+  const editAnno = (a) => {
+    setAnnoFm({ title: a.title, body: a.body || "", kind: a.kind || "info", expires_at: a.expires_at ? a.expires_at.slice(0, 10) : "" })
+    setAnnoEditId(a.id); setAnnoShow(true)
+  }
+  const delAnno = async (id) => {
+    if (!confirm("删除这条通知？")) return
+    await sbDel(`announcements?id=eq.${id}`, tk)
+    await loadAnnos()
+  }
 
   useEffect(() => {
     const iv = setInterval(() => setTime(new Date()), 1000)
@@ -124,12 +164,79 @@ export default function Dashboard({ user, t, tk }) {
 
   const canClock = user.employment_type === "正社員" || user.employment_type === "契約社員"
 
+  const kindStyle = (k) => k === "warning" ? { c: t.wn, bg: `${t.wn}10`, bd: `${t.wn}40` } : k === "success" ? { c: t.gn, bg: `${t.gn}10`, bd: `${t.gn}40` } : { c: t.ac, bg: `${t.ac}08`, bd: `${t.ac}30` }
+  const AnnoSection = () => (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: t.tx }}>📢 通知</div>
+        {isA && <button onClick={() => { if (annoShow) resetAnnoForm(); else setAnnoShow(true) }} style={{ padding: "5px 12px", borderRadius: 6, border: annoShow ? `1px solid ${t.bd}` : "none", background: annoShow ? "transparent" : t.ac, color: annoShow ? t.ts : "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{annoShow ? "✕ 关闭" : "+ 发布通知"}</button>}
+      </div>
+
+      {annoShow && (
+        <div style={{ background: t.bgC, borderRadius: 10, padding: 14, border: `2px solid ${t.ac}33`, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>标题 *</label>
+              <input value={annoFm.title} onChange={(e) => setAnnoFm(p => ({ ...p, title: e.target.value }))} placeholder="例：本月工资发放日延后" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
+              <select value={annoFm.kind} onChange={(e) => setAnnoFm(p => ({ ...p, kind: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }}>
+                <option value="info">通知 (蓝)</option>
+                <option value="warning">警告 (黄)</option>
+                <option value="success">喜讯 (绿)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>到期日（选填）</label>
+              <input type="date" value={annoFm.expires_at} onChange={(e) => setAnnoFm(p => ({ ...p, expires_at: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>内容（选填）</label>
+            <textarea value={annoFm.body} onChange={(e) => setAnnoFm(p => ({ ...p, body: e.target.value }))} rows={3} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={submitAnno} disabled={annoSub || !annoFm.title.trim()} style={{ padding: "7px 18px", borderRadius: 6, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: annoSub || !annoFm.title.trim() ? 0.5 : 1 }}>{annoSub ? "保存中..." : annoEditId ? "保存" : "发布"}</button>
+            <button onClick={resetAnnoForm} style={{ padding: "7px 18px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
+          </div>
+        </div>
+      )}
+
+      {annos.length === 0 && !annoShow ? (
+        <div style={{ padding: "12px 16px", borderRadius: 8, background: t.bgC, border: `1px dashed ${t.bl}`, fontSize: 11, color: t.tm, textAlign: "center" }}>暂无通知</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {annos.map((a) => {
+            const s = kindStyle(a.kind)
+            return (
+              <div key={a.id} style={{ background: s.bg, border: `1px solid ${s.bd}`, borderLeft: `4px solid ${s.c}`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: s.c }}>{a.title}</div>
+                  {a.body && <div style={{ fontSize: 11, color: t.ts, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{a.body}</div>}
+                  <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>{new Date(a.created_at).toLocaleDateString("zh-CN")}{a.expires_at && ` · 到期 ${a.expires_at.slice(0,10)}`}</div>
+                </div>
+                {isA && (
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => editAnno(a)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>编辑</button>
+                    <button onClick={() => delAnno(a.id)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>删除</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+
   if (isA) {
     const COMPS = { 1: "世家学舍", 2: "紫陽花教育" }
     return (
       <div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>管理面板</h2>
         {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
+        <AnnoSection />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
           <Card label="员工数" value={`${stats.empCount}人`} />
           <Card label="本月出勤" value={`${stats.todayWorkers}人`} color={t.gn} />
@@ -177,20 +284,23 @@ export default function Dashboard({ user, t, tk }) {
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>首页</h2>
       {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
+      <AnnoSection />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
-        <Card label="本月出勤" value={`${stats.wd}天`} />
-        <Card label="本月工时" value={fmtMinutes(stats.totalW)} color={t.gn} />
-        <Card label="有休余额" value={`${stats.leaveBalance}天`} color={t.ac} sub={`已用${stats.leaveUsed}天`} />
+        <Card label={isHourly ? "本月上班天数" : "本月出勤"} value={`${stats.wd}天`} />
+        {!isHourly && <Card label="本月工时" value={fmtMinutes(stats.totalW)} color={t.gn} />}
+        {!isHourly && <Card label="有休余额" value={`${stats.leaveBalance}天`} color={t.ac} sub={`已用${stats.leaveUsed}天`} />}
       </div>
-      <div style={{ background: t.bgC, borderRadius: 12, padding: "16px 18px", border: `1px solid ${t.bd}` }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: t.ts, marginBottom: 6 }}>
-          <span>工时充足度</span><span>{fmtMinutes(stats.totalW)} / {fmtMinutes(stats.targetH)}</span>
+      {!isHourly && (
+        <div style={{ background: t.bgC, borderRadius: 12, padding: "16px 18px", border: `1px solid ${t.bd}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: t.ts, marginBottom: 6 }}>
+            <span>工时充足度</span><span>{fmtMinutes(stats.totalW)} / {fmtMinutes(stats.targetH)}</span>
+          </div>
+          <div style={{ height: 10, background: t.bgI, borderRadius: 5, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: barColor, borderRadius: 5, transition: "width .5s" }} />
+          </div>
+          <div style={{ fontSize: 10, color: barColor, marginTop: 4, textAlign: "right" }}>{pct.toFixed(0)}%</div>
         </div>
-        <div style={{ height: 10, background: t.bgI, borderRadius: 5, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: barColor, borderRadius: 5, transition: "width .5s" }} />
-        </div>
-        <div style={{ fontSize: 10, color: barColor, marginTop: 4, textAlign: "right" }}>{pct.toFixed(0)}%</div>
-      </div>
+      )}
     </div>
   )
 }
