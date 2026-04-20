@@ -481,30 +481,157 @@ export default function Dashboard({ user, t, tk, onNav }) {
   }
 
   const pct = stats.targetH > 0 ? Math.min((stats.totalW / stats.targetH) * 100, 150) : 0
-  const barColor = pct >= 95 ? t.gn : pct >= 80 ? t.wn : t.rd
+  const barColor = pct >= 95 ? "#10b981" : pct >= 80 ? "#f59e0b" : "#f43f5e"
+
+  const userStateLabel = (() => {
+    if (!canClock) return `本日时薪记录 · ${user.name}`
+    if (!ci) return "Current Status · 未打卡"
+    if (co) return `已退勤 ${co.slice(0, 5)} · 辛苦了`
+    if (bs && !be) return `休息中 ${bs.slice(0, 5)}~`
+    if (bs && be) return `已出勤 ${ci.slice(0, 5)} · 休憩 ${bs.slice(0, 5)}-${be.slice(0, 5)}`
+    return `已出勤 ${ci.slice(0, 5)}`
+  })()
+
+  const userClockButtons = (() => {
+    if (!canClock) return null
+    if (clocking) return <button disabled className="clock-btn clock-btn-lg ac"><Fingerprint size={36} strokeWidth={1} className="clock-icon" /><span className="clock-label">处理中</span></button>
+    if (!ci) return (
+      <div style={{ position: "relative" }}>
+        <div className="clock-glow" />
+        <button onClick={() => clock("in")} className="clock-btn clock-btn-lg ac"><Fingerprint size={40} strokeWidth={1} className="clock-icon" /><span className="clock-label">出勤</span></button>
+      </div>
+    )
+    if (co) return <div style={{ color: "#10b981", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}><Check size={40} strokeWidth={1.4} /><span style={{ fontSize: 12, letterSpacing: ".2em" }}>辛苦了</span></div>
+    if (onBreak) return <button onClick={() => clock("be")} className="clock-btn clock-btn-md gn"><Zap size={28} strokeWidth={1.2} className="clock-icon" /><span className="clock-label">休息结束</span></button>
+    return (
+      <>
+        {!be && <button onClick={() => clock("bs")} className="clock-btn clock-btn-md wn"><Coffee size={26} strokeWidth={1.2} className="clock-icon" /><span className="clock-label">开始休息</span></button>}
+        <button onClick={() => clock("out")} className="clock-btn clock-btn-md pp"><Moon size={26} strokeWidth={1.2} className="clock-icon" /><span className="clock-label">退勤</span></button>
+      </>
+    )
+  })()
 
   return (
-    <div>
-      <Header title="首页" />
-      {annoShow && <PublishForm />}
-      <Toast />
-      {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
-        <Card label={isHourly ? "本月上班天数" : "本月出勤"} value={`${stats.wd}天`} />
-        {!isHourly && <Card label="本月工时" value={fmtMinutes(stats.totalW)} color={t.gn} />}
-        {!isHourly && <Card label="有休余额" value={`${stats.leaveBalance}天`} color={t.ac} sub={`已用${stats.leaveUsed}天`} />}
-      </div>
-      {!isHourly && (
-        <div style={{ background: t.bgC, borderRadius: 12, padding: "16px 18px", border: `1px solid ${t.bd}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: t.ts, marginBottom: 6 }}>
-            <span>工时充足度</span><span>{fmtMinutes(stats.totalW)} / {fmtMinutes(stats.targetH)}</span>
+    <div style={{ position: "relative", minHeight: "100%" }}>
+      <div className="home-ambient home-ambient-tl" />
+      <div className="home-ambient home-ambient-br" />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto" }}>
+        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ color: "rgba(59,130,246,.8)", fontSize: 11, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>早稲田理工塾</div>
+            <h1 style={{ fontSize: 20, fontWeight: 500, color: "#1e293b", marginTop: 4, letterSpacing: ".04em" }}>{user.name} · 我的面板</h1>
           </div>
-          <div style={{ height: 10, background: t.bgI, borderRadius: 5, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: barColor, borderRadius: 5, transition: "width .5s" }} />
+          <div style={{ display: "flex", gap: 10, alignItems: "center", position: "relative" }}>
+            <button className="icon-btn" onClick={() => bellOpen ? setBellOpen(false) : openBell()} aria-label="通知">
+              <Bell size={18} strokeWidth={1.6} />
+              {unreadAnnos.length > 0 && <span className="bell-dot" />}
+            </button>
+            {bellOpen && (
+              <>
+                <div onClick={() => setBellOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                <div style={{ position: "absolute", top: "calc(100% + 10px)", right: 0, width: 340, maxWidth: "92vw", maxHeight: 420, overflowY: "auto", background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 12, boxShadow: "0 16px 48px rgba(15,23,42,.18)", zIndex: 50 }}>
+                  <div style={{ padding: "12px 14px", borderBottom: `1px solid ${t.bl}`, fontSize: 13, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Bell size={14} strokeWidth={1.7} color={t.ac} /> 通知（{annos.length}）
+                  </div>
+                  {annos.length === 0 ? (
+                    <div style={{ padding: 24, textAlign: "center", fontSize: 11, color: t.tm }}>暂无通知</div>
+                  ) : annos.map((a) => {
+                    const s = kindStyle(a.kind)
+                    return (
+                      <div key={a.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${t.bl}`, borderLeft: `3px solid ${s.c}`, background: s.bg }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: s.c }}>{a.title}</div>
+                        {a.body && <div style={{ fontSize: 11, color: t.ts, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{a.body}</div>}
+                        <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>{fmtDateW(a.created_at)}{a.expires_at && ` · 到期 ${fmtDateW(a.expires_at)}`}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
-          <div style={{ fontSize: 10, color: barColor, marginTop: 4, textAlign: "right" }}>{pct.toFixed(0)}%</div>
+        </header>
+
+        <Toast />
+
+        <div className="home-grid">
+          {/* 打卡 / 时钟主面板 */}
+          <div className="glass-card clock-panel span-4">
+            <div className="clock-info">
+              <div className="clock-time-label">
+                {time.getFullYear()}年{m}月{time.getDate()}日 {WEEKDAYS[time.getDay()]}曜日
+              </div>
+              <div className="clock-time">
+                {pad(time.getHours())}:{pad(time.getMinutes())}:{pad(time.getSeconds())}
+              </div>
+              <div className="clock-status">
+                {userStateLabel}
+              </div>
+            </div>
+            {userClockButtons && (
+              <div className="clock-buttons">
+                {userClockButtons}
+              </div>
+            )}
+          </div>
+
+          {/* 本月出勤 / 上班天数 */}
+          <div className="glass-card stat-card hv-emerald span-2">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span className="stat-label">{isHourly ? "本月上班天数" : "本月出勤"}</span>
+              <Users size={16} color="rgba(16,185,129,.7)" strokeWidth={1.5} />
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span className="stat-value em">{stats.wd}</span>
+              <span className="stat-sub">天</span>
+            </div>
+          </div>
+
+          {/* 本月工时（全职） */}
+          {!isHourly && (
+            <div className="glass-card stat-card hv-amber span-2">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="stat-label">本月工时</span>
+                <FileText size={16} color="rgba(245,158,11,.7)" strokeWidth={1.5} />
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span className="stat-value amber">{fmtMinutes(stats.totalW)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 有休余额（全职） */}
+          {!isHourly && (
+            <div className="glass-card stat-card hv-emerald span-2">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="stat-label">有休余额</span>
+                <AlertCircle size={16} color="rgba(59,130,246,.7)" strokeWidth={1.5} />
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span className="stat-value" style={{ color: "#3b82f6" }}>{stats.leaveBalance}</span>
+                  <span className="stat-sub">天</span>
+                </div>
+                <div className="stat-sub">已用 {stats.leaveUsed}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 工时充足度（全职） */}
+          {!isHourly && (
+            <div className="glass-card span-4" style={{ padding: "18px 22px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748b", marginBottom: 8, letterSpacing: ".05em" }}>
+                <span className="stat-label" style={{ color: "#64748b" }}>工时充足度</span>
+                <span style={{ fontFamily: "monospace", color: "#94a3b8" }}>{fmtMinutes(stats.totalW)} / {fmtMinutes(stats.targetH)}</span>
+              </div>
+              <div style={{ height: 8, background: "rgba(226,232,240,.6)", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: barColor, borderRadius: 4, transition: "width .5s" }} />
+              </div>
+              <div style={{ fontSize: 10, color: barColor, marginTop: 6, textAlign: "right", fontWeight: 500 }}>{pct.toFixed(0)}%</div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
