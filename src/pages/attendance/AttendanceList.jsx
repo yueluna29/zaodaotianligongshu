@@ -3,7 +3,7 @@ import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
-import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks } from "lucide-react"
+import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks, History } from "lucide-react"
 
 const mkTrans = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, claim_date: "", route: "", round_trip: true, amount: "", note: "" })
 const mkComm = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, entry_date: "", seq_number: "", student_name: "", tuition_amount: "", commission_rate: "", commission_amount: 0 })
@@ -44,6 +44,12 @@ export default function AttendanceList({ user, t, tk }) {
   const [swapFm, setSwapFm] = useState({ swap_type: "休日出勤", original_dates: [], swap_date: "", compensation_type: "換休", reason: "" })
   const [swapEditId, setSwapEditId] = useState(null)
   const [swapHistMode, setSwapHistMode] = useState(false)
+
+  // ====== 过去记录（自助补录 有休/代休） ======
+  const [histShow, setHistShow] = useState(false)
+  const [histFm, setHistFm] = useState({ leave_type: "有休", dates: [], reason: "", is_half_day: false })
+  const [histEditId, setHistEditId] = useState(null)
+  const [histSub, setHistSub] = useState(false)
 
   // ====== 共用: admin历史录入 ======
   const [allEmps, setAllEmps] = useState([])
@@ -156,6 +162,45 @@ export default function AttendanceList({ user, t, tk }) {
   const delLeave = async (id, status) => {
     const msg = status === "申請中" ? "确定要取消这条申请吗？" : "确定要删除这条已批准的休假记录吗？此操作不可撤销。"
     if (!confirm(msg)) return
+    await sbDel(`leave_requests?id=eq.${id}`, tk); await load()
+  }
+
+  // ==================== 过去记录（自助补录） ====================
+  const resetHistForm = () => { setHistFm({ leave_type: "有休", dates: [], reason: "", is_half_day: false }); setHistEditId(null); setHistShow(false) }
+
+  const submitHist = async () => {
+    if (!histFm.dates.length) return
+    setHistSub(true)
+    if (histEditId) {
+      await sbPatch(`leave_requests?id=eq.${histEditId}`, {
+        leave_type: histFm.leave_type,
+        leave_date: histFm.dates[0],
+        reason: histFm.reason || null,
+        is_half_day: histFm.is_half_day,
+      }, tk)
+    } else {
+      for (const date of histFm.dates) {
+        await sbPost("leave_requests", {
+          employee_id: user.id,
+          leave_type: histFm.leave_type,
+          leave_date: date,
+          reason: histFm.reason || null,
+          is_half_day: histFm.is_half_day,
+          status: "承認",
+          approved_at: new Date().toISOString(),
+        }, tk)
+      }
+    }
+    await load(); resetHistForm(); setHistSub(false)
+  }
+
+  const startHistEdit = (r) => {
+    setHistFm({ leave_type: r.leave_type, dates: [r.leave_date], reason: r.reason || "", is_half_day: r.is_half_day || false })
+    setHistEditId(r.id); setHistShow(true)
+  }
+
+  const delHist = async (id) => {
+    if (!confirm("确定要删除这条历史记录吗？此操作不可撤销。")) return
     await sbDel(`leave_requests?id=eq.${id}`, tk); await load()
   }
 
@@ -311,6 +356,7 @@ export default function AttendanceList({ user, t, tk }) {
   // ==================== Tab 定义 ====================
   const tabs = [
     { key: "leave", label: "假期申请", icon: CalendarX2, badge: leavePending },
+    { key: "history", label: "过去记录", icon: History },
     { key: "swap", label: "换休管理", icon: ArrowLeftRight, badge: swapPending },
     { key: "summary", label: "报销一览", icon: ListChecks },
     { key: "transport", label: "交通費", icon: Train },
@@ -533,6 +579,77 @@ export default function AttendanceList({ user, t, tk }) {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ====== 过去记录 Tab（自助补录历史 有休/代休） ====== */}
+      {tab === "history" && (
+        <div>
+          <div style={{ padding: "10px 14px", borderRadius: 8, background: `${t.ac}08`, border: `1px solid ${t.ac}20`, marginBottom: 12, fontSize: 11, color: t.tm, lineHeight: 1.5 }}>
+            这里是用来补录<strong style={{ color: t.tx }}>已经休过</strong>的有休 / 代休（无需审批）。新申请请到「假期申请」tab。
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button onClick={() => { if (histShow) resetHistForm(); else setHistShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: histShow ? `1px solid ${t.bd}` : "none", background: histShow ? "transparent" : t.ac, color: histShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{histShow ? "✕ 关闭" : <><Plus size={14} /> 记录</>}</button>
+          </div>
+
+          {histShow && (
+            <div style={{ background: t.bgC, borderRadius: 12, padding: 22, border: `2px solid ${t.ac}33`, marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: t.tx, margin: "0 0 14px" }}>{histEditId ? "编辑历史记录" : "记录过去休假"}</h3>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
+                <select value={histFm.leave_type} onChange={(e) => setHistFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>
+                  <option value="有休">有休</option>
+                  <option value="代休">代休</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{histEditId ? "日期" : "选择日期（点击选取，可多选）"}</label>
+                {histEditId ? (
+                  <input type="date" value={histFm.dates[0] || ""} onChange={(e) => setHistFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
+                ) : (
+                  <DateMultiPicker selected={histFm.dates} onChange={(dates) => setHistFm(p => ({ ...p, dates }))} t={t} />
+                )}
+              </div>
+              <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                <label style={{ fontSize: 10, color: t.ts }}>半天休</label>
+                <button type="button" onClick={() => setHistFm(p => ({ ...p, is_half_day: !p.is_half_day }))} style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: histFm.is_half_day ? t.ac : t.bd, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 3, left: histFm.is_half_day ? 21 : 3, transition: "left 0.2s" }} />
+                </button>
+                <span style={{ fontSize: 10, color: t.tm }}>{histFm.is_half_day ? "0.5天" : "1天"}</span>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>备注（选填）</label>
+                <input placeholder="例：私事、身体不适" value={histFm.reason} onChange={(e) => setHistFm(p => ({ ...p, reason: e.target.value }))} style={fmS} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={submitHist} disabled={histSub || !histFm.dates.length} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (histSub || !histFm.dates.length) ? "not-allowed" : "pointer", opacity: (histSub || !histFm.dates.length) ? 0.5 : 1 }}>{histSub ? "保存中..." : histEditId ? "保存修改" : `记录（${histFm.dates.length}天）`}</button>
+                {histEditId && <button onClick={resetHistForm} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>取消编辑</button>}
+              </div>
+            </div>
+          )}
+
+          <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
+            {(() => {
+              const histRecs = leaveReqs.filter(r => r.status === "承認" && (r.leave_type === "有休" || r.leave_type === "代休"))
+              if (!histRecs.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>还没有历史记录，点上面的「记录」按钮添加</div>
+              return histRecs.map((r) => {
+                const lt = LEAVE_TYPES.find((l) => l.v === r.leave_type)
+                return (
+                  <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{r.leave_type}</span>
+                      <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.leave_date}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
+                      {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => startHistEdit(r)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
+                      <button onClick={() => delHist(r.id)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>删除</button>
+                    </div>
+                  </div>
+                )
+              })
+            })()}
           </div>
         </div>
       )}
