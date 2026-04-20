@@ -34,7 +34,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   useEffect(() => {
     if (!isAdmin) return
     (async () => {
-      const emps = await sbGet("employees?is_active=eq.true&order=department,name&select=id,name,employment_type,department,is_teacher", tk)
+      const emps = await sbGet("employees?is_active=eq.true&order=department,name&select=id,name,employment_type,department,is_teacher,login_id", tk)
       setAllEmps(emps || [])
     })()
   }, [tk, isAdmin])
@@ -189,7 +189,8 @@ export default function WorkEntryManager({ user, t, tk }) {
   // ==================== ADMIN 列表模式 ====================
   if (isAdmin && !selectedEmp) {
     const filteredEmps = allEmps.filter(e => {
-      if (e.employment_type === "正社員" || e.employment_type === "正社员") return false
+      const fullTime = e.employment_type === "正社員" || e.employment_type === "契約社員" || e.employment_type === "正社员"
+      if (fullTime && e.login_id !== "luna") return false
       if (!deptFilter) return true
       return e.department === deptFilter
     })
