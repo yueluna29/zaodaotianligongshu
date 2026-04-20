@@ -69,7 +69,7 @@ export default function App() {
     expense: <ExpenseClaim user={user} t={t} tk={user.token} />,
     work:    <WorkEntryManager user={user} t={t} tk={user.token} />,
     empmgr:  <EmployeeManager user={user} t={t} tk={user.token} />,
-    approve: <ApprovalCenter t={t} tk={user.token} />,
+    approve: <ApprovalCenter user={user} t={t} tk={user.token} />,
     cal:     <LeaveCalendar t={t} tk={user.token} />,
     report:  <MonthlyReport t={t} tk={user.token} />,
   }
