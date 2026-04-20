@@ -548,7 +548,8 @@ export default function AttendanceList({ user, t, tk }) {
               <HistEmpSelect histMode={leaveHistMode} />
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
-                <select value={leaveFm.leave_type} onChange={(e) => setLeaveFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>{LEAVE_TYPES.map((l) => <option key={l.v} value={l.v}>{l.l}</option>)}</select>
+                <select value={leaveFm.leave_type} onChange={(e) => setLeaveFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>{LEAVE_TYPES.filter(l => l.v !== "代休").map((l) => <option key={l.v} value={l.v}>{l.l}</option>)}</select>
+                {leaveFm.leave_type === "代休" && <div style={{ fontSize: 10, color: t.wn, marginTop: 4 }}>⚠ 代休请去「换休管理」tab 填消化日期</div>}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{leaveEditId ? "日期" : "选择日期（点击选取，可多选）"}</label>
