@@ -17,7 +17,9 @@ export default function AttendanceList({ user, t, tk }) {
   const isAdmin = user.role === "admin"
 
   // ====== Tab ======
-  const [tab, setTab] = useState("leave")
+  // mainTab: 顶层 tab — work=勤务时间登记 / leave=假期管理 / expense=报销
+  const [mainTab, setMainTab] = useState("work")
+  const [tab, setTab] = useState("leave") // 子 tab
 
   // ====== 勤怠 ======
   const [recs, sRecs] = useState({})
@@ -374,14 +376,27 @@ export default function AttendanceList({ user, t, tk }) {
   ) : null
 
   // ==================== Tab 定义 ====================
-  const tabs = [
+  const leaveSubTabs = [
     { key: "leave", label: "假期申请", icon: CalendarX2, badge: leavePending },
     { key: "history", label: "过去记录", icon: History },
     { key: "swap", label: "换休管理", icon: ArrowLeftRight, badge: swapPending },
+  ]
+  const expenseSubTabs = [
     { key: "summary", label: "报销一览", icon: ListChecks },
     { key: "transport", label: "交通費", icon: Train },
     { key: "expense", label: "报销登记", icon: Banknote },
     ...(user.has_commission ? [{ key: "commission", label: "签单提成", icon: Receipt }] : []),
+  ]
+  const subTabs = mainTab === "leave" ? leaveSubTabs : mainTab === "expense" ? expenseSubTabs : []
+  const switchMain = (mt) => {
+    setMainTab(mt)
+    if (mt === "leave") setTab("leave")
+    else if (mt === "expense") setTab("summary")
+  }
+  const mainTabsDef = [
+    { key: "work", label: "勤务时间登记", icon: ClipboardList },
+    { key: "leave", label: "假期管理", icon: CalendarX2, badge: leavePending + swapPending },
+    { key: "expense", label: "报销", icon: Banknote },
   ]
 
   // ==================== 主渲染 ====================
@@ -403,18 +418,45 @@ export default function AttendanceList({ user, t, tk }) {
         </div>
       </div>
 
-      {/* ====== 统计卡片 ====== */}
+      {/* ====== 主 Tab 切换 ====== */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${t.bd}`, paddingBottom: 0, flexWrap: "wrap" }}>
+        {mainTabsDef.map(mt => {
+          const Icon = mt.icon
+          const active = mainTab === mt.key
+          return (
+            <button key={mt.key} onClick={() => switchMain(mt.key)} style={{ padding: "10px 18px", border: "none", borderBottom: `3px solid ${active ? t.ac : "transparent"}`, background: "transparent", color: active ? t.ac : t.ts, fontSize: 13, fontWeight: active ? 700 : 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, marginBottom: -1, position: "relative" }}>
+              <Icon size={16} />
+              {mt.label}
+              {mt.badge > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: t.wn, color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{mt.badge}</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ====== 统计卡片（按 Tab 分组） ====== */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(95px,1fr))", gap: 8, marginBottom: 16 }}>
-        {[
-          { l: "出勤", v: `${wds}天`, c: t.ac },
-          { l: "劳动时长", v: fmtMinutes(tw), c: t.gn },
-          { l: "固定外加班", v: fmtMinutes(to), c: to / 60 > 20 ? t.rd : t.wn },
-          { l: "有休余额", v: `${bal.balance}天`, c: t.ac, sub: `本年${bal.currentGrant}+繰越${bal.carryOver}-已用${bal.used}`, click: () => setShowTL(p => !p) },
-          { l: "代休余额", v: `${compBal + unusedComp}天`, c: "#8B5CF6" },
-          { l: "交通费", v: `¥${totalTrans.toLocaleString()}`, c: "#8B5CF6" },
-          { l: "报销", v: `¥${totalExp.toLocaleString()}`, c: t.wn },
-          ...(user.has_commission ? [{ l: "签单提成", v: `¥${totalComm.toLocaleString()}`, c: "#EC4899" }] : []),
-        ].map((c, i) => (
+        {(() => {
+          const cards = []
+          if (mainTab === "work") {
+            cards.push(
+              { l: "出勤", v: `${wds}天`, c: t.ac },
+              { l: "劳动时长", v: fmtMinutes(tw), c: t.gn },
+              { l: "固定外加班", v: fmtMinutes(to), c: to / 60 > 20 ? t.rd : t.wn },
+            )
+          } else if (mainTab === "leave") {
+            cards.push(
+              { l: "有休余额", v: `${bal.balance}天`, c: t.ac, sub: `本年${bal.currentGrant}+繰越${bal.carryOver}-已用${bal.used}`, click: () => setShowTL(p => !p) },
+              { l: "代休余额", v: `${compBal + unusedComp}天`, c: "#8B5CF6" },
+            )
+          } else { // expense
+            cards.push(
+              { l: "交通费", v: `¥${totalTrans.toLocaleString()}`, c: "#8B5CF6" },
+              { l: "报销", v: `¥${totalExp.toLocaleString()}`, c: t.wn },
+              ...(user.has_commission ? [{ l: "签单提成", v: `¥${totalComm.toLocaleString()}`, c: "#EC4899" }] : []),
+            )
+          }
+          return cards
+        })().map((c, i) => (
           <div key={i} onClick={c.click} style={{ background: t.bgC, borderRadius: 10, padding: "12px 14px", border: `1px solid ${t.bd}`, cursor: c.click ? "pointer" : "default" }}>
             <div style={{ fontSize: 10, color: t.tm }}>{c.l}{c.click && <span style={{ color: t.ac, marginLeft: 4 }}>▾</span>}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: c.c, marginTop: 2 }}>{c.v}</div>
@@ -423,8 +465,8 @@ export default function AttendanceList({ user, t, tk }) {
         ))}
       </div>
 
-      {/* ====== 有休时间线 ====== */}
-      {showTL && bal.timeline?.length > 0 && (
+      {/* ====== 有休时间线（仅假期管理 tab 显示） ====== */}
+      {mainTab === "leave" && showTL && bal.timeline?.length > 0 && (
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, padding: 16, marginBottom: 16 }}>
           <h3 style={{ fontSize: 13, fontWeight: 600, color: t.tx, margin: "0 0 12px" }}>有休付与时间线</h3>
           <div style={{ fontSize: 10, color: t.tm, marginBottom: 10 }}>入职日: {user.hire_date || "未设定"}</div>
@@ -444,16 +486,18 @@ export default function AttendanceList({ user, t, tk }) {
         </div>
       )}
 
-      {/* ====== 勤怠编辑按钮 ====== */}
+      {/* ====== 勤怠编辑按钮（仅勤务时间 tab） ====== */}
+      {mainTab === "work" && (
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10, gap: 8 }}>
         {!ed ? <button onClick={startEd} style={{ padding: "7px 18px", borderRadius: 7, border: `1px solid ${t.ac}44`, background: `${t.ac}11`, color: t.ac, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>编辑勤怠</button> : <>
           <button onClick={() => sEd(false)} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
           <button onClick={saveAtt} disabled={sv} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.gn, color: "#fff", fontSize: 12, fontWeight: 600, cursor: sv ? "wait" : "pointer", opacity: sv ? 0.7 : 1 }}>{sv ? "保存中..." : "保存勤怠"}</button>
         </>}
       </div>
+      )}
 
-      {/* ====== 勤怠表 ====== */}
-      {ld ? <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div> :
+      {/* ====== 勤怠表（仅勤务时间 tab） ====== */}
+      {mainTab === "work" && (ld ? <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div> :
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto", maxHeight: "55vh", marginBottom: 20 }}>
           <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", width: "100%", minWidth: ed ? 604 : 784 }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 2 }}><tr style={{ background: t.bgH }}>
@@ -501,25 +545,27 @@ export default function AttendanceList({ user, t, tk }) {
               })}
             </tbody>
           </table>
-        </div>}
+        </div>)}
 
-      {/* ====== Tab 切换栏 ====== */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
-        {tabs.map(tb => {
-          const Icon = tb.icon
-          const active = tab === tb.key
-          return (
-            <button key={tb.key} onClick={() => setTab(tb.key)} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${active ? t.ac : t.bd}`, background: active ? `${t.ac}12` : "transparent", color: active ? t.ac : t.ts, fontSize: 12, fontWeight: active ? 600 : 400, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, position: "relative" }}>
-              <Icon size={14} />
-              {tb.label}
-              {tb.badge > 0 && <span style={{ minWidth: 16, height: 16, borderRadius: 8, background: t.wn, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{tb.badge}</span>}
-            </button>
-          )
-        })}
-      </div>
+      {/* ====== 子 Tab 切换栏（仅 假期管理 / 报销） ====== */}
+      {mainTab !== "work" && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
+          {subTabs.map(tb => {
+            const Icon = tb.icon
+            const active = tab === tb.key
+            return (
+              <button key={tb.key} onClick={() => setTab(tb.key)} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${active ? t.ac : t.bd}`, background: active ? `${t.ac}12` : "transparent", color: active ? t.ac : t.ts, fontSize: 12, fontWeight: active ? 600 : 400, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, position: "relative" }}>
+                <Icon size={14} />
+                {tb.label}
+                {tb.badge > 0 && <span style={{ minWidth: 16, height: 16, borderRadius: 8, background: t.wn, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{tb.badge}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* ====== 假期申请 Tab ====== */}
-      {tab === "leave" && (
+      {mainTab === "leave" && tab === "leave" && (
         <div>
           {isAdmin && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", borderRadius: 8, background: `#8B5CF608`, border: `1px solid #8B5CF625` }}>
@@ -605,7 +651,7 @@ export default function AttendanceList({ user, t, tk }) {
       )}
 
       {/* ====== 过去记录 Tab（自助补录历史 有休/代休） ====== */}
-      {tab === "history" && (() => {
+      {mainTab === "leave" && tab === "history" && (() => {
         const isDaikyu = histFm.leave_type === "代休"
         const canSubmit = isDaikyu ? !!(histFm.work_date && histFm.dates[0]) : histFm.dates.length > 0
         return (
@@ -707,7 +753,7 @@ export default function AttendanceList({ user, t, tk }) {
       })()}
 
       {/* ====== 换休管理 Tab ====== */}
-      {tab === "swap" && (
+      {mainTab === "leave" && tab === "swap" && (
         <div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={() => { if (swapShow) resetSwapForm(); else setSwapShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: swapShow ? `1px solid ${t.bd}` : "none", background: swapShow ? "transparent" : t.ac, color: swapShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{swapShow ? "✕ 关闭" : "+ 新申请"}</button>
@@ -798,7 +844,7 @@ export default function AttendanceList({ user, t, tk }) {
       )}
 
       {/* ====== 报销一览 Tab ====== */}
-{tab === "summary" && (
+{mainTab === "expense" && tab === "summary" && (
   <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
     <div style={{ padding: "16px 20px", borderBottom: `1px solid ${t.bd}` }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: t.tx }}>{y}年{m}月 报销汇总</div>
@@ -854,7 +900,7 @@ export default function AttendanceList({ user, t, tk }) {
 )}
       
       {/* ====== 交通費 Tab ====== */}
-      {tab === "transport" && (
+      {mainTab === "expense" && tab === "transport" && (
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead><tr style={{ background: t.bgH }}>{["日期", "路线", "往返", "金额", "备注", ""].map((h, i) => <th key={i} style={{ padding: "8px 8px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
@@ -903,7 +949,7 @@ export default function AttendanceList({ user, t, tk }) {
       )}
 
       {/* ====== 报销登记 Tab ====== */}
-      {tab === "expense" && (
+      {mainTab === "expense" && tab === "expense" && (
         <div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={() => { if (expShow) resetExpForm(); else setExpShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: expShow ? `1px solid ${t.bd}` : "none", background: expShow ? "transparent" : t.ac, color: expShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expShow ? "✕ 关闭" : "+ 新报销"}</button>
@@ -947,7 +993,7 @@ export default function AttendanceList({ user, t, tk }) {
       )}
       
       {/* ====== 签单提成 Tab ====== */}
-      {tab === "commission" && user.has_commission && (
+      {mainTab === "expense" && tab === "commission" && user.has_commission && (
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 550 }}>
             <thead><tr style={{ background: t.bgH }}>{["日期", "第N个", "学生名字", "学费", "提成率(%)", "提成金额", ""].map((h, i) => <th key={i} style={{ padding: "8px 8px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
