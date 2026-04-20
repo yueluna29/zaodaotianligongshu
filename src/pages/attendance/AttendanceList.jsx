@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes } from "../../config/constants"
+import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes, isFullTime } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
-import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks, History } from "lucide-react"
+import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks, History, Users } from "lucide-react"
 
 const mkTrans = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, claim_date: "", route: "", round_trip: true, amount: "", note: "" })
 const mkComm = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, entry_date: "", seq_number: "", student_name: "", tuition_amount: "", commission_rate: "", commission_amount: 0 })
@@ -72,6 +72,10 @@ export default function AttendanceList({ user, t, tk }) {
   const [expEditId, setExpEditId] = useState(null)
   const [expFm, setExpFm] = useState({ claim_date: todayStr(), category: "教材费", amount: "", note: "" })
 
+  // ====== 团队假期总览（admin 专用） ======
+  const [overview, setOverview] = useState(null)
+  const [overviewLoading, setOverviewLoading] = useState(false)
+
   // ====== 固定交通费 & 变更申请 ======
   const [myTransAmount, setMyTransAmount] = useState(0)
   const [myTransChangeReqs, setMyTransChangeReqs] = useState([])
@@ -114,7 +118,7 @@ export default function AttendanceList({ user, t, tk }) {
     setMyTransChangeReqs(myTChg || [])
 
     if (isAdmin && !allEmps.length) {
-      const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name", tk)
+      const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name,employment_type,hire_date,company_id", tk)
       setAllEmps(emps || [])
     }
 
@@ -123,6 +127,52 @@ export default function AttendanceList({ user, t, tk }) {
   }, [y, m, days, user.id, tk, user.has_commission, isAdmin, leaveViewEmp])
 
   useEffect(() => { load() }, [load])
+
+  // 团队假期总览：切到 overview tab 时拉全员 approved 有休 + 换休做一次汇总
+  useEffect(() => {
+    if (!isAdmin || mainTab !== "overview") return
+    let cancelled = false
+    ;(async () => {
+      setOverviewLoading(true)
+      const [emps, leaves, swaps] = await Promise.all([
+        sbGet("employees?is_active=eq.true&order=name&select=id,name,employment_type,hire_date,company_id", tk),
+        sbGet("leave_requests?status=eq.承認&select=employee_id,leave_type,leave_date,is_half_day", tk),
+        sbGet("day_swap_requests?status=eq.承認&swap_type=eq.休日出勤&compensation_type=eq.換休&select=employee_id,swap_date,deadline", tk),
+      ])
+      if (cancelled) return
+      const currentYear = new Date().getFullYear()
+      const now = new Date()
+      const rows = (emps || []).filter(e => isFullTime(e.employment_type)).map(emp => {
+        const myLeaves = (leaves || []).filter(l => l.employee_id === emp.id)
+        const myPaid = myLeaves.filter(l => l.leave_type === "有休")
+        const paid = calcPaidLeave(emp.hire_date, myPaid)
+        const mySwaps = (swaps || []).filter(s => s.employee_id === emp.id)
+        const compUnused = mySwaps.filter(s => !s.swap_date)
+        const expiringSoon = compUnused.filter(s => {
+          if (!s.deadline) return false
+          const diff = (new Date(s.deadline) - now) / (1000 * 60 * 60 * 24)
+          return diff >= 0 && diff <= 14
+        })
+        const thisYearLeaves = myLeaves.filter(l => l.leave_date && l.leave_date.startsWith(String(currentYear)))
+        const byType = {}
+        for (const l of thisYearLeaves) {
+          const inc = l.is_half_day ? 0.5 : 1
+          byType[l.leave_type] = (byType[l.leave_type] || 0) + inc
+        }
+        return {
+          emp,
+          paid,
+          compUnused: compUnused.length,
+          compExpiring: expiringSoon.length,
+          thisYearTotal: thisYearLeaves.reduce((acc, l) => acc + (l.is_half_day ? 0.5 : 1), 0),
+          byType,
+        }
+      })
+      setOverview(rows)
+      setOverviewLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [mainTab, isAdmin, tk])
 
   const chg = (d) => { let nm = m + d, ny = y; if (nm > 12) { nm = 1; ny++ } else if (nm < 1) { nm = 12; ny-- } sY(ny); sM(nm); sEd(false) }
 
@@ -440,6 +490,7 @@ export default function AttendanceList({ user, t, tk }) {
   const mainTabsDef = [
     { key: "work", label: "勤务时间登记", icon: ClipboardList },
     { key: "leave", label: "假期管理", icon: CalendarX2, badge: leavePending + swapPending },
+    ...(isAdmin ? [{ key: "overview", label: "团队假期总览", icon: Users }] : []),
     { key: "expense", label: "报销", icon: Banknote },
   ]
 
@@ -477,7 +528,8 @@ export default function AttendanceList({ user, t, tk }) {
         })}
       </div>
 
-      {/* ====== 统计卡片（按 Tab 分组） ====== */}
+      {/* ====== 统计卡片（按 Tab 分组，overview tab 不显示） ====== */}
+      {mainTab !== "overview" && (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(95px,1fr))", gap: 8, marginBottom: 16 }}>
         {(() => {
           const cards = []
@@ -508,6 +560,58 @@ export default function AttendanceList({ user, t, tk }) {
           </div>
         ))}
       </div>
+      )}
+
+      {/* ====== 团队假期总览（admin 专用） ====== */}
+      {mainTab === "overview" && isAdmin && (
+        overviewLoading || !overview ? (
+          <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
+        ) : (
+          <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto", marginBottom: 20 }}>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, fontSize: 11, color: t.tm }}>
+              仅统计 正社員 / 契約社員（含中国正社员）。点姓名跳转到该员工的「假期管理 → 过去记录」。
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead><tr style={{ background: t.bgH }}>
+                {[
+                  ["姓名", "left"],
+                  ["雇佣类型", "left"],
+                  ["入职日期", "left"],
+                  ["本年付与", "right"],
+                  ["繰越", "right"],
+                  ["已用", "right"],
+                  ["有休余", "right"],
+                  ["代休余", "right"],
+                  ["即将过期代休", "right"],
+                  ["本年休假总天数", "right"],
+                ].map(([h, a], i) => (
+                  <th key={i} style={{ padding: "10px 12px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: a, borderBottom: `1px solid ${t.bd}`, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {overview.length === 0 ? (
+                  <tr><td colSpan={10} style={{ padding: 40, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无符合条件的员工</td></tr>
+                ) : overview.map(r => (
+                  <tr key={r.emp.id} style={{ borderBottom: `1px solid ${t.bl}` }}>
+                    <td style={{ padding: "10px 12px" }}>
+                      <button onClick={() => { setMainTab("leave"); setTab("history"); setLeaveViewEmp(r.emp.id) }} style={{ background: "none", border: "none", padding: 0, color: t.ac, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{r.emp.name}</button>
+                    </td>
+                    <td style={{ padding: "10px 12px", color: t.ts }}>{r.emp.employment_type}</td>
+                    <td style={{ padding: "10px 12px", color: t.ts, fontFamily: "monospace", fontSize: 11 }}>{r.emp.hire_date || "—"}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.paid.currentGrant}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.paid.carryOver}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.paid.used}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", color: r.paid.balance <= 0 ? t.rd : t.ac, fontWeight: 700 }}>{r.paid.balance}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", color: "#8B5CF6", fontWeight: 600 }}>{r.compUnused}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", color: r.compExpiring > 0 ? t.rd : t.td, fontWeight: r.compExpiring > 0 ? 700 : 400 }}>{r.compExpiring > 0 ? r.compExpiring : "—"}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.thisYearTotal}{Object.keys(r.byType).length > 0 && <div style={{ fontSize: 9, color: t.tm, marginTop: 2 }}>{Object.entries(r.byType).map(([k, v]) => `${k}${v}`).join(" · ")}</div>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
 
       {/* ====== 有休时间线（仅假期管理 tab 显示） ====== */}
       {mainTab === "leave" && showTL && bal.timeline?.length > 0 && (
