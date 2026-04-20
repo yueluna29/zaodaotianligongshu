@@ -46,8 +46,11 @@ export default function AttendanceList({ user, t, tk }) {
   const [swapHistMode, setSwapHistMode] = useState(false)
 
   // ====== 过去记录（自助补录 有休/代休） ======
+  // histFm.dates: 有休=多日；代休=代休日(单日，dates[0])
+  // histFm.work_date: 仅代休用，对应"节假日出勤日"
+  // histEditId: null | { table: "leave"|"swap", id }
   const [histShow, setHistShow] = useState(false)
-  const [histFm, setHistFm] = useState({ leave_type: "有休", dates: [], reason: "", is_half_day: false })
+  const [histFm, setHistFm] = useState({ leave_type: "有休", dates: [], reason: "", is_half_day: false, work_date: "" })
   const [histEditId, setHistEditId] = useState(null)
   const [histSub, setHistSub] = useState(false)
 
@@ -166,42 +169,59 @@ export default function AttendanceList({ user, t, tk }) {
   }
 
   // ==================== 过去记录（自助补录） ====================
-  const resetHistForm = () => { setHistFm({ leave_type: "有休", dates: [], reason: "", is_half_day: false }); setHistEditId(null); setHistShow(false) }
+  const resetHistForm = () => { setHistFm({ leave_type: "有休", dates: [], reason: "", is_half_day: false, work_date: "" }); setHistEditId(null); setHistShow(false) }
 
   const submitHist = async () => {
-    if (!histFm.dates.length) return
-    setHistSub(true)
-    if (histEditId) {
-      await sbPatch(`leave_requests?id=eq.${histEditId}`, {
-        leave_type: histFm.leave_type,
-        leave_date: histFm.dates[0],
-        reason: histFm.reason || null,
-        is_half_day: histFm.is_half_day,
-      }, tk)
-    } else {
-      for (const date of histFm.dates) {
-        await sbPost("leave_requests", {
-          employee_id: user.id,
-          leave_type: histFm.leave_type,
-          leave_date: date,
+    if (histFm.leave_type === "有休") {
+      if (!histFm.dates.length) return
+      setHistSub(true)
+      if (histEditId?.table === "leave") {
+        await sbPatch(`leave_requests?id=eq.${histEditId.id}`, {
+          leave_type: "有休", leave_date: histFm.dates[0],
+          reason: histFm.reason || null, is_half_day: histFm.is_half_day,
+        }, tk)
+      } else {
+        for (const date of histFm.dates) {
+          await sbPost("leave_requests", {
+            employee_id: user.id, leave_type: "有休", leave_date: date,
+            reason: histFm.reason || null, is_half_day: histFm.is_half_day,
+            status: "承認", approved_at: new Date().toISOString(),
+          }, tk)
+        }
+      }
+    } else { // 代休：写入 day_swap_requests
+      if (!histFm.work_date || !histFm.dates[0]) return
+      setHistSub(true)
+      if (histEditId?.table === "swap") {
+        await sbPatch(`day_swap_requests?id=eq.${histEditId.id}`, {
+          original_date: histFm.work_date, swap_date: histFm.dates[0],
           reason: histFm.reason || null,
-          is_half_day: histFm.is_half_day,
-          status: "承認",
-          approved_at: new Date().toISOString(),
+        }, tk)
+      } else {
+        await sbPost("day_swap_requests", {
+          employee_id: user.id, swap_type: "休日出勤", compensation_type: "代休",
+          original_date: histFm.work_date, swap_date: histFm.dates[0],
+          reason: histFm.reason || null,
+          status: "承認", approved_at: new Date().toISOString(), is_confirmed: true,
         }, tk)
       }
     }
     await load(); resetHistForm(); setHistSub(false)
   }
 
-  const startHistEdit = (r) => {
-    setHistFm({ leave_type: r.leave_type, dates: [r.leave_date], reason: r.reason || "", is_half_day: r.is_half_day || false })
-    setHistEditId(r.id); setHistShow(true)
+  const startHistEdit = (r, table) => {
+    if (table === "leave") {
+      setHistFm({ leave_type: "有休", dates: [r.leave_date], reason: r.reason || "", is_half_day: r.is_half_day || false, work_date: "" })
+    } else {
+      setHistFm({ leave_type: "代休", dates: [r.swap_date || ""], reason: r.reason || "", is_half_day: false, work_date: r.original_date })
+    }
+    setHistEditId({ table, id: r.id }); setHistShow(true)
   }
 
-  const delHist = async (id) => {
+  const delHist = async (id, table) => {
     if (!confirm("确定要删除这条历史记录吗？此操作不可撤销。")) return
-    await sbDel(`leave_requests?id=eq.${id}`, tk); await load()
+    await sbDel(`${table === "leave" ? "leave_requests" : "day_swap_requests"}?id=eq.${id}`, tk)
+    await load()
   }
 
   // ==================== 换休管理 ====================
@@ -584,10 +604,13 @@ export default function AttendanceList({ user, t, tk }) {
       )}
 
       {/* ====== 过去记录 Tab（自助补录历史 有休/代休） ====== */}
-      {tab === "history" && (
+      {tab === "history" && (() => {
+        const isDaikyu = histFm.leave_type === "代休"
+        const canSubmit = isDaikyu ? !!(histFm.work_date && histFm.dates[0]) : histFm.dates.length > 0
+        return (
         <div>
           <div style={{ padding: "10px 14px", borderRadius: 8, background: `${t.ac}08`, border: `1px solid ${t.ac}20`, marginBottom: 12, fontSize: 11, color: t.tm, lineHeight: 1.5 }}>
-            这里是用来补录<strong style={{ color: t.tx }}>已经休过</strong>的有休 / 代休（无需审批）。新申请请到「假期申请」tab。
+            这里补录<strong style={{ color: t.tx }}>已经休过</strong>的有休 / 代休（无需审批，会自动算入余额）。新申请请到「假期申请」或「换休管理」tab。
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={() => { if (histShow) resetHistForm(); else setHistShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: histShow ? `1px solid ${t.bd}` : "none", background: histShow ? "transparent" : t.ac, color: histShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{histShow ? "✕ 关闭" : <><Plus size={14} /> 记录</>}</button>
@@ -598,32 +621,50 @@ export default function AttendanceList({ user, t, tk }) {
               <h3 style={{ fontSize: 14, fontWeight: 600, color: t.tx, margin: "0 0 14px" }}>{histEditId ? "编辑历史记录" : "记录过去休假"}</h3>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
-                <select value={histFm.leave_type} onChange={(e) => setHistFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>
+                <select value={histFm.leave_type} onChange={(e) => setHistFm(p => ({ ...p, leave_type: e.target.value, dates: [], work_date: "" }))} style={fmS} disabled={!!histEditId}>
                   <option value="有休">有休</option>
-                  <option value="代休">代休</option>
+                  <option value="代休">代休（节假日出勤换的休）</option>
                 </select>
+                {isDaikyu && <div style={{ fontSize: 10, color: t.tm, marginTop: 4 }}>代休需要同时填"出勤日"和"代休日"，会自动同步到换休管理表。</div>}
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{histEditId ? "日期" : "选择日期（点击选取，可多选）"}</label>
-                {histEditId ? (
-                  <input type="date" value={histFm.dates[0] || ""} onChange={(e) => setHistFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
-                ) : (
-                  <DateMultiPicker selected={histFm.dates} onChange={(dates) => setHistFm(p => ({ ...p, dates }))} t={t} />
-                )}
-              </div>
-              <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                <label style={{ fontSize: 10, color: t.ts }}>半天休</label>
-                <button type="button" onClick={() => setHistFm(p => ({ ...p, is_half_day: !p.is_half_day }))} style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: histFm.is_half_day ? t.ac : t.bd, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
-                  <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 3, left: histFm.is_half_day ? 21 : 3, transition: "left 0.2s" }} />
-                </button>
-                <span style={{ fontSize: 10, color: t.tm }}>{histFm.is_half_day ? "0.5天" : "1天"}</span>
-              </div>
+
+              {isDaikyu ? (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>节假日出勤日期</label>
+                    <input type="date" value={histFm.work_date} onChange={(e) => setHistFm(p => ({ ...p, work_date: e.target.value }))} style={fmS} />
+                  </div>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>代休日期</label>
+                    <input type="date" value={histFm.dates[0] || ""} onChange={(e) => setHistFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{histEditId ? "日期" : "选择日期（点击选取，可多选）"}</label>
+                    {histEditId ? (
+                      <input type="date" value={histFm.dates[0] || ""} onChange={(e) => setHistFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
+                    ) : (
+                      <DateMultiPicker selected={histFm.dates} onChange={(dates) => setHistFm(p => ({ ...p, dates }))} t={t} />
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <label style={{ fontSize: 10, color: t.ts }}>半天休</label>
+                    <button type="button" onClick={() => setHistFm(p => ({ ...p, is_half_day: !p.is_half_day }))} style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: histFm.is_half_day ? t.ac : t.bd, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+                      <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 3, left: histFm.is_half_day ? 21 : 3, transition: "left 0.2s" }} />
+                    </button>
+                    <span style={{ fontSize: 10, color: t.tm }}>{histFm.is_half_day ? "0.5天" : "1天"}</span>
+                  </div>
+                </>
+              )}
+
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>备注（选填）</label>
-                <input placeholder="例：私事、身体不适" value={histFm.reason} onChange={(e) => setHistFm(p => ({ ...p, reason: e.target.value }))} style={fmS} />
+                <input placeholder={isDaikyu ? "例：清明节加班" : "例：私事、身体不适"} value={histFm.reason} onChange={(e) => setHistFm(p => ({ ...p, reason: e.target.value }))} style={fmS} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={submitHist} disabled={histSub || !histFm.dates.length} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (histSub || !histFm.dates.length) ? "not-allowed" : "pointer", opacity: (histSub || !histFm.dates.length) ? 0.5 : 1 }}>{histSub ? "保存中..." : histEditId ? "保存修改" : `记录（${histFm.dates.length}天）`}</button>
+                <button onClick={submitHist} disabled={histSub || !canSubmit} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (histSub || !canSubmit) ? "not-allowed" : "pointer", opacity: (histSub || !canSubmit) ? 0.5 : 1 }}>{histSub ? "保存中..." : histEditId ? "保存修改" : isDaikyu ? "记录" : `记录（${histFm.dates.length}天）`}</button>
                 {histEditId && <button onClick={resetHistForm} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>取消编辑</button>}
               </div>
             </div>
@@ -631,20 +672,29 @@ export default function AttendanceList({ user, t, tk }) {
 
           <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
             {(() => {
-              const histRecs = leaveReqs.filter(r => r.status === "承認" && (r.leave_type === "有休" || r.leave_type === "代休"))
-              if (!histRecs.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>还没有历史记录，点上面的「记录」按钮添加</div>
-              return histRecs.map((r) => {
-                const lt = LEAVE_TYPES.find((l) => l.v === r.leave_type)
+              const histLeave = leaveReqs.filter(r => r.status === "承認" && r.leave_type === "有休")
+                .map(r => ({ ...r, _table: "leave", _sortDate: r.leave_date }))
+              const histDaikyu = swapReqs.filter(r => r.status === "承認" && r.compensation_type === "代休" && r.swap_type === "休日出勤")
+                .map(r => ({ ...r, _table: "swap", _sortDate: r.swap_date || r.original_date }))
+              const histAll = [...histLeave, ...histDaikyu].sort((a, b) => (b._sortDate || "").localeCompare(a._sortDate || ""))
+              if (!histAll.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>还没有历史记录，点上面的「记录」按钮添加</div>
+              return histAll.map((r) => {
+                const isLeave = r._table === "leave"
+                const lt = LEAVE_TYPES.find((l) => l.v === (isLeave ? "有休" : "代休"))
                 return (
-                  <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div key={`${r._table}-${r.id}`} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{r.leave_type}</span>
-                      <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.leave_date}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
+                      <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{isLeave ? "有休" : "代休"}</span>
+                      {isLeave ? (
+                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{r.leave_date}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>休 <strong>{r.swap_date || "—"}</strong> <span style={{ fontSize: 10, color: t.tm }}>(出勤 {r.original_date})</span></span>
+                      )}
                       {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <button onClick={() => startHistEdit(r)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
-                      <button onClick={() => delHist(r.id)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>删除</button>
+                      <button onClick={() => startHistEdit(r, r._table)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
+                      <button onClick={() => delHist(r.id, r._table)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>删除</button>
                     </div>
                   </div>
                 )
@@ -652,7 +702,8 @@ export default function AttendanceList({ user, t, tk }) {
             })()}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* ====== 换休管理 Tab ====== */}
       {tab === "swap" && (
