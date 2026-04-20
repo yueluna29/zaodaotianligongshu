@@ -338,7 +338,7 @@ export default function Dashboard({ user, t, tk, onNav }) {
     })()
 
     return (
-      <div style={{ position: "relative", minHeight: "100%" }}>
+      <div style={{ position: "relative", minHeight: "100%", overflow: "hidden" }}>
         <div className="home-ambient home-ambient-tl" />
         <div className="home-ambient home-ambient-br" />
 

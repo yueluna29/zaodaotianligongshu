@@ -77,7 +77,7 @@ export default function App() {
   return (
     <div style={{ display: "flex", height: "100vh", background: t.bg, color: t.tx, overflow: "hidden" }}>
       {!mobile && <Sidebar user={user} view={view} onNav={setView} onLogout={logout} t={t} theme={theme} toggleTheme={toggleTheme} badge={badge} />}
-      <div style={{ flex: 1, overflow: "auto", padding: mobile ? "16px 14px 80px" : "24px 28px" }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: mobile ? "16px 14px 80px" : "24px 28px" }}>
         {mobile && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div>
