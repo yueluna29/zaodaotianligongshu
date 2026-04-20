@@ -637,7 +637,7 @@ export default function EmployeeManager({ user, t, tk }) {
                   <td style={{ padding: "10px 12px" }}><div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{(emp.subjects || []).slice(0, 3).map((s, i) => <span key={i} style={{ padding: "1px 6px", borderRadius: 4, fontSize: 9, background: `${t.gn}15`, color: t.gn }}>{s}</span>)}{(emp.subjects || []).length > 3 && <span style={{ fontSize: 9, color: t.tm }}>+{emp.subjects.length - 3}</span>}</div></td>
                   <td style={{ padding: "10px 12px", color: t.ts }}>{emp.employment_type}</td>
                   <td style={{ padding: "10px 12px" }}>
-                    {emp.residence_status && <div style={{ fontSize: 11, color: t.ts }}>{emp.residence_status}</div>}
+                    {!isChinaCompany(emp.company_id) && emp.residence_status && <div style={{ fontSize: 11, color: t.ts }}>{emp.residence_status}</div>}
                     {isExp && <div style={{ fontSize: 10, color: t.rd, fontWeight: 600 }}>即将过期 ({emp.residence_expiry})</div>}
                   </td>
                   <td style={{ padding: "10px 12px", textAlign: "right" }}><span style={{ color: t.ac, fontSize: 11, fontWeight: 600 }}>查看档案</span></td>
