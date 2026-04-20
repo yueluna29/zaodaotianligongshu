@@ -22,6 +22,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [sv, setSv] = useState(false)
   const [rates, setRates] = useState([])
   const [editingKeys, setEditingKeys] = useState(new Set())
+  const [saveMsg, setSaveMsg] = useState("")
 
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -113,22 +114,40 @@ export default function WorkEntryManager({ user, t, tk }) {
   const delExisting = async (id, key) => { if (!confirm("确定删除？")) return; await sbDel(`work_entries?id=eq.${id}`, tk); setRows(prev => prev.filter(r => r._key !== key)) }
   const delCommExisting = async (id, key) => { if (!confirm("确定删除？")) return; await sbDel(`commission_entries?id=eq.${id}`, tk); setCommRows(prev => prev.filter(r => r._key !== key)) }
 
+  // 一行能否保存：和按钮显示条件保持一致
+  const validNewWork = (r) => r._isNew && r._type === "work" && r.work_date && r.business_type && r.work_minutes > 0
+  const validNewExp = (r) => r._isNew && r._type === "expense" && r.work_date && parseFloat(r.other_expense) > 0
+  const validNewComm = (r) => r._isNew && r.entry_date && r.student_name && parseFloat(r.tuition_amount) > 0
+  // 已存在的行：被改过且必填仍齐全
+  const validDirtyWork = (r) => !r._isNew && r._dirty && (r._type !== "work" || (r.work_date && r.business_type && r.work_minutes > 0)) && (r._type !== "expense" || (r.work_date && parseFloat(r.other_expense) > 0))
+  const validDirtyComm = (r) => !r._isNew && r._dirty && r.entry_date && r.student_name && parseFloat(r.tuition_amount) > 0
+  // 有写但不完整 → 用于"忽略 X 行"提示
+  const incompleteNew = (r) => r._isNew && r._dirty && !validNewWork(r) && !validNewExp(r)
+  const incompleteNewComm = (r) => r._isNew && r._dirty && !validNewComm(r)
+
   const saveAll = async () => {
-    setSv(true)
-    const newWork = rows.filter(r => r._isNew && r._type === "work" && r.work_date && r.business_type && r.work_minutes > 0)
-    const newExp = rows.filter(r => r._isNew && r._type === "expense" && r.work_date && parseFloat(r.other_expense) > 0)
-    const dirty = rows.filter(r => !r._isNew && r._dirty)
+    setSv(true); setSaveMsg("")
+    const newWork = rows.filter(validNewWork)
+    const newExp = rows.filter(validNewExp)
+    const dirty = rows.filter(validDirtyWork)
     for (const r of [...newWork, ...newExp]) {
       await sbPost("work_entries", { employee_id: targetEmpId, work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk)
     }
     for (const r of dirty) {
       await sbPatch(`work_entries?id=eq.${r.id}`, { work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk)
     }
-    const newCm = commRows.filter(r => r._isNew && r.entry_date && r.student_name && parseFloat(r.tuition_amount) > 0)
-    const dirtyCm = commRows.filter(r => !r._isNew && r._dirty)
+    const newCm = commRows.filter(validNewComm)
+    const dirtyCm = commRows.filter(validDirtyComm)
     for (const r of newCm) await sbPost("commission_entries", { employee_id: targetEmpId, entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
     for (const r of dirtyCm) await sbPatch(`commission_entries?id=eq.${r.id}`, { entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
+
+    const savedCount = newWork.length + newExp.length + dirty.length + newCm.length + dirtyCm.length
+    const skippedCount = rows.filter(incompleteNew).length + commRows.filter(incompleteNewComm).length
+    if (savedCount === 0 && skippedCount > 0) setSaveMsg(`未保存：${skippedCount} 行信息不完整（请确认日期、业务内容、起止时间都已填写）`)
+    else if (savedCount > 0) setSaveMsg(`已保存 ${savedCount} 行${skippedCount > 0 ? `（${skippedCount} 行不完整已跳过）` : ""}`)
+
     await load(); setSv(false)
+    setTimeout(() => setSaveMsg(""), 5000)
   }
 
   const chgMonth = (d) => { let nm = month + d, ny = year; if (nm > 12) { nm = 1; ny++ } else if (nm < 1) { nm = 12; ny-- } setYear(ny); setMonth(nm) }
@@ -147,7 +166,8 @@ export default function WorkEntryManager({ user, t, tk }) {
   const totalOther = savedExp.reduce((s, e) => s + (parseFloat(e.other_expense) || 0), 0)
   const totalComm = savedComm.reduce((s, e) => s + (e.commission_amount || 0), 0)
   const totalAll = totalWage + totalTrans + totalOther + totalComm
-  const hasChanges = rows.some(r => r._dirty || (r._isNew && r._type === "work" && r.work_date && r.business_type) || (r._isNew && r._type === "expense" && r.work_date && parseFloat(r.other_expense) > 0)) || commRows.some(r => r._dirty || (r._isNew && r.entry_date && r.student_name))
+  // 按钮显示：有任意"动过的"行（即使不完整也显示，让用户能点保存得到反馈）
+  const hasChanges = rows.some(r => (r._isNew && r._dirty) || validDirtyWork(r)) || commRows.some(r => (r._isNew && r._dirty) || validDirtyComm(r))
 
   const actBtns = (r, isComm) => r._isNew ? (
     (isComm ? r.entry_date : r.work_date) && <button onClick={() => isComm ? removeComm(r._key) : removeRow(r._key)} style={{ background: "none", border: "none", color: t.td, cursor: "pointer", padding: 2 }}><Trash2 size={12} /></button>
@@ -241,6 +261,7 @@ export default function WorkEntryManager({ user, t, tk }) {
         ))}
       </div>
 
+      {saveMsg && <div style={{ padding: 10, borderRadius: 8, background: saveMsg.startsWith("已保存") ? `${t.gn}15` : `${t.wn}15`, border: `1px solid ${saveMsg.startsWith("已保存") ? t.gn : t.wn}33`, marginBottom: 12, fontSize: 12, color: saveMsg.startsWith("已保存") ? t.gn : t.wn }}>{saveMsg}</div>}
       {!rates.length && <div style={{ padding: 12, borderRadius: 8, background: `${t.wn}15`, border: `1px solid ${t.wn}33`, marginBottom: 12, fontSize: 11, color: t.wn, display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> 该员工尚未配置时薪，请先在人事档案中设定</div>}
       {rates.length > 0 && <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>{rates.map(r => <span key={r.business_type} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#8B5CF6", background: "#8B5CF612", border: "1px solid #8B5CF620" }}>{r.business_type}: ¥{Number(r.hourly_rate).toLocaleString()}/h</span>)}</div>}
 
