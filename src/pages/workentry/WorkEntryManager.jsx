@@ -127,27 +127,35 @@ export default function WorkEntryManager({ user, t, tk }) {
 
   const saveAll = async () => {
     setSv(true); setSaveMsg("")
+    const errors = []
+    const track = async (label, p) => {
+      const res = await p
+      // PostgREST 错误返回 { code, message, ... }；成功返回数组（有 Prefer: return=representation）
+      if (res && !Array.isArray(res) && (res.code || res.message)) errors.push(`${label}：${res.message || res.code}`)
+    }
     const newWork = rows.filter(validNewWork)
     const newExp = rows.filter(validNewExp)
     const dirty = rows.filter(validDirtyWork)
     for (const r of [...newWork, ...newExp]) {
-      await sbPost("work_entries", { employee_id: targetEmpId, work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk)
+      await track(r._type === "expense" ? "报销行" : "工时行", sbPost("work_entries", { employee_id: targetEmpId, work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk))
     }
     for (const r of dirty) {
-      await sbPatch(`work_entries?id=eq.${r.id}`, { work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk)
+      await track("更新", sbPatch(`work_entries?id=eq.${r.id}`, { work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk))
     }
     const newCm = commRows.filter(validNewComm)
     const dirtyCm = commRows.filter(validDirtyComm)
-    for (const r of newCm) await sbPost("commission_entries", { employee_id: targetEmpId, entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
-    for (const r of dirtyCm) await sbPatch(`commission_entries?id=eq.${r.id}`, { entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk)
+    for (const r of newCm) await track("提成行", sbPost("commission_entries", { employee_id: targetEmpId, entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk))
+    for (const r of dirtyCm) await track("提成更新", sbPatch(`commission_entries?id=eq.${r.id}`, { entry_date: r.entry_date, seq_number: parseInt(r.seq_number) || 1, student_name: r.student_name, tuition_amount: parseFloat(r.tuition_amount), commission_rate: parseFloat(r.commission_rate) || 0, commission_amount: r.commission_amount || 0 }, tk))
 
-    const savedCount = newWork.length + newExp.length + dirty.length + newCm.length + dirtyCm.length
+    const attempted = newWork.length + newExp.length + dirty.length + newCm.length + dirtyCm.length
+    const savedCount = attempted - errors.length
     const skippedCount = rows.filter(incompleteNew).length + commRows.filter(incompleteNewComm).length
-    if (savedCount === 0 && skippedCount > 0) setSaveMsg(`未保存：${skippedCount} 行信息不完整（请确认日期、业务内容、起止时间都已填写）`)
+    if (errors.length) setSaveMsg(`保存失败 ${errors.length} 行：${errors[0]}${errors.length > 1 ? ` (及其它 ${errors.length - 1} 条)` : ""}`)
+    else if (savedCount === 0 && skippedCount > 0) setSaveMsg(`未保存：${skippedCount} 行信息不完整（请确认日期、业务内容、起止时间都已填写）`)
     else if (savedCount > 0) setSaveMsg(`已保存 ${savedCount} 行${skippedCount > 0 ? `（${skippedCount} 行不完整已跳过）` : ""}`)
 
     await load(); setSv(false)
-    setTimeout(() => setSaveMsg(""), 5000)
+    setTimeout(() => setSaveMsg(""), errors.length ? 10000 : 5000)
   }
 
   const chgMonth = (d) => { let nm = month + d, ny = year; if (nm > 12) { nm = 1; ny++ } else if (nm < 1) { nm = 12; ny-- } setYear(ny); setMonth(nm) }
@@ -261,7 +269,7 @@ export default function WorkEntryManager({ user, t, tk }) {
         ))}
       </div>
 
-      {saveMsg && <div style={{ padding: 10, borderRadius: 8, background: saveMsg.startsWith("已保存") ? `${t.gn}15` : `${t.wn}15`, border: `1px solid ${saveMsg.startsWith("已保存") ? t.gn : t.wn}33`, marginBottom: 12, fontSize: 12, color: saveMsg.startsWith("已保存") ? t.gn : t.wn }}>{saveMsg}</div>}
+      {saveMsg && (() => { const ok = saveMsg.startsWith("已保存"), err = saveMsg.startsWith("保存失败"); const c = err ? t.rd : ok ? t.gn : t.wn; return <div style={{ padding: 10, borderRadius: 8, background: `${c}15`, border: `1px solid ${c}33`, marginBottom: 12, fontSize: 12, color: c }}>{saveMsg}</div> })()}
       {!rates.length && <div style={{ padding: 12, borderRadius: 8, background: `${t.wn}15`, border: `1px solid ${t.wn}33`, marginBottom: 12, fontSize: 11, color: t.wn, display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> 该员工尚未配置时薪，请先在人事档案中设定</div>}
       {rates.length > 0 && <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>{rates.map(r => <span key={r.business_type} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#8B5CF6", background: "#8B5CF612", border: "1px solid #8B5CF620" }}>{r.business_type}: ¥{Number(r.hourly_rate).toLocaleString()}/h</span>)}</div>}
 
