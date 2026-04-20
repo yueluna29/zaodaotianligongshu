@@ -17,6 +17,12 @@ export default function LeaveCalendar({ t, tk }) {
   const [scheds, setScheds] = useState({})
   const [swaps, setSwaps] = useState([])
   const [ld, sLd] = useState(true)
+  const [mobile, setMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768)
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < 768)
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
 
   // 计算当前视图的日期范围
   const range = useMemo(() => {
@@ -123,8 +129,8 @@ export default function LeaveCalendar({ t, tk }) {
     const ds = toDateStr(d)
     const hList = holidays[ds] || []
     const HOURS = Array.from({ length: 17 }, (_, i) => i + 7) // 7-23
-    const HOUR_W = 48
-    const NAME_W = 160
+    const HOUR_W = mobile ? 32 : 48
+    const NAME_W = mobile ? 90 : 160
     const rows = emps.map((emp) => ({ emp, s: getStatus(emp, d) }))
     const working = rows.filter((r) => r.s.kind === "work" || r.s.kind === "swap-work")
     const onLeave = rows.filter((r) => r.s.kind === "leave")
@@ -220,11 +226,11 @@ export default function LeaveCalendar({ t, tk }) {
   const WeekView = () => {
     const todayDs = toDateStr(new Date())
     return (
-      <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+      <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto", WebkitOverflowScrolling: "touch" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: mobile ? 560 : 760 }}>
           <thead>
             <tr style={{ background: t.bgH }}>
-              <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: t.tm, fontWeight: 500, borderBottom: `1px solid ${t.bd}`, minWidth: 140, position: "sticky", left: 0, background: t.bgH, zIndex: 1 }}>社员</th>
+              <th style={{ padding: mobile ? "8px 8px" : "10px 14px", textAlign: "left", fontSize: 11, color: t.tm, fontWeight: 500, borderBottom: `1px solid ${t.bd}`, minWidth: mobile ? 80 : 140, position: "sticky", left: 0, background: t.bgH, zIndex: 1 }}>社员</th>
               {range.days.map((d, i) => {
                 const ds = toDateStr(d)
                 const we = d.getDay() === 0 || d.getDay() === 6
@@ -248,9 +254,9 @@ export default function LeaveCalendar({ t, tk }) {
           <tbody>
             {emps.map((emp) => (
               <tr key={emp.id} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                <td style={{ padding: "10px 14px", fontSize: 12, color: t.tx, fontWeight: 500, position: "sticky", left: 0, background: t.bgC, zIndex: 1, borderRight: `1px solid ${t.bl}` }}>
+                <td style={{ padding: mobile ? "8px 8px" : "10px 14px", fontSize: mobile ? 11 : 12, color: t.tx, fontWeight: 500, position: "sticky", left: 0, background: t.bgC, zIndex: 1, borderRight: `1px solid ${t.bl}` }}>
                   {emp.name || emp.email}
-                  {emp.department && <div style={{ fontSize: 9, color: t.tm, marginTop: 2 }}>{emp.department}</div>}
+                  {emp.department && !mobile && <div style={{ fontSize: 9, color: t.tm, marginTop: 2 }}>{emp.department}</div>}
                 </td>
                 {range.days.map((d, i) => {
                   const s = getStatus(emp, d)
@@ -272,7 +278,7 @@ export default function LeaveCalendar({ t, tk }) {
                   } else {
                     cell = <div style={{ textAlign: "center", fontSize: 10, color: t.td }}>—</div>
                   }
-                  return <td key={i} style={{ padding: "6px 5px", verticalAlign: "middle", minWidth: 86 }}>{cell}</td>
+                  return <td key={i} style={{ padding: mobile ? "4px 3px" : "6px 5px", verticalAlign: "middle", minWidth: mobile ? 60 : 86 }}>{cell}</td>
                 })}
               </tr>
             ))}
@@ -311,41 +317,50 @@ export default function LeaveCalendar({ t, tk }) {
             const leaves = rows.filter((r) => r.s.kind === "leave")
 
             return (
-              <div key={ds} onClick={() => jumpToDay(d)} style={{ minHeight: 120, borderRadius: 8, border: `1px solid ${isToday ? t.ac : t.bl}`, padding: "5px 6px", background: isToday ? `${t.ac}08` : isH ? `${t.rd}06` : we ? t.we : "transparent", cursor: "pointer", transition: "background 0.15s" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: isToday ? t.ac : (we || isH) ? t.rd : t.tx }}>{d.getDate()}</span>
+              <div key={ds} onClick={() => jumpToDay(d)} style={{ minHeight: mobile ? 64 : 120, borderRadius: mobile ? 6 : 8, border: `1px solid ${isToday ? t.ac : t.bl}`, padding: mobile ? "3px 3px" : "5px 6px", background: isToday ? `${t.ac}08` : isH ? `${t.rd}06` : we ? t.we : "transparent", cursor: "pointer", transition: "background 0.15s", overflow: "hidden" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: mobile ? 1 : 3 }}>
+                  <span style={{ fontSize: mobile ? 11 : 12, fontWeight: 700, color: isToday ? t.ac : (we || isH) ? t.rd : t.tx }}>{d.getDate()}</span>
+                  {mobile && (leaves.length + working.length + swapping.length) > 0 && <span style={{ width: 5, height: 5, borderRadius: 5, background: leaves.length ? t.rd : t.ac }} />}
                 </div>
                 {hList.map((h, i) => {
                   const c = holidayColor(h.country)
                   return (
-                    <div key={`h-${i}`} style={{ fontSize: 9, fontWeight: 600, color: c, marginBottom: 3, padding: "1px 4px", borderRadius: 3, background: `${c}12`, borderLeft: `2px solid ${c}`, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${h.name} (${h.country === "CN" ? "中国" : "日本"})`}>
-                      {h.name}<span style={{ opacity: 0.55, marginLeft: 2 }}>·{countryBadge(h.country)}</span>
+                    <div key={`h-${i}`} style={{ fontSize: mobile ? 8 : 9, fontWeight: 600, color: c, marginBottom: mobile ? 1 : 3, padding: mobile ? "1px 2px" : "1px 4px", borderRadius: 3, background: `${c}12`, borderLeft: `2px solid ${c}`, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${h.name} (${h.country === "CN" ? "中国" : "日本"})`}>
+                      {h.name}{!mobile && <span style={{ opacity: 0.55, marginLeft: 2 }}>·{countryBadge(h.country)}</span>}
                     </div>
                   )
                 })}
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  {working.length > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 5px", borderRadius: 3, background: `${t.ac}15`, color: t.ac, fontWeight: 600 }}>
-                      <span style={{ width: 4, height: 4, borderRadius: 4, background: t.ac }} />出勤 {working.length}
-                    </div>
-                  )}
-                  {swapping.length > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 5px", borderRadius: 3, background: "#8B5CF615", color: "#8B5CF6", fontWeight: 600 }}>
-                      <span style={{ width: 4, height: 4, borderRadius: 4, background: "#8B5CF6" }} />休出 {swapping.length}
-                    </div>
-                  )}
-                  {leaves.slice(0, 3).map((l, i) => {
-                    const lt = LEAVE_TYPES.find((x) => x.v === l.s.lvReq.leave_type)
-                    const c = lt?.c || t.tm
-                    return (
-                      <div key={i} style={{ padding: "2px 5px", borderRadius: 4, background: `${c}15`, borderLeft: `2px solid ${c}`, lineHeight: 1.25 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: t.tx, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{l.emp.name}</div>
-                        <div style={{ fontSize: 8, color: c, fontWeight: 600 }}>{lt?.l || l.s.lvReq.leave_type}{l.s.lvReq.is_half_day ? "(半)" : ""}</div>
+                {mobile ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+                    {working.length > 0 && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: `${t.ac}15`, color: t.ac, fontWeight: 600 }}>勤{working.length}</span>}
+                    {swapping.length > 0 && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "#8B5CF615", color: "#8B5CF6", fontWeight: 600 }}>出{swapping.length}</span>}
+                    {leaves.length > 0 && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: `${t.rd}15`, color: t.rd, fontWeight: 600 }}>休{leaves.length}</span>}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    {working.length > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 5px", borderRadius: 3, background: `${t.ac}15`, color: t.ac, fontWeight: 600 }}>
+                        <span style={{ width: 4, height: 4, borderRadius: 4, background: t.ac }} />出勤 {working.length}
                       </div>
-                    )
-                  })}
-                  {leaves.length > 3 && <div style={{ fontSize: 8, color: t.tm, paddingLeft: 4 }}>+{leaves.length - 3} 人请假</div>}
-                </div>
+                    )}
+                    {swapping.length > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, padding: "2px 5px", borderRadius: 3, background: "#8B5CF615", color: "#8B5CF6", fontWeight: 600 }}>
+                        <span style={{ width: 4, height: 4, borderRadius: 4, background: "#8B5CF6" }} />休出 {swapping.length}
+                      </div>
+                    )}
+                    {leaves.slice(0, 3).map((l, i) => {
+                      const lt = LEAVE_TYPES.find((x) => x.v === l.s.lvReq.leave_type)
+                      const c = lt?.c || t.tm
+                      return (
+                        <div key={i} style={{ padding: "2px 5px", borderRadius: 4, background: `${c}15`, borderLeft: `2px solid ${c}`, lineHeight: 1.25 }}>
+                          <div style={{ fontSize: 9, fontWeight: 600, color: t.tx, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{l.emp.name}</div>
+                          <div style={{ fontSize: 8, color: c, fontWeight: 600 }}>{lt?.l || l.s.lvReq.leave_type}{l.s.lvReq.is_half_day ? "(半)" : ""}</div>
+                        </div>
+                      )
+                    })}
+                    {leaves.length > 3 && <div style={{ fontSize: 8, color: t.tm, paddingLeft: 4 }}>+{leaves.length - 3} 人请假</div>}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -372,17 +387,19 @@ export default function LeaveCalendar({ t, tk }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={() => shift(-1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronLeft size={14} /></button>
-          <span style={{ fontSize: 14, fontWeight: 600, color: t.tx, minWidth: 180, textAlign: "center" }}>{labelOfCursor()}</span>
+          <span style={{ fontSize: mobile ? 13 : 14, fontWeight: 600, color: t.tx, minWidth: mobile ? 120 : 180, textAlign: "center" }}>{labelOfCursor()}</span>
           <button onClick={() => shift(1)} style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "flex", alignItems: "center" }}><ChevronRight size={14} /></button>
           <button onClick={goToday} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 11, cursor: "pointer" }}>今天</button>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Legend t={t} color={t.ac} label="出勤" />
-          <Legend t={t} color="#8B5CF6" label="休日出勤" />
-          {LEAVE_TYPES.slice(0, 4).map((lt) => <Legend key={lt.v} color={lt.c} label={lt.l} t={t} />)}
-          <Legend t={t} color={t.rd} label="日本祝日" round />
-          <Legend t={t} color={t.wn} label="中国节日" round />
-        </div>
+        {!mobile && (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Legend t={t} color={t.ac} label="出勤" />
+            <Legend t={t} color="#8B5CF6" label="休日出勤" />
+            {LEAVE_TYPES.slice(0, 4).map((lt) => <Legend key={lt.v} color={lt.c} label={lt.l} t={t} />)}
+            <Legend t={t} color={t.rd} label="日本祝日" round />
+            <Legend t={t} color={t.wn} label="中国节日" round />
+          </div>
+        )}
       </div>
 
       {ld ? (
