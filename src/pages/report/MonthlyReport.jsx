@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { sbGet } from "../../api/supabase"
-import { LEAVE_TYPES, daysInMonth, pad, workingDays } from "../../config/constants"
+import { LEAVE_TYPES, daysInMonth, pad, workingDays, COMPANIES } from "../../config/constants"
 
 export default function MonthlyReport({ t, tk }) {
   const now = new Date(); const [y, sY] = useState(now.getFullYear()); const [m, sM] = useState(now.getMonth() + 1)
   const [data, sData] = useState([]); const [ld, sLd] = useState(true); const days = daysInMonth(y, m)
+  const [companyFilter, setCompanyFilter] = useState(null)
 
   useEffect(() => {
     (async () => {
@@ -33,12 +34,20 @@ export default function MonthlyReport({ t, tk }) {
 
   const chg = (d) => { let nm = m + d, ny = y; if (nm > 12) { nm = 1; ny++ } else if (nm < 1) { nm = 12; ny-- } sY(ny); sM(nm) }
 
+  const companyCounts = useMemo(() => {
+    const m = {}
+    for (const r of data) m[r.company_id] = (m[r.company_id] || 0) + 1
+    return m
+  }, [data])
+  const visible = useMemo(() => companyFilter == null ? data : data.filter(r => r.company_id === companyFilter), [data, companyFilter])
+
   const exportCSV = () => {
-    const hdr = ["社员名", "出勤日数", "目标(h)", "实绩(h)", "加班(h)", "固定20h", "超过(h)", "休假日数", "签单额", "提成额"]
-    const rows = data.map((r) => [r.name || r.email, r.wd, r.tw, r.to, r.fo, r.eo, r.lv, r.tcc, r.ca])
+    const hdr = ["社员名", "公司", "出勤日数", "目标(h)", "实绩(h)", "加班(h)", "固定20h", "超过(h)", "休假日数", "签单额", "提成额"]
+    const rows = visible.map((r) => [r.name || r.email, COMPANIES.find(c => c.id === r.company_id)?.name || "", r.wd, r.tw, r.to, r.fo, r.eo, r.lv, r.tcc, r.ca])
     const csv = "\uFEFF" + [hdr, ...rows].map((r) => r.join(",")).join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `勤怠报告_${y}年${m}月.csv`; a.click()
+    const suffix = companyFilter != null ? `_${COMPANIES.find(c => c.id === companyFilter)?.name || ""}` : ""
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `勤怠报告_${y}年${m}月${suffix}.csv`; a.click()
   }
 
   if (ld) return <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
@@ -55,6 +64,18 @@ export default function MonthlyReport({ t, tk }) {
         </div>
       </div>
 
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12 }}>
+        <button onClick={() => setCompanyFilter(null)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${companyFilter == null ? t.ac : t.bd}`, background: companyFilter == null ? `${t.ac}15` : "transparent", color: companyFilter == null ? t.ac : t.ts, fontSize: 11, fontWeight: companyFilter == null ? 600 : 400, cursor: "pointer" }}>全部 {data.length}</button>
+        {COMPANIES.map((c) => {
+          const cnt = companyCounts[c.id] || 0
+          if (cnt === 0) return null
+          const active = companyFilter === c.id
+          return (
+            <button key={c.id} onClick={() => setCompanyFilter(active ? null : c.id)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${active ? t.ac : t.bd}`, background: active ? `${t.ac}15` : "transparent", color: active ? t.ac : t.ts, fontSize: 11, fontWeight: active ? 600 : 400, cursor: "pointer" }}>{c.name} {cnt}</button>
+          )
+        })}
+      </div>
+
       <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 800 }}>
           <thead><tr style={{ background: t.bgH }}>
@@ -63,7 +84,10 @@ export default function MonthlyReport({ t, tk }) {
             ))}
           </tr></thead>
           <tbody>
-            {data.map((r) => (
+            {visible.length === 0 && (
+              <tr><td colSpan={11} style={{ padding: 28, textAlign: "center", color: t.tm, fontSize: 12 }}>该公司本月暂无数据</td></tr>
+            )}
+            {visible.map((r) => (
               <tr key={r.id} style={{ borderBottom: `1px solid ${t.bl}`, background: r.danger ? `${t.rd}08` : "transparent" }}>
                 <td style={{ padding: "9px 8px", color: t.tx, fontWeight: 500 }}>{r.name || r.email}</td>
                 <td style={{ padding: "9px 8px", color: t.ts, textAlign: "right" }}>{r.wd}</td>
