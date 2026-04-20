@@ -256,7 +256,6 @@ export default function WorkEntryManager({ user, t, tk }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(95px,1fr))", gap: 8, marginBottom: 16 }}>
         {[
           { l: "总工时", v: `${(totalMins / 60).toFixed(1)}h`, c: t.ac },
-          { l: "工资", v: `¥${totalWage.toLocaleString()}`, c: t.gn },
           { l: "交通费", v: `¥${totalTrans.toLocaleString()}`, c: "#8B5CF6" },
           { l: "其他报销", v: `¥${totalOther.toLocaleString()}`, c: t.wn },
           ...(showComm ? [{ l: "签单提成", v: `¥${totalComm.toLocaleString()}`, c: "#EC4899" }] : []),
