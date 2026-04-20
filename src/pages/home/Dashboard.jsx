@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays, isHourly as empIsHourly, isFullTime as empIsFullTime, COMPANIES } from "../../config/constants"
+import { Bell } from "lucide-react"
+
+const LAST_SEEN_KEY = "kintai_last_seen_anno_at"
 
 export default function Dashboard({ user, t, tk }) {
   const isA = user.role === "admin"
@@ -17,6 +20,10 @@ export default function Dashboard({ user, t, tk }) {
   const [annoFm, setAnnoFm] = useState({ title: "", body: "", kind: "info", expires_at: "" })
   const [annoEditId, setAnnoEditId] = useState(null)
   const [annoSub, setAnnoSub] = useState(false)
+  const [bellOpen, setBellOpen] = useState(false)
+  const [lastSeenAt, setLastSeenAt] = useState(() => localStorage.getItem(LAST_SEEN_KEY) || "1970-01-01T00:00:00Z")
+  const [toastAnno, setToastAnno] = useState(null)
+  const [toastDismissedIds, setToastDismissedIds] = useState(() => new Set())
   const td = todayStr()
 
   const loadAnnos = useCallback(async () => {
@@ -25,6 +32,31 @@ export default function Dashboard({ user, t, tk }) {
     setAnnos(rows || [])
   }, [tk])
   useEffect(() => { loadAnnos() }, [loadAnnos])
+
+  const unreadAnnos = useMemo(() => annos.filter(a => new Date(a.created_at) > new Date(lastSeenAt)), [annos, lastSeenAt])
+
+  // 有新通知 → 弹 toast（每条每次会话只弹一次，点击或 5s 后消失）
+  useEffect(() => {
+    const next = unreadAnnos.find(a => !toastDismissedIds.has(a.id))
+    if (!next) return
+    setToastAnno(next)
+    const timer = setTimeout(() => {
+      setToastAnno((cur) => cur?.id === next.id ? null : cur)
+      setToastDismissedIds((s) => { const ns = new Set(s); ns.add(next.id); return ns })
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [unreadAnnos, toastDismissedIds])
+
+  const markAnnosRead = () => {
+    const iso = new Date().toISOString()
+    setLastSeenAt(iso)
+    localStorage.setItem(LAST_SEEN_KEY, iso)
+  }
+
+  const openBell = () => {
+    setBellOpen(true)
+    markAnnosRead()
+  }
 
   const resetAnnoForm = () => { setAnnoFm({ title: "", body: "", kind: "info", expires_at: "" }); setAnnoEditId(null); setAnnoShow(false) }
   const submitAnno = async () => {
@@ -45,7 +77,7 @@ export default function Dashboard({ user, t, tk }) {
   }
   const editAnno = (a) => {
     setAnnoFm({ title: a.title, body: a.body || "", kind: a.kind || "info", expires_at: a.expires_at ? a.expires_at.slice(0, 10) : "" })
-    setAnnoEditId(a.id); setAnnoShow(true)
+    setAnnoEditId(a.id); setAnnoShow(true); setBellOpen(false)
   }
   const delAnno = async (id) => {
     if (!confirm("删除这条通知？")) return
@@ -68,17 +100,27 @@ export default function Dashboard({ user, t, tk }) {
       try {
         const from = `${y}-${pad(m)}-01`, to = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`
         if (isA) {
-          const [emps, atts, lr, pending] = await Promise.all([
-            sbGet("employees?is_active=eq.true&select=id", tk),
-            sbGet(`attendance_records?work_date=gte.${from}&work_date=lte.${to}&select=employee_id,work_minutes,clock_in`, tk),
+          const todayWeekday = new Date().getDay()
+          const [emps, todayAtts, pendL, pendS, pendTc, todayLeaves, pending] = await Promise.all([
+            sbGet("employees?is_active=eq.true&select=id,employment_type,days_off", tk),
+            sbGet(`attendance_records?work_date=eq.${td}&select=employee_id,clock_in`, tk),
             sbGet("leave_requests?status=eq.申請中&select=id", tk),
+            sbGet("day_swap_requests?status=eq.申請中&select=id", tk),
+            sbGet("transport_change_requests?status=eq.申請中&select=id", tk),
+            sbGet(`leave_requests?status=eq.承認&leave_date=eq.${td}&select=employee_id`, tk),
             sbGet("employees?is_active=eq.true&or=(contract_start_date.is.null,my_number.is.null)&select=id,name,employment_type,hire_date,contract_start_date,my_number,company_id&order=hire_date.desc", tk),
           ])
+          const fullTime = (emps || []).filter((e) => empIsFullTime(e.employment_type))
+          const expectedToday = fullTime.filter((e) => !(e.days_off || []).includes(todayWeekday))
+          const clockedInIds = new Set((todayAtts || []).filter((a) => a.clock_in).map((a) => a.employee_id))
+          const onLeaveIds = new Set((todayLeaves || []).map((l) => l.employee_id))
+          const absentCount = expectedToday.filter((e) => !clockedInIds.has(e.id) && !onLeaveIds.has(e.id)).length
           setStats({
-            empCount: emps.length,
-            todayWorkers: new Set(atts.filter((a) => a.clock_in).map((a) => a.employee_id)).size,
-            totalOT: (atts.reduce((s, a) => s + Math.max(Number(a.work_minutes || 0) - 480, 0), 0) / 60).toFixed(1),
-            pending: lr.length,
+            empCount: (emps || []).length,
+            expectedToday: expectedToday.length,
+            clockedInCount: clockedInIds.size,
+            absentCount,
+            totalPending: (pendL?.length || 0) + (pendS?.length || 0) + (pendTc?.length || 0),
           })
           setPendingProfiles(pending || [])
         } else {
@@ -94,7 +136,7 @@ export default function Dashboard({ user, t, tk }) {
         await loadToday()
       } catch (e) {
         console.error(e)
-        setStats({ empCount: 0, todayWorkers: 0, totalOT: "0", pending: 0, totalW: 0, wd: 0, targetH: 1, leaveBalance: 0, leaveUsed: 0 })
+        setStats({ empCount: 0, clockedInCount: 0, expectedToday: 0, absentCount: 0, totalPending: 0, totalW: 0, wd: 0, targetH: 1, leaveBalance: 0, leaveUsed: 0 })
       }
     })()
   }, [tk, user.id, isA])
@@ -154,7 +196,6 @@ export default function Dashboard({ user, t, tk }) {
     </div>
   )
 
-  // 实时时钟区块（可见版本，不带打卡按钮）
   const TimeDisplay = () => (
     <div style={{ background: t.bgC, borderRadius: 16, padding: "20px", border: `1px solid ${t.bd}`, marginBottom: 16, textAlign: "center" }}>
       <div style={{ fontSize: 12, color: t.tm, marginBottom: 4 }}>{time.getFullYear()}年{m}月{time.getDate()}日（{WEEKDAYS[time.getDay()]}）</div>
@@ -165,112 +206,133 @@ export default function Dashboard({ user, t, tk }) {
   const canClock = empIsFullTime(user.employment_type)
 
   const kindStyle = (k) => k === "warning" ? { c: t.wn, bg: `${t.wn}10`, bd: `${t.wn}40` } : k === "success" ? { c: t.gn, bg: `${t.gn}10`, bd: `${t.gn}40` } : { c: t.ac, bg: `${t.ac}08`, bd: `${t.ac}30` }
-  const AnnoSection = () => (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: t.tx }}>📢 通知</div>
-        {isA && <button onClick={() => { if (annoShow) resetAnnoForm(); else setAnnoShow(true) }} style={{ padding: "5px 12px", borderRadius: 6, border: annoShow ? `1px solid ${t.bd}` : "none", background: annoShow ? "transparent" : t.ac, color: annoShow ? t.ts : "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{annoShow ? "✕ 关闭" : "+ 发布通知"}</button>}
-      </div>
 
-      {annoShow && (
-        <div style={{ background: t.bgC, borderRadius: 10, padding: 14, border: `2px solid ${t.ac}33`, marginBottom: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-            <div>
-              <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>标题 *</label>
-              <input value={annoFm.title} onChange={(e) => setAnnoFm(p => ({ ...p, title: e.target.value }))} placeholder="例：本月工资发放日延后" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
-              <select value={annoFm.kind} onChange={(e) => setAnnoFm(p => ({ ...p, kind: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }}>
-                <option value="info">通知 (蓝)</option>
-                <option value="warning">警告 (黄)</option>
-                <option value="success">喜讯 (绿)</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>到期日（选填）</label>
-              <input type="date" value={annoFm.expires_at} onChange={(e) => setAnnoFm(p => ({ ...p, expires_at: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }} />
-            </div>
-          </div>
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>内容（选填）</label>
-            <textarea value={annoFm.body} onChange={(e) => setAnnoFm(p => ({ ...p, body: e.target.value }))} rows={3} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={submitAnno} disabled={annoSub || !annoFm.title.trim()} style={{ padding: "7px 18px", borderRadius: 6, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: annoSub || !annoFm.title.trim() ? 0.5 : 1 }}>{annoSub ? "保存中..." : annoEditId ? "保存" : "发布"}</button>
-            <button onClick={resetAnnoForm} style={{ padding: "7px 18px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
-          </div>
-        </div>
+  const BellWidget = () => (
+    <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center" }}>
+      <button onClick={() => bellOpen ? setBellOpen(false) : openBell()} aria-label="通知" style={{ position: "relative", background: "transparent", border: `1px solid ${t.bd}`, borderRadius: 8, cursor: "pointer", padding: "6px 8px", display: "flex", alignItems: "center", color: t.ts }}>
+        <Bell size={18} strokeWidth={1.7} />
+        {unreadAnnos.length > 0 && (
+          <span style={{ position: "absolute", top: -4, right: -4, background: t.rd, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 9, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{unreadAnnos.length}</span>
+        )}
+      </button>
+      {isA && (
+        <button onClick={() => { setBellOpen(false); if (annoShow) resetAnnoForm(); else setAnnoShow(true) }} style={{ padding: "6px 12px", borderRadius: 8, border: annoShow ? `1px solid ${t.bd}` : "none", background: annoShow ? "transparent" : t.ac, color: annoShow ? t.ts : "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{annoShow ? "✕ 关闭" : "+ 发布通知"}</button>
       )}
-
-      {annos.length === 0 && !annoShow ? (
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: t.bgC, border: `1px dashed ${t.bl}`, fontSize: 11, color: t.tm, textAlign: "center" }}>暂无通知</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {annos.map((a) => {
-            const s = kindStyle(a.kind)
-            return (
-              <div key={a.id} style={{ background: s.bg, border: `1px solid ${s.bd}`, borderLeft: `4px solid ${s.c}`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: s.c }}>{a.title}</div>
-                  {a.body && <div style={{ fontSize: 11, color: t.ts, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{a.body}</div>}
-                  <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>{new Date(a.created_at).toLocaleDateString("zh-CN")}{a.expires_at && ` · 到期 ${a.expires_at.slice(0,10)}`}</div>
-                </div>
-                {isA && (
-                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                    <button onClick={() => editAnno(a)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>编辑</button>
-                    <button onClick={() => delAnno(a.id)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>删除</button>
+      {bellOpen && (
+        <>
+          <div onClick={() => setBellOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+          <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 340, maxWidth: "90vw", maxHeight: 420, overflowY: "auto", background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,.18)", zIndex: 50 }}>
+            <div style={{ padding: "12px 14px", borderBottom: `1px solid ${t.bl}`, fontSize: 13, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 6 }}>
+              <Bell size={14} strokeWidth={1.7} color={t.ac} />
+              通知（{annos.length}）
+            </div>
+            {annos.length === 0 ? (
+              <div style={{ padding: 24, textAlign: "center", fontSize: 11, color: t.tm }}>暂无通知</div>
+            ) : (
+              annos.map((a) => {
+                const s = kindStyle(a.kind)
+                return (
+                  <div key={a.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${t.bl}`, borderLeft: `3px solid ${s.c}`, background: s.bg }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: s.c }}>{a.title}</div>
+                    {a.body && <div style={{ fontSize: 11, color: t.ts, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{a.body}</div>}
+                    <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>{new Date(a.created_at).toLocaleDateString("zh-CN")}{a.expires_at && ` · 到期 ${a.expires_at.slice(0, 10)}`}</div>
+                    {isA && (
+                      <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                        <button onClick={() => editAnno(a)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>编辑</button>
+                        <button onClick={() => delAnno(a.id)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>删除</button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                )
+              })
+            )}
+          </div>
+        </>
       )}
     </div>
   )
 
+  const Toast = () => {
+    if (!toastAnno) return null
+    const s = kindStyle(toastAnno.kind)
+    return (
+      <div onClick={() => { setToastDismissedIds((sIds) => { const ns = new Set(sIds); ns.add(toastAnno.id); return ns }); setToastAnno(null) }}
+        style={{ position: "fixed", top: 20, right: 20, minWidth: 260, maxWidth: 360, padding: "12px 14px", background: t.bgC, borderRadius: 10, border: `1px solid ${s.c}66`, borderLeft: `4px solid ${s.c}`, boxShadow: "0 10px 30px rgba(0,0,0,.22)", zIndex: 100, cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: s.c, fontWeight: 700, marginBottom: 4 }}>
+          <Bell size={12} strokeWidth={1.8} /> 新通知
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: t.tx }}>{toastAnno.title}</div>
+        {toastAnno.body && <div style={{ fontSize: 11, color: t.ts, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{toastAnno.body}</div>}
+        <div style={{ fontSize: 9, color: t.tm, marginTop: 6 }}>点击关闭</div>
+      </div>
+    )
+  }
+
+  const PublishForm = () => (
+    <div style={{ background: t.bgC, borderRadius: 10, padding: 14, border: `2px solid ${t.ac}33`, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div>
+          <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>标题 *</label>
+          <input value={annoFm.title} onChange={(e) => setAnnoFm(p => ({ ...p, title: e.target.value }))} placeholder="例：本月工资发放日延后" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
+          <select value={annoFm.kind} onChange={(e) => setAnnoFm(p => ({ ...p, kind: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }}>
+            <option value="info">通知 (蓝)</option>
+            <option value="warning">警告 (黄)</option>
+            <option value="success">喜讯 (绿)</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>到期日（选填）</label>
+          <input type="date" value={annoFm.expires_at} onChange={(e) => setAnnoFm(p => ({ ...p, expires_at: e.target.value }))} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }} />
+        </div>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>内容（选填）</label>
+        <textarea value={annoFm.body} onChange={(e) => setAnnoFm(p => ({ ...p, body: e.target.value }))} rows={3} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={submitAnno} disabled={annoSub || !annoFm.title.trim()} style={{ padding: "7px 18px", borderRadius: 6, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: annoSub || !annoFm.title.trim() ? 0.5 : 1 }}>{annoSub ? "保存中..." : annoEditId ? "保存" : "发布"}</button>
+        <button onClick={resetAnnoForm} style={{ padding: "7px 18px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
+      </div>
+    </div>
+  )
+
+  const Header = ({ title }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0 }}>{title}</h2>
+      <BellWidget />
+    </div>
+  )
+
   if (isA) {
-    const COMPS = Object.fromEntries(COMPANIES.map(c => [c.id, c.name]))
     return (
       <div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>管理面板</h2>
+        <Header title="管理面板" />
+        {annoShow && <PublishForm />}
+        <Toast />
         {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
-        <AnnoSection />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
-          <Card label="员工数" value={`${stats.empCount}人`} />
-          <Card label="本月出勤" value={`${stats.todayWorkers}人`} color={t.gn} />
-          <Card label="待审批" value={`${stats.pending}件`} color={stats.pending > 0 ? t.wn : t.gn} />
-          <Card label="待完善档案" value={`${pendingProfiles.length}人`} color={pendingProfiles.length > 0 ? t.wn : t.gn} />
-          <Card label="全员加班合计" value={`${stats.totalOT}h`} color={parseFloat(stats.totalOT) > 100 ? t.rd : t.wn} />
+
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: t.tx, margin: "0 0 10px" }}>勤怠概览</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10 }}>
+            <Card label="已打卡人数" value={`${stats.clockedInCount}人`} sub={`今日应出勤 ${stats.expectedToday}人`} color={t.gn} />
+            <Card label="异常考勤" value={`${stats.absentCount}条`} sub="未打卡且无请假" color={stats.absentCount > 0 ? t.rd : t.gn} />
+            <Card label="待审批" value={`${stats.totalPending}件`} sub="请假 / 换休 / 交通费" color={stats.totalPending > 0 ? t.wn : t.gn} />
+          </div>
         </div>
+
         {pendingProfiles.length > 0 && (
-          <div style={{ background: t.bgC, borderRadius: 12, border: `1px solid ${t.bd}`, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.wn}40`, background: `${t.wn}08`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 8, background: t.wn }} />
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: t.tx }}>新入职 · 待完善档案</div>
-                <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>自助注册后，这些员工仍缺少合同日期或 My Number。请在"人事档案"中补齐。</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: t.tx }}>还有 {pendingProfiles.length} 个档案待完善</div>
+                <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>新员工缺合同日期或 My Number，请在「人事档案」中补齐</div>
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {pendingProfiles.map((p) => {
-                const needs = []
-                if (!p.contract_start_date) needs.push("合同日期")
-                if (!p.my_number) needs.push("My Number")
-                return (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, border: `1px solid ${t.bl}`, background: `${t.wn}05` }}>
-                    <div style={{ width: 6, height: 6, borderRadius: 6, background: t.wn }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: t.tx, fontWeight: 600 }}>{p.name}</div>
-                      <div style={{ fontSize: 10, color: t.tm, marginTop: 1 }}>
-                        {p.employment_type} · {COMPS[p.company_id] || "—"} · 入职 {p.hire_date || "—"}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 10, color: t.wn, fontWeight: 600, whiteSpace: "nowrap" }}>缺：{needs.join("、")}</div>
-                  </div>
-                )
-              })}
-            </div>
+            <span style={{ fontSize: 10, color: t.wn, fontWeight: 600, whiteSpace: "nowrap" }}>去人事档案补齐 →</span>
           </div>
         )}
       </div>
@@ -282,9 +344,10 @@ export default function Dashboard({ user, t, tk }) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 16px" }}>首页</h2>
+      <Header title="首页" />
+      {annoShow && <PublishForm />}
+      <Toast />
       {canClock ? <ClockSection size={96} /> : <TimeDisplay />}
-      <AnnoSection />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
         <Card label={isHourly ? "本月上班天数" : "本月出勤"} value={`${stats.wd}天`} />
         {!isHourly && <Card label="本月工时" value={fmtMinutes(stats.totalW)} color={t.gn} />}
