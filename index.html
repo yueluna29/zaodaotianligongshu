@@ -65,6 +65,30 @@ input,select,button,textarea{font-family:inherit}
 
 .bell-dot{position:absolute;top:7px;right:7px;width:7px;height:7px;background:#fb7185;border-radius:50%;animation:bell-pulse 1.6s ease-in-out infinite}
 @keyframes bell-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.25)}}
+
+.home-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.home-grid>.span-4{grid-column:span 4}
+.home-grid>.span-2{grid-column:span 2}
+
+.clock-panel{padding:30px 36px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:24px}
+.clock-panel .clock-info{flex:1;min-width:240px}
+.clock-panel .clock-time-label{color:#94a3b8;font-size:12px;font-weight:500;letter-spacing:.05em;margin-bottom:6px}
+.clock-panel .clock-time{font-size:54px;font-weight:300;color:#334155;letter-spacing:.05em;font-family:monospace;line-height:1;margin-bottom:10px}
+.clock-panel .clock-status{color:#94a3b8;font-size:11px;letter-spacing:.15em;text-transform:uppercase}
+.clock-panel .clock-buttons{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center}
+
+@media (max-width: 768px){
+  .home-grid{grid-template-columns:1fr;gap:14px}
+  .home-grid>.span-4,.home-grid>.span-2{grid-column:span 1}
+  .clock-panel{flex-direction:column;padding:28px 20px;gap:20px;text-align:center}
+  .clock-panel .clock-info{min-width:0;width:100%;text-align:center}
+  .clock-panel .clock-time{font-size:44px;margin:0 auto 8px}
+  .stat-card{min-height:96px;padding:18px 20px}
+  .stat-value{font-size:26px}
+}
+@media (max-width: 420px){
+  .clock-panel .clock-time{font-size:38px}
+}
 </style>
 </head>
 <body><div id="root"></div>

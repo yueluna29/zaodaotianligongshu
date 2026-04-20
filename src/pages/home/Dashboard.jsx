@@ -388,22 +388,22 @@ export default function Dashboard({ user, t, tk, onNav }) {
           {annoShow && <PublishForm />}
           <Toast />
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+          <div className="home-grid">
             {/* 打卡主面板 */}
-            <div className="glass-card" style={{ gridColumn: "span 4", padding: "30px 36px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
-              <div style={{ flex: 1, minWidth: 240 }}>
-                <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 500, letterSpacing: ".05em", marginBottom: 6 }}>
+            <div className="glass-card clock-panel span-4">
+              <div className="clock-info">
+                <div className="clock-time-label">
                   {time.getFullYear()}年{m}月{time.getDate()}日 {WEEKDAYS[time.getDay()]}曜日
                 </div>
-                <div style={{ fontSize: 54, fontWeight: 300, color: "#334155", letterSpacing: ".05em", fontFamily: "monospace", lineHeight: 1, marginBottom: 10 }}>
+                <div className="clock-time">
                   {pad(time.getHours())}:{pad(time.getMinutes())}:{pad(time.getSeconds())}
                 </div>
-                <div style={{ color: "#94a3b8", fontSize: 11, letterSpacing: ".15em", textTransform: "uppercase" }}>
+                <div className="clock-status">
                   {stateLabel}
                 </div>
               </div>
               {clockButtons && (
-                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", minHeight: 128, alignItems: "center" }}>
+                <div className="clock-buttons">
                   {clockButtons}
                 </div>
               )}
@@ -440,7 +440,7 @@ export default function Dashboard({ user, t, tk, onNav }) {
             </div>
 
             {/* 待审批 */}
-            <div className="glass-card stat-card hv-amber" style={{ gridColumn: "span 2" }}>
+            <div className="glass-card stat-card hv-amber span-2">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="stat-label">待审批事项</span>
                 <FileText size={16} color="rgba(245,158,11,.7)" strokeWidth={1.5} />
