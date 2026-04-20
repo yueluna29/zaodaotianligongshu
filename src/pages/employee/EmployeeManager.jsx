@@ -214,7 +214,7 @@ export default function EmployeeManager({ user, t, tk }) {
     const isHourly = empIsHourly(empType)
     const cid = editing ? fm.company_id : e.company_id
     const isCN = isChinaCompany(cid)
-    const isExpiring = !creating && e.residence_expiry && new Date(e.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
+    const isExpiring = !creating && !isCN && e.residence_expiry && new Date(e.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
     const yearsOfService = (!creating && e.hire_date) ? ((new Date() - new Date(e.hire_date)) / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1) : null
     const contractExpiring = !creating && e.contract_end_date && new Date(e.contract_end_date) < new Date(new Date().getTime() + 60 * 24 * 60 * 60 * 1000)
     // admin-only 字段的样式
@@ -623,7 +623,7 @@ export default function EmployeeManager({ user, t, tk }) {
           </tr></thead>
           <tbody>
             {filtered.map((emp) => {
-              const isExp = emp.residence_expiry && new Date(emp.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
+              const isExp = !isChinaCompany(emp.company_id) && emp.residence_expiry && new Date(emp.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
               return (
                 <tr key={emp.id} style={{ borderBottom: `1px solid ${t.bl}`, cursor: "pointer" }} onClick={() => { sSelected(emp); sEditing(false); sCreating(false) }}>
                   <td style={{ padding: "10px 12px" }}>
