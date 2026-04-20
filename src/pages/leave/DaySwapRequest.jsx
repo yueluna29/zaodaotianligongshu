@@ -197,7 +197,7 @@ export default function DaySwapRequest({ user, t, tk }) {
             {editId ? (
               <input type="date" value={fm.original_dates[0] || ""} onChange={(e) => sFm(p => ({ ...p, original_dates: [e.target.value] }))} style={iS} />
             ) : (
-              <DateMultiPicker selected={fm.original_dates} onChange={(dates) => sFm(p => ({ ...p, original_dates: dates }))} t={t} />
+              <DateMultiPicker selected={fm.original_dates} onChange={(dates) => sFm(p => ({ ...p, original_dates: dates }))} t={t} tk={tk} />
             )}
           </div>
 

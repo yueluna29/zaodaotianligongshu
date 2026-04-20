@@ -177,7 +177,7 @@ export default function LeaveRequest({ user, t, tk }) {
             {editId ? (
               <input type="date" value={fm.dates[0] || ""} onChange={(e) => sFm(p => ({ ...p, dates: [e.target.value] }))} style={iS} />
             ) : (
-              <DateMultiPicker selected={fm.dates} onChange={(dates) => sFm(p => ({ ...p, dates }))} t={t} />
+              <DateMultiPicker selected={fm.dates} onChange={(dates) => sFm(p => ({ ...p, dates }))} t={t} tk={tk} />
             )}
           </div>
           <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>

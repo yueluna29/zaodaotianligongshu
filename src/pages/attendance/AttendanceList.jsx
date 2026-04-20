@@ -608,7 +608,7 @@ export default function AttendanceList({ user, t, tk }) {
                 {leaveEditId ? (
                   <input type="date" value={leaveFm.dates[0] || ""} onChange={(e) => setLeaveFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
                 ) : (
-                  <DateMultiPicker selected={leaveFm.dates} onChange={(dates) => setLeaveFm(p => ({ ...p, dates }))} t={t} />
+                  <DateMultiPicker selected={leaveFm.dates} onChange={(dates) => setLeaveFm(p => ({ ...p, dates }))} t={t} tk={tk} />
                 )}
               </div>
               <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
@@ -699,7 +699,7 @@ export default function AttendanceList({ user, t, tk }) {
                     {histEditId ? (
                       <input type="date" value={histFm.dates[0] || ""} onChange={(e) => setHistFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
                     ) : (
-                      <DateMultiPicker selected={histFm.dates} onChange={(dates) => setHistFm(p => ({ ...p, dates }))} t={t} />
+                      <DateMultiPicker selected={histFm.dates} onChange={(dates) => setHistFm(p => ({ ...p, dates }))} t={t} tk={tk} />
                     )}
                   </div>
                   <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
@@ -801,7 +801,7 @@ export default function AttendanceList({ user, t, tk }) {
                 {swapEditId ? (
                   <input type="date" value={swapFm.original_dates[0] || ""} onChange={(e) => setSwapFm(p => ({ ...p, original_dates: [e.target.value] }))} style={fmS} />
                 ) : (
-                  <DateMultiPicker selected={swapFm.original_dates} onChange={(dates) => setSwapFm(p => ({ ...p, original_dates: dates }))} t={t} />
+                  <DateMultiPicker selected={swapFm.original_dates} onChange={(dates) => setSwapFm(p => ({ ...p, original_dates: dates }))} t={t} tk={tk} />
                 )}
               </div>
               {(swapEditId || swapFm.original_dates.length === 1) && (
