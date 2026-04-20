@@ -237,6 +237,12 @@ export default function EmployeeManager({ user, t, tk }) {
               <div style={{ flex: 1, minWidth: 220 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: t.tx, lineHeight: 1.2 }}>{e.name || e.email || "—"}</div>
                 <div style={{ fontSize: 11, color: t.tm, marginTop: 4, minHeight: 14 }}>{[e.furigana, e.pinyin].filter(Boolean).join(" ・ ")}</div>
+                {e.login_id && (
+                  <div style={{ fontSize: 11, color: t.ts, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 9px", borderRadius: 6, background: `${t.ac}10`, border: `1px solid ${t.ac}30` }}>
+                    <span style={{ color: t.tm }}>登录ID</span>
+                    <span style={{ fontFamily: "monospace", fontWeight: 600, color: t.ac }}>{e.login_id}</span>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                   {e.company_id && chip(t.wn, COMPANIES.find(c => c.id === e.company_id)?.name)}
                   {e.employment_type && chip(t.gn, e.employment_type)}

@@ -57,3 +57,17 @@ export async function sbDel(path, token) {
     headers: { apikey: AK, Authorization: `Bearer ${token}` },
   })
 }
+
+// 调用 Postgres RPC 函数。token 可省略（匿名调用，用 anon key 鉴权）
+export async function sbRpc(fn, body, token) {
+  const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: {
+      apikey: AK,
+      Authorization: `Bearer ${token || AK}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body || {}),
+  })
+  return r.json()
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { sbAuth, sbGet, sbPatch } from "../../api/supabase"
+import { sbAuth, sbGet, sbPatch, sbRpc } from "../../api/supabase"
 
 const ID_DOMAIN = "juku.local"
 const ID_PATTERN = /^[a-zA-Z0-9]{4,20}$/
@@ -33,7 +33,9 @@ const emptyForm = () => ({
 export default function Login({ onAuth, theme, t, toggleTheme }) {
   const [allowedTypes, setAllowedTypes] = useState(null) // 数组 or null
   const [lockedCompanyId, setLockedCompanyId] = useState(null) // 邀请链接锁定的公司 id
-  const [mode, setMode] = useState("login") // "login" | "register"
+  const [mode, setMode] = useState("login") // "login" | "register" | "forgot"
+  const [forgotFm, setForgotFm] = useState({ name: "", phone4: "" })
+  const [forgotResult, setForgotResult] = useState(null) // null | { status, login_id? }
   const [step, setStep] = useState(1)
   const [fm, setFm] = useState(emptyForm())
   const [ld, setLd] = useState(false)
@@ -59,6 +61,18 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
     const arr = p[k] || []
     return { ...p, [k]: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v] }
   })
+
+  const lookupForgotId = async () => {
+    setErr(""); setForgotResult(null)
+    if (!forgotFm.name.trim()) { setErr("请输入姓名"); return }
+    if (!/^\d{4}$/.test(forgotFm.phone4)) { setErr("请输入手机号最后 4 位"); return }
+    setLd(true)
+    try {
+      const r = await sbRpc("lookup_login_id", { p_name: forgotFm.name.trim(), p_phone_last4: forgotFm.phone4 })
+      setForgotResult(r || { status: "not_found" })
+    } catch (e) { setErr("查询出错：" + e.message) }
+    setLd(false)
+  }
 
   const login = async () => {
     const id = fm.loginId.trim().toLowerCase()
@@ -297,7 +311,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
           <div style={{ fontSize: 13, fontWeight: 700, color: t.ac, letterSpacing: ".08em", marginBottom: 6 }}>早稲田理工塾</div>
           <h1 style={{ fontSize: 21, fontWeight: 700, color: t.tx, margin: 0 }}>勤怠管理系统</h1>
           <p style={{ fontSize: 12, color: t.tm, marginTop: 8 }}>
-            {mode === "login" ? "登录" : `新员工入职登记 · ${stepTitle} (${step}/4)`}
+            {mode === "login" ? "登录" : mode === "forgot" ? "找回登录ID" : `新员工入职登记 · ${stepTitle} (${step}/4)`}
           </p>
           {mode === "register" && allowedTypes && (
             <div style={{ fontSize: 10, color: t.ts, marginTop: 4 }}>
@@ -317,8 +331,35 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
               <input placeholder="密码" type="password" value={fm.password} onChange={(e) => up("password", e.target.value)} style={iS} onKeyDown={(e) => e.key === "Enter" && login()} />
               <button onClick={login} disabled={ld} style={{ padding: 13, borderRadius: 10, border: "none", background: `linear-gradient(135deg,${t.ac},${t.ah})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: ld ? "wait" : "pointer", opacity: ld ? 0.7 : 1 }}>{ld ? "..." : "登录"}</button>
             </div>
-            <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: t.tm }}>
+            <div style={{ textAlign: "center", marginTop: 12 }}>
+              <button onClick={() => { setMode("forgot"); setErr(""); setMsg(""); setForgotResult(null) }} style={{ background: "none", border: "none", color: t.ac, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+                忘记登录ID？
+              </button>
+            </div>
+            <div style={{ textAlign: "center", marginTop: 12, fontSize: 11, color: t.tm }}>
               新员工请使用管理员提供的入职链接完成注册
+            </div>
+          </>
+        ) : mode === "forgot" ? (
+          <>
+            <div style={{ fontSize: 11, color: t.tm, marginBottom: 12 }}>请输入注册时填写的姓名 + 手机号最后 4 位，匹配成功后会显示你的登录ID。</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input placeholder="汉字姓名" value={forgotFm.name} onChange={(e) => setForgotFm(p => ({ ...p, name: e.target.value }))} style={iS} />
+              <input placeholder="手机号最后 4 位" inputMode="numeric" maxLength={4} value={forgotFm.phone4} onChange={(e) => setForgotFm(p => ({ ...p, phone4: e.target.value.replace(/\D/g, "") }))} style={iS} onKeyDown={(e) => e.key === "Enter" && lookupForgotId()} />
+              <button onClick={lookupForgotId} disabled={ld} style={{ padding: 13, borderRadius: 10, border: "none", background: `linear-gradient(135deg,${t.ac},${t.ah})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: ld ? "wait" : "pointer", opacity: ld ? 0.7 : 1 }}>{ld ? "..." : "查询"}</button>
+            </div>
+            {forgotResult && (
+              <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 10, border: `1px solid ${forgotResult.status === "ok" ? t.gn : t.wn}40`, background: `${forgotResult.status === "ok" ? t.gn : t.wn}10`, fontSize: 12, color: forgotResult.status === "ok" ? t.gn : t.wn, textAlign: "center" }}>
+                {forgotResult.status === "ok" && <>你的登录ID：<span style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, marginLeft: 4 }}>{forgotResult.login_id}</span></>}
+                {forgotResult.status === "not_found" && "未找到匹配的员工，请确认姓名和手机号；或联系管理员"}
+                {forgotResult.status === "multiple" && "找到多名同名员工，请联系管理员获取登录ID"}
+                {forgotResult.status === "bad_input" && "输入有误，请检查姓名和 4 位数字"}
+              </div>
+            )}
+            <div style={{ textAlign: "center", marginTop: 14 }}>
+              <button onClick={() => { setMode("login"); setErr(""); setForgotResult(null) }} style={{ background: "none", border: "none", color: t.ac, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+                返回登录
+              </button>
             </div>
           </>
         ) : (
