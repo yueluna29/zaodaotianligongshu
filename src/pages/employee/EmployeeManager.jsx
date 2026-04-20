@@ -7,7 +7,11 @@ import PayRateSection from "../../components/PayRateSection"
 
 const EMP_TYPES = ["正社員", "契約社員", "アルバイト", "外部講師"]
 const COMPANIES = [{ id: 1, name: "世家学舍" }, { id: 2, name: "紫陽花教育" }]
-const DEPTS = ["大学院", "学部", "教务", "咨询", "宣传"]
+const DEPTS_FULL = ["教务", "咨询", "宣传", "财务"]
+const DEPTS_BAITO = ["大学院", "学部", "文书", "语言类"]
+const REGIONS = ["日本", "中国"]
+const isFullTime = (et) => et === "正社員" || et === "契約社員"
+const deptListFor = (et) => isFullTime(et) ? DEPTS_FULL : DEPTS_BAITO
 const SUBJECTS = ["物理", "数学", "机械工学", "电气电子", "情报科学", "土木建筑", "生命理工", "材料化学", "环境工学", "体育学", "大学院文科", "经营工学", "EJU数学", "EJU理科", "日语", "英语", "班主任"]
 const GENDERS = ["男", "女"]
 const PAY_METHODS = ["银行转账", "现金"]
@@ -21,6 +25,7 @@ const emptyForm = () => ({
   has_dependent_deduction: false, hire_date: new Date().toISOString().split("T")[0],
   leave_date: "", residence_status: "", residence_card_number: "",
   residence_expiry: "", nationality: "", has_extra_work_permit: false, visa_status: "valid",
+  region: "",
   commission_rate: "0", fixed_overtime_hours: "20", payment_method: "银行转账",
   transport_method: "实报实销", transport_amount: "0", transport_cap: "20000",
   dependents_count: "0", my_number: "", contract_start_date: "", contract_end_date: "",
@@ -95,7 +100,7 @@ export default function EmployeeManager({ user, t, tk }) {
       gender: emp.gender || "", birth_date: emp.birth_date || "", phone: emp.phone || "",
       email: emp.email || "", postal_code: emp.postal_code || "", address: emp.address || "",
       company_id: emp.company_id || 1, employment_type: emp.employment_type || "正社員",
-      role: emp.role || "staff", department: emp.department || "", subjects: emp.subjects || [],
+      role: emp.role || "staff", department: emp.department || "", region: emp.region || "", subjects: emp.subjects || [],
       is_teacher: emp.is_teacher || false, has_dependent_deduction: emp.has_dependent_deduction || false,
       hire_date: emp.hire_date || "", leave_date: emp.leave_date || "",
       residence_status: emp.residence_status || "", residence_card_number: emp.residence_card_number || "",
@@ -246,6 +251,7 @@ export default function EmployeeManager({ user, t, tk }) {
                 <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                   {e.company_id && chip(t.wn, COMPANIES.find(c => c.id === e.company_id)?.name)}
                   {e.employment_type && chip(t.gn, e.employment_type)}
+                  {isFullTime(e.employment_type) && e.region && chip("#0EA5E9", e.region)}
                   {e.department && chip(t.ac, e.department)}
                   {e.role === "admin" && chip("#8B5CF6", "管理者")}
                   {e.is_teacher && chip(t.ts, "兼任教师")}
@@ -311,12 +317,15 @@ export default function EmployeeManager({ user, t, tk }) {
               <div>{fieldLabel("电话号码")}<input value={fm.phone} onChange={(ev) => sFm((p) => ({ ...p, phone: ev.target.value }))} style={iS} /></div>
             </div>
             <div style={g4}>
-              <div style={{ gridColumn: "span 2" }}>{fieldLabel("邮箱 *")}<input type="email" value={fm.email} onChange={(ev) => sFm((p) => ({ ...p, email: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("负责部门")}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{DEPTS.map((d) => <button type="button" key={d} onClick={() => sFm((p) => ({ ...p, department: p.department === d ? "" : d }))} style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${fm.department === d ? t.ac : t.bd}`, background: fm.department === d ? `${t.ac}15` : "transparent", color: fm.department === d ? t.ac : t.ts, fontSize: 10, cursor: "pointer" }}>{d}</button>)}</div></div>
+              <div style={{ gridColumn: isFullTime(fm.employment_type) ? "span 2" : "span 3" }}>{fieldLabel("邮箱 *")}<input type="email" value={fm.email} onChange={(ev) => sFm((p) => ({ ...p, email: ev.target.value }))} style={iS} /></div>
+              {isFullTime(fm.employment_type) && (
+                <div>{fieldLabel("地区")}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{REGIONS.map((r) => <button type="button" key={r} onClick={() => sFm((p) => ({ ...p, region: p.region === r ? "" : r }))} style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${fm.region === r ? t.ac : t.bd}`, background: fm.region === r ? `${t.ac}15` : "transparent", color: fm.region === r ? t.ac : t.ts, fontSize: 10, cursor: "pointer" }}>{r}</button>)}</div></div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
                 <label style={{ fontSize: 11, color: t.ts, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={fm.is_teacher} onChange={(ev) => sFm((p) => ({ ...p, is_teacher: ev.target.checked }))} />兼任教师</label>
               </div>
             </div>
+            <div style={{ marginBottom: 10 }}>{fieldLabel(`负责部门${isFullTime(fm.employment_type) ? "（教务/咨询/宣传/财务）" : "（大学院/学部/文书/语言类）"}`)}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{deptListFor(fm.employment_type).map((d) => <button type="button" key={d} onClick={() => sFm((p) => ({ ...p, department: p.department === d ? "" : d }))} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${fm.department === d ? t.ac : t.bd}`, background: fm.department === d ? `${t.ac}15` : "transparent", color: fm.department === d ? t.ac : t.ts, fontSize: 11, cursor: "pointer" }}>{d}</button>)}</div></div>
             <div style={{ marginBottom: 10 }}>{fieldLabel("担任科目 (多选)")}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{SUBJECTS.map((s) => <button type="button" key={s} onClick={() => toggleArr("subjects", s)} style={{ padding: "3px 8px", borderRadius: 14, border: `1px solid ${(fm.subjects || []).includes(s) ? t.gn : t.bd}`, background: (fm.subjects || []).includes(s) ? `${t.gn}15` : "transparent", color: (fm.subjects || []).includes(s) ? t.gn : t.ts, fontSize: 10, cursor: "pointer" }}>{s}</button>)}</div></div>
             <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 10, marginBottom: 10 }}>
               <div>{fieldLabel("住址")}<input value={fm.address} onChange={(ev) => sFm((p) => ({ ...p, address: ev.target.value }))} style={iS} /></div>
@@ -332,7 +341,7 @@ export default function EmployeeManager({ user, t, tk }) {
             </div>
             <div style={g4}>
               {readField("邮箱", e.email)}
-              {readField("负责部门", e.department)}
+              {readField("负责部门", isFullTime(e.employment_type) ? [e.region, e.department].filter(Boolean).join(" · ") : e.department)}
               {readField("担任科目", (e.subjects || []).length > 0 ? e.subjects.join("、") : null)}
               {readField("兼任教师", e.is_teacher ? "是" : "否")}
             </div>
@@ -562,7 +571,10 @@ export default function EmployeeManager({ user, t, tk }) {
                     <div style={{ fontWeight: 600, color: t.tx }}>{emp.name || emp.email}</div>
                     {emp.furigana && <div style={{ fontSize: 10, color: t.td }}>{emp.furigana}</div>}
                   </td>
-                  <td style={{ padding: "10px 12px" }}>{emp.department && <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, background: `${t.ac}10`, color: t.ts }}>{emp.department}</span>}</td>
+                  <td style={{ padding: "10px 12px" }}>
+                    {isFullTime(emp.employment_type) && emp.region && <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, background: "#0EA5E910", color: "#0EA5E9", marginRight: 4 }}>{emp.region}</span>}
+                    {emp.department && <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, background: `${t.ac}10`, color: t.ts }}>{emp.department}</span>}
+                  </td>
                   <td style={{ padding: "10px 12px" }}><div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{(emp.subjects || []).slice(0, 3).map((s, i) => <span key={i} style={{ padding: "1px 6px", borderRadius: 4, fontSize: 9, background: `${t.gn}15`, color: t.gn }}>{s}</span>)}{(emp.subjects || []).length > 3 && <span style={{ fontSize: 9, color: t.tm }}>+{emp.subjects.length - 3}</span>}</div></td>
                   <td style={{ padding: "10px 12px", color: t.ts }}>{emp.employment_type}</td>
                   <td style={{ padding: "10px 12px" }}>

@@ -4,7 +4,10 @@ import { sbAuth, sbGet, sbPatch, sbRpc } from "../../api/supabase"
 const ID_DOMAIN = "juku.local"
 const ID_PATTERN = /^[a-zA-Z0-9]{4,20}$/
 const COMPANIES = [{ id: 1, name: "世家学舍" }, { id: 2, name: "紫陽花教育" }]
-const DEPTS = ["大学院", "学部", "教务", "咨询", "宣传"]
+const DEPTS_FULL = ["教务", "咨询", "宣传", "财务"]
+const DEPTS_BAITO = ["大学院", "学部", "文书", "语言类"]
+const REGIONS = ["日本", "中国"]
+const isFullTime = (et) => et === "正社員" || et === "契約社員"
 const SUBJECTS = ["物理", "数学", "机械工学", "电气电子", "情报科学", "土木建筑", "生命理工", "材料化学", "环境工学", "体育学", "大学院文科", "经营工学", "EJU数学", "EJU理科", "日语", "英语", "班主任"]
 const GENDERS = ["男", "女"]
 const ACCT_TYPES = ["普通", "当座"]
@@ -22,7 +25,7 @@ const emptyForm = () => ({
   name: "", furigana: "", pinyin: "", gender: "", birth_date: "",
   phone: "", email: "", postal_code: "", address: "",
   company_id: 1, employment_type: "",
-  department: "", hire_date: new Date().toISOString().split("T")[0],
+  department: "", region: "", hire_date: new Date().toISOString().split("T")[0],
   subjects: [], is_teacher: false,
   nationality: "日本", residence_status: "", residence_card_number: "",
   residence_expiry: "", has_extra_work_permit: false,
@@ -168,6 +171,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
         company_id: Number(fm.company_id),
         employment_type: fm.employment_type,
         department: fm.department || null,
+        region: fm.region || null,
         hire_date: fm.hire_date,
         subjects: fm.subjects,
         is_teacher: !!fm.is_teacher,
@@ -238,8 +242,15 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
           {field("所属公司", <select value={fm.company_id} onChange={(e) => up("company_id", Number(e.target.value))} style={iS} disabled={lockedCompanyId != null}>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>, true)}
           {field("雇佣类型", <select value={fm.employment_type} onChange={(e) => up("employment_type", e.target.value)} style={iS} disabled={!allowedTypes}>{(allowedTypes || []).map((tp) => <option key={tp} value={tp}>{tp}</option>)}</select>, true)}
           {field("入职日期", <input type="date" value={fm.hire_date} onChange={(e) => up("hire_date", e.target.value)} style={iS} />, true)}
-          {field("部门", <select value={fm.department} onChange={(e) => up("department", e.target.value)} style={iS}><option value="">—</option>{DEPTS.map((d) => <option key={d} value={d}>{d}</option>)}</select>)}
+          {isFullTime(fm.employment_type)
+            ? field("地区", <select value={fm.region} onChange={(e) => up("region", e.target.value)} style={iS}><option value="">—</option>{REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>)
+            : field("部门", <select value={fm.department} onChange={(e) => up("department", e.target.value)} style={iS}><option value="">—</option>{DEPTS_BAITO.map((d) => <option key={d} value={d}>{d}</option>)}</select>)}
         </div>
+        {isFullTime(fm.employment_type) && (
+          <div style={{ marginBottom: 10 }}>
+            {field("负责部门", <select value={fm.department} onChange={(e) => up("department", e.target.value)} style={iS}><option value="">—</option>{DEPTS_FULL.map((d) => <option key={d} value={d}>{d}</option>)}</select>)}
+          </div>
+        )}
         <div style={{ marginBottom: 10 }}>
           <label style={{ ...labelS, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
             <input type="checkbox" checked={fm.is_teacher} onChange={(e) => up("is_teacher", e.target.checked)} /> 兼任教师
