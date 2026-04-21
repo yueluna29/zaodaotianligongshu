@@ -27,7 +27,7 @@ const emptyForm = () => ({
   commission_rate: "0", fixed_overtime_hours: "20", payment_method: "银行转账",
   transport_method: "实报实销", transport_amount: "0", transport_cap: "20000",
   dependents_count: "0", my_number: "", id_card_number: "", contract_start_date: "", contract_end_date: "",
-  bank_name: "", bank_branch: "", bank_account_type: "普通",
+  bank_name: "", bank_branch: "", bank_branch_code: "", bank_account_type: "普通",
   bank_account_number: "", bank_account_holder: "",
   days_off: [0, 6], available_days: [], remarks: "",
   has_commission: false,
@@ -323,7 +323,7 @@ export default function EmployeeManager({ user, t, tk }) {
       dependents_count: String(emp.dependents_count || 0), my_number: emp.my_number || "",
       id_card_number: emp.id_card_number || "",
       contract_start_date: emp.contract_start_date || "", contract_end_date: emp.contract_end_date || "",
-      bank_name: emp.bank_name || "", bank_branch: emp.bank_branch || "",
+      bank_name: emp.bank_name || "", bank_branch: emp.bank_branch || "", bank_branch_code: emp.bank_branch_code || "",
       bank_account_type: emp.bank_account_type || "普通",
       bank_account_number: emp.bank_account_number || "", bank_account_holder: emp.bank_account_holder || "",
       days_off: emp.days_off || [0, 6], available_days: emp.available_days || [], remarks: emp.remarks || "",
@@ -768,7 +768,7 @@ export default function EmployeeManager({ user, t, tk }) {
                       </div>
                     )}
                     <div style={flexRow}>
-                      {!isHourly && (
+                      {(editing ? fm.has_commission : e.has_commission) && (
                         <Field
                           label="提成率 (%)"
                           value={editing ? fm.commission_rate : `${((e.commission_rate || 0) * 100).toFixed(0)}%`}
@@ -788,24 +788,6 @@ export default function EmployeeManager({ user, t, tk }) {
                       )}
                       {fld("payment_method", "支付方式", { locked: isHourly ? false : !isAdmin, type: "select", options: PAY_METHODS })}
                       {!isHourly && fld("transport_method", "交通费方式", { locked: !isAdmin, type: "select", options: TRANSPORT_METHODS })}
-                      {!isHourly && (
-                        <Field
-                          label="交通费 (円)"
-                          value={editing ? fm.transport_amount : `¥${Number(e.transport_amount || 0).toLocaleString()}`}
-                          onChange={(v) => sFm(p => ({ ...p, transport_amount: v }))}
-                          isEditing={editing} isLocked={!isAdmin} type="number"
-                          t={t}
-                        />
-                      )}
-                      {!isHourly && (
-                        <Field
-                          label="交通费上限 (円)"
-                          value={editing ? fm.transport_cap : `¥${Number(e.transport_cap || 0).toLocaleString()}`}
-                          onChange={(v) => sFm(p => ({ ...p, transport_cap: v }))}
-                          isEditing={editing} isLocked={!isAdmin} type="number"
-                          t={t}
-                        />
-                      )}
                       {fld("dependents_count", "扶养人数", { locked: isHourly ? false : !isAdmin, type: "number" })}
                       {fld("my_number", "My Number", { locked: isHourly ? false : !isAdmin })}
                       {fld("contract_start_date", "合同开始日", { locked: isHourly ? false : !isAdmin, type: "date" })}
@@ -850,6 +832,7 @@ export default function EmployeeManager({ user, t, tk }) {
                       <>
                         {fld("bank_name", "银行名称")}
                         {fld("bank_branch", "支店名")}
+                        {fld("bank_branch_code", "支店番号", { placeholder: "例：001" })}
                         {fld("bank_account_type", "账户类型", { type: "select", options: ACCT_TYPES })}
                         {fld("bank_account_number", "账号")}
                         {fld("bank_account_holder", "户名 (カナ)", { fullWidth: true, placeholder: "ヤマダ タロウ" })}
