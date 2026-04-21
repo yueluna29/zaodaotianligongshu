@@ -75,6 +75,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [selectedDate, setSelectedDate] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`)
+  const [viewMode, setViewMode] = useState("month") // month | week
 
   const targetEmpId = selectedEmp?.id || user.id
 
@@ -307,21 +308,14 @@ export default function WorkEntryManager({ user, t, tk }) {
 
         {/* 顶栏 */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {isAdmin && <HoverBtn onClick={() => setSelectedEmp(null)} t={t}><ArrowLeft size={14} /> 返回列表</HoverBtn>}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
+            {isAdmin && <HoverBtn onClick={() => setSelectedEmp(null)} t={t} style={{ padding: "7px 10px" }}><ArrowLeft size={14} /></HoverBtn>}
             <FileText size={22} strokeWidth={1.8} color={t.ac} />
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: t.tx, margin: 0 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {isAdmin ? `${selectedEmp?.name} 的工资报表` : "工资报表"}
             </h2>
           </div>
           {hasChanges && <HoverBtn primary disabled={sv} onClick={saveAll} t={t}><Save size={14} /> {sv ? "保存中..." : "保存全部"}</HoverBtn>}
-        </div>
-
-        {/* 月份切换 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <HoverBtn onClick={() => chgMonth(-1)} t={t} style={{ padding: "7px 10px" }}><ChevronLeft size={14} /></HoverBtn>
-          <span style={{ fontSize: 15, fontWeight: 700, color: t.tx, minWidth: 100, textAlign: "center" }}>{year}年{month}月</span>
-          <HoverBtn onClick={() => chgMonth(1)} t={t} style={{ padding: "7px 10px" }}><ChevronRight size={14} /></HoverBtn>
         </div>
 
         {saveMsg && (() => { const ok = saveMsg.startsWith("已保存"), err = saveMsg.startsWith("保存失败"); const c = err ? t.rd : ok ? t.gn : t.wn; return <div style={{ padding: 10, borderRadius: 10, background: `${c}15`, border: `1px solid ${c}33`, marginBottom: 14, fontSize: 12, color: c }}>{saveMsg}</div> })()}
@@ -334,14 +328,26 @@ export default function WorkEntryManager({ user, t, tk }) {
             <div style={{ flex: "1 1 320px", display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
 
               {/* 日历 */}
-              <div style={{ ...glassCard, padding: "18px 20px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div>
-                    <h3 style={{ fontSize: 17, fontWeight: 800, color: t.tx, margin: 0, letterSpacing: -0.5 }}>{month}月</h3>
+              <div style={{ ...glassCard, padding: "16px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <h3 style={{ fontSize: 17, fontWeight: 800, color: t.tx, margin: 0, letterSpacing: -0.5, whiteSpace: "nowrap" }}>{month}月</h3>
                     <span style={{ fontSize: 11, color: t.tm, fontWeight: 600 }}>{year}</span>
                   </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <button
+                      onClick={() => setViewMode(viewMode === "month" ? "week" : "month")}
+                      title={viewMode === "month" ? "折叠为周历" : "展开为月历"}
+                      style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: t.bgI, color: t.ac, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
+                    >
+                      <ChevronLeft size={15} style={{ transform: viewMode === "month" ? "rotate(90deg)" : "rotate(-90deg)", transition: "transform 0.25s" }} />
+                    </button>
+                    <div style={{ width: 1, height: 14, background: t.bd, margin: "0 4px" }} />
+                    <button onClick={() => chgMonth(-1)} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}><ChevronLeft size={15} /></button>
+                    <button onClick={() => chgMonth(1)} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}><ChevronRight size={15} /></button>
+                  </div>
                 </div>
-                <Calendar year={year} month={month} selectedDate={selectedDate} onPick={setSelectedDate} datesWithEntries={datesWithEntries} t={t} />
+                <Calendar year={year} month={month} selectedDate={selectedDate} onPick={setSelectedDate} datesWithEntries={datesWithEntries} viewMode={viewMode} t={t} />
               </div>
 
               {/* 28h 工时预警 */}
@@ -516,7 +522,7 @@ const inputStyle = (t) => ({
   boxSizing: "border-box",
 })
 
-function Calendar({ year, month, selectedDate, onPick, datesWithEntries, t }) {
+function Calendar({ year, month, selectedDate, onPick, datesWithEntries, viewMode, t }) {
   const firstDow = new Date(year, month - 1, 1).getDay()
   const daysInMo = new Date(year, month, 0).getDate()
   // 日期格显示：周一开头（月=1）
@@ -524,15 +530,30 @@ function Calendar({ year, month, selectedDate, onPick, datesWithEntries, t }) {
   const cells = []
   for (let i = 0; i < adjustedFirst; i++) cells.push(null)
   for (let d = 1; d <= daysInMo; d++) cells.push(d)
+  // 补到整周
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  // 周历模式：只渲染包含 selectedDate 的那一行
+  let displayCells = cells
+  if (viewMode === "week") {
+    const selDay = parseInt((selectedDate || "").split("-")[2])
+    const selIdx = cells.indexOf(selDay)
+    if (selIdx >= 0) {
+      const weekStart = Math.floor(selIdx / 7) * 7
+      displayCells = cells.slice(weekStart, weekStart + 7)
+    } else {
+      displayCells = cells.slice(0, 7)
+    }
+  }
 
   const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` })()
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, transition: "all 0.3s" }}>
       {["月", "火", "水", "木", "金", "土", "日"].map(d => (
         <div key={d} style={{ textAlign: "center", fontSize: 11, color: t.tm, fontWeight: 600, paddingBottom: 4 }}>{d}</div>
       ))}
-      {cells.map((day, idx) => {
+      {displayCells.map((day, idx) => {
         if (!day) return <div key={`e-${idx}`} style={{ width: 36, height: 36, margin: "0 auto" }} />
         const ds = `${year}-${pad(month)}-${pad(day)}`
         const isSelected = selectedDate === ds
