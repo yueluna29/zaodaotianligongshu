@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW } from "../../config/constants"
-import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight } from "lucide-react"
+import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, AlertTriangle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight, CheckSquare, Square } from "lucide-react"
 import PayRateSection from "../../components/PayRateSection"
 
 const EMP_TYPES_ALL = [...EMP_TYPES_JP, ...EMP_TYPES_CN]
@@ -131,9 +131,28 @@ function Field({ label, value, onChange, isEditing, isLocked, required, type, op
 
 function ChipPicker({ label, options, value, onChange, multi, isEditing, isLocked, t }) {
   if (!isEditing) {
-    const display = multi
-      ? (value || []).length > 0 ? (value || []).join("、") : null
-      : value
+    if (multi) {
+      const sel = value || []
+      const top = sel.slice(0, 3)
+      const overflow = sel.length > 3 ? sel.length - 3 : 0
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 100%", padding: "8px 0" }}>
+          <label style={{ fontSize: 13, color: t.tm, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+            {label}
+            {isLocked && <Lock size={12} color={t.td} />}
+          </label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", minHeight: 28 }}>
+            {sel.length === 0
+              ? <span style={{ color: t.td, fontSize: 14 }}>—未填写—</span>
+              : top.map(item => (
+                  <span key={item} style={{ padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600, color: t.tx, background: t.bl, border: `1px solid ${t.bd}` }}>{item}</span>
+                ))
+            }
+            {overflow > 0 && <span style={{ fontSize: 12, color: t.tm, fontWeight: 600 }}>+{overflow}</span>}
+          </div>
+        </div>
+      )
+    }
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 100%", padding: "8px 0" }}>
         <label style={{ fontSize: 13, color: t.tm, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
@@ -141,7 +160,7 @@ function ChipPicker({ label, options, value, onChange, multi, isEditing, isLocke
           {isLocked && <Lock size={12} color={t.td} />}
         </label>
         <div style={{ fontSize: 15, color: t.tx, fontWeight: 600 }}>
-          {display || <span style={{ color: t.td, fontWeight: 400 }}>—未填写—</span>}
+          {value || <span style={{ color: t.td, fontWeight: 400 }}>—未填写—</span>}
         </div>
       </div>
     )
@@ -178,20 +197,32 @@ function ChipPicker({ label, options, value, onChange, multi, isEditing, isLocke
   )
 }
 
-function CheckBox({ label, checked, onChange, disabled, t }) {
+function CheckBox({ label, checked, onChange, disabled, isEditing = true, t }) {
+  if (!isEditing) {
+    if (!checked) return null
+    return (
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 0", flex: "1 1 220px" }}>
+        <CheckSquare size={18} color={t.ac} />
+        <span style={{ fontSize: 14, color: t.tx, fontWeight: 600 }}>{label}</span>
+      </div>
+    )
+  }
   return (
-    <label style={{
-      display: "inline-flex", alignItems: "center", gap: 8,
+    <div onClick={() => !disabled && onChange?.(!checked)} style={{
+      display: "inline-flex", alignItems: "center", gap: 10,
       padding: "10px 14px", borderRadius: 12,
-      border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.7)",
+      border: `1px solid ${checked ? t.ac : t.bd}`,
+      backgroundColor: checked ? t.tb : "rgba(255,255,255,0.7)",
       fontSize: 13, color: disabled ? t.td : t.tx, fontWeight: 500,
       cursor: disabled ? "not-allowed" : "pointer",
       opacity: disabled ? 0.65 : 1,
+      transition: "all 0.2s",
+      userSelect: "none",
     }}>
-      <input type="checkbox" checked={!!checked} onChange={(e) => !disabled && onChange?.(e.target.checked)} disabled={disabled} />
+      {checked ? <CheckSquare size={18} color={t.ac} /> : <Square size={18} color={t.td} />}
       {label}
-      {disabled && <Lock size={12} color={t.td} />}
-    </label>
+      {disabled && <Lock size={12} color={t.td} style={{ marginLeft: 4 }} />}
+    </div>
   )
 }
 
@@ -406,7 +437,7 @@ export default function EmployeeManager({ user, t, tk }) {
                 </HoverButton>
               )}
               <h2 style={{ margin: 0, color: "#1E293B", fontSize: 22, fontWeight: 700 }}>
-                {creating ? "新增社员" : (editing ? "编辑档案" : "人事档案")}
+                {creating ? "新增社员档案" : (editing ? "编辑档案" : "人事档案")}
               </h2>
             </div>
             {(isAdmin || isSelf) && (
@@ -500,6 +531,44 @@ export default function EmployeeManager({ user, t, tk }) {
               )}
             </div>
           )}
+
+          {/* 完成度进度条（编辑态 / 新增态） */}
+          {editing && (() => {
+            const src = fm
+            const checks = [
+              { key: "name", label: "姓名" },
+              { key: "email", label: "邮箱" },
+              { key: "phone", label: "电话" },
+              { key: "hire_date", label: "入职日期" },
+              { key: "department", label: "部门" },
+              { key: "bank_account_number", label: "银行账号" },
+              ...(isHourly ? [] : [{ key: "contract_start_date", label: "合同开始日" }, { key: "my_number", label: "My Number" }]),
+              ...(isJP && !isHourly ? [{ key: "residence_status", label: "在留资格" }, { key: "residence_expiry", label: "在留期限" }] : []),
+            ]
+            const filled = checks.filter((c) => src[c.key])
+            const missing = checks.filter((c) => !src[c.key])
+            const rate = Math.round((filled.length / checks.length) * 100)
+            const done = rate === 100
+            return (
+              <div style={{ ...glassCard, padding: "14px 20px", marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: t.tx, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <AlertCircle size={14} color={done ? t.gn : t.wn} />
+                    档案填写完成度
+                  </span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: done ? t.gn : t.ac }}>{rate}%</span>
+                </div>
+                <div style={{ width: "100%", height: 6, backgroundColor: t.bd, borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${rate}%`, height: "100%", backgroundColor: done ? t.gn : t.ac, transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)" }} />
+                </div>
+                {!done && missing.length > 0 && (
+                  <div style={{ fontSize: 12, color: t.ts }}>
+                    缺少：<span style={{ color: t.wn }}>{missing.map(m => m.label).join("、")}</span>。为了保证算薪正常，请尽快补全。
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Tab 导航 */}
           <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
@@ -630,16 +699,13 @@ export default function EmployeeManager({ user, t, tk }) {
                   </div>
 
                   <div style={{ marginTop: 20 }}>
-                    {editing ? (
-                      <CheckBox
-                        label="兼任教师"
-                        checked={fm.is_teacher}
-                        onChange={(v) => sFm(p => ({ ...p, is_teacher: v }))}
-                        t={t}
-                      />
-                    ) : (
-                      <Field label="兼任教师" value={e.is_teacher ? "是" : "否"} isEditing={false} t={t} />
-                    )}
+                    <CheckBox
+                      label="兼任教师（允许排课）"
+                      checked={editing ? fm.is_teacher : e.is_teacher}
+                      onChange={(v) => sFm(p => ({ ...p, is_teacher: v }))}
+                      isEditing={editing}
+                      t={t}
+                    />
                   </div>
                 </div>
 
@@ -658,16 +724,13 @@ export default function EmployeeManager({ user, t, tk }) {
                         {fld("gender", "性别", { type: "select", options: GENDERS })}
                       </div>
                       <div style={{ marginTop: 20 }}>
-                        {editing ? (
-                          <CheckBox
-                            label="资格外许可（有）"
-                            checked={fm.has_extra_work_permit}
-                            onChange={(v) => sFm(p => ({ ...p, has_extra_work_permit: v }))}
-                            t={t}
-                          />
-                        ) : (
-                          <Field label="资格外许可" value={e.has_extra_work_permit ? "有" : "无"} isEditing={false} t={t} />
-                        )}
+                        <CheckBox
+                          label="持有资格外活动许可"
+                          checked={editing ? fm.has_extra_work_permit : e.has_extra_work_permit}
+                          onChange={(v) => sFm(p => ({ ...p, has_extra_work_permit: v }))}
+                          isEditing={editing}
+                          t={t}
+                        />
                       </div>
                     </div>
                   </>
@@ -697,7 +760,7 @@ export default function EmployeeManager({ user, t, tk }) {
 
                 {/* 薪资与税务 */}
                 <div>
-                  <SectionTitle t={t}>{isHourly ? "税务与合同信息" : "薪资与税务配置"}</SectionTitle>
+                  <SectionTitle t={t}>{isHourly ? "税务与合同信息" : "常规薪资配置"}</SectionTitle>
                   <div style={{ padding: !isAdmin ? 20 : 0, backgroundColor: !isAdmin ? t.bl : "transparent", borderRadius: 16, border: !isAdmin ? `1px dashed ${t.bd}` : "none" }}>
                     {!isAdmin && (
                       <div style={{ color: t.ts, fontSize: 13, display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
@@ -748,31 +811,26 @@ export default function EmployeeManager({ user, t, tk }) {
                       {fld("contract_start_date", "合同开始日", { locked: isHourly ? false : !isAdmin, type: "date" })}
                       {fld("contract_end_date", "合同结束日", { locked: isHourly ? false : !isAdmin, type: "date" })}
                     </div>
-                    {editing ? (
-                      <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
-                        {!isHourly && (
-                          <CheckBox
-                            label="扶养控除"
-                            checked={fm.has_dependent_deduction}
-                            onChange={(v) => sFm(p => ({ ...p, has_dependent_deduction: v }))}
-                            disabled={!isAdmin}
-                            t={t}
-                          />
-                        )}
+                    <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
+                      {!isHourly && (
                         <CheckBox
-                          label="签单提成"
-                          checked={fm.has_commission}
-                          onChange={(v) => sFm(p => ({ ...p, has_commission: v }))}
+                          label="启用扶养控除"
+                          checked={editing ? fm.has_dependent_deduction : e.has_dependent_deduction}
+                          onChange={(v) => sFm(p => ({ ...p, has_dependent_deduction: v }))}
                           disabled={!isAdmin}
+                          isEditing={editing}
                           t={t}
                         />
-                      </div>
-                    ) : (
-                      <div style={{ ...flexRow, marginTop: 20 }}>
-                        {!isHourly && <Field label="扶养控除" value={e.has_dependent_deduction ? "有" : "无"} isEditing={false} t={t} />}
-                        <Field label="签单提成" value={e.has_commission ? "已开启" : "未开启"} isEditing={false} t={t} />
-                      </div>
-                    )}
+                      )}
+                      <CheckBox
+                        label="计算签单提成"
+                        checked={editing ? fm.has_commission : e.has_commission}
+                        onChange={(v) => sFm(p => ({ ...p, has_commission: v }))}
+                        disabled={!isAdmin}
+                        isEditing={editing}
+                        t={t}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -808,55 +866,63 @@ export default function EmployeeManager({ user, t, tk }) {
                 {/* 排班设定 */}
                 {!creating && (
                   <div>
-                    <SectionTitle t={t}>排班设定</SectionTitle>
+                    <SectionTitle t={t}>固定排班周视图</SectionTitle>
                     {editSched ? (
                       <div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                          {WEEKDAYS.map((w, i) => (
-                            <div key={i} style={{
-                              display: "flex", alignItems: "center", gap: 12,
-                              padding: "10px 14px", borderRadius: 12,
-                              border: `1px solid ${t.bd}`,
-                              backgroundColor: schedFm[i]?.enabled ? t.tb : "rgba(255,255,255,0.7)",
-                            }}>
-                              <button type="button" onClick={() => setSchedFm(p => ({ ...p, [i]: { ...p[i], enabled: !p[i]?.enabled } }))} style={{
-                                width: 40, height: 40, borderRadius: 10,
-                                border: `1px solid ${schedFm[i]?.enabled ? t.ac : t.bd}`,
-                                backgroundColor: schedFm[i]?.enabled ? `${t.ac}20` : "rgba(255,255,255,0.8)",
-                                color: schedFm[i]?.enabled ? t.ac : t.td,
-                                fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                              }}>{w}</button>
-                              {schedFm[i]?.enabled ? (
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <input type="time" value={schedFm[i]?.start || "09:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], start: ev.target.value } }))} style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.8)", color: t.tx, fontSize: 13, fontFamily: "inherit", width: 120 }} />
-                                  <span style={{ color: t.tm }}>~</span>
-                                  <input type="time" value={schedFm[i]?.end || "18:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], end: ev.target.value } }))} style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.8)", color: t.tx, fontSize: 13, fontFamily: "inherit", width: 120 }} />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                          {WEEKDAYS.map((w, i) => {
+                            const on = !!schedFm[i]?.enabled
+                            return (
+                              <div key={i} style={{
+                                display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+                                background: "rgba(255,255,255,0.72)", padding: "10px 16px", borderRadius: 14,
+                                border: `1px solid ${on ? t.ac + "40" : t.bd}`,
+                              }}>
+                                <div onClick={() => setSchedFm(p => ({ ...p, [i]: { ...p[i], enabled: !p[i]?.enabled } }))} style={{
+                                  display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none",
+                                  minWidth: 90,
+                                }}>
+                                  {on ? <CheckSquare size={18} color={t.ac} /> : <Square size={18} color={t.td} />}
+                                  <span style={{ fontSize: 14, fontWeight: 600, color: on ? t.tx : t.tm }}>{w}</span>
                                 </div>
-                              ) : <span style={{ fontSize: 13, color: t.td }}>休息</span>}
-                            </div>
-                          ))}
+                                {on ? (
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+                                    <input type="time" value={schedFm[i]?.start || "09:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], start: ev.target.value } }))} style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.85)", color: t.tx, fontSize: 13, fontFamily: "inherit", width: 120, outline: "none" }} />
+                                    <span style={{ color: t.td }}>~</span>
+                                    <input type="time" value={schedFm[i]?.end || "18:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], end: ev.target.value } }))} style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.85)", color: t.tx, fontSize: 13, fontFamily: "inherit", width: 120, outline: "none" }} />
+                                  </div>
+                                ) : <span style={{ fontSize: 13, color: t.td, marginLeft: "auto" }}>休息</span>}
+                              </div>
+                            )
+                          })}
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
-                          <HoverButton primary disabled={saving} onClick={saveSched} t={t}>{saving ? "保存中..." : "保存排班"}</HoverButton>
-                          <HoverButton onClick={() => setEditSched(false)} t={t}>取消</HoverButton>
+                          <HoverButton primary disabled={saving} onClick={saveSched} t={t}><Save size={14} /> {saving ? "保存中..." : "保存排班"}</HoverButton>
+                          <HoverButton onClick={() => setEditSched(false)} t={t}><X size={14} /> 取消</HoverButton>
                         </div>
                       </div>
                     ) : (
                       <div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 14 }}>
                           {WEEKDAYS.map((w, i) => {
                             const s = schedules.find(sc => sc.day_of_week === i)
                             return (
                               <div key={i} style={{
-                                padding: "12px 16px", borderRadius: 14, minWidth: 84, textAlign: "center",
-                                background: s ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.4)",
-                                border: `1px solid ${s ? t.ac : t.bd}`,
+                                flex: 1, minWidth: 90,
+                                background: s ? "rgba(255,255,255,0.75)" : t.bl,
+                                border: `1px solid ${s ? t.bd : "transparent"}`,
+                                borderRadius: 14, padding: 14, textAlign: "center",
+                                opacity: s ? 1 : 0.55,
                               }}>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: s ? t.ac : t.td }}>{w}</div>
-                                {s
-                                  ? <div style={{ fontSize: 11, color: t.tx, marginTop: 6, fontFamily: "monospace" }}>{s.start_time?.slice(0, 5)}~{s.end_time?.slice(0, 5)}</div>
-                                  : <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>休</div>
-                                }
+                                <div style={{ fontSize: 14, fontWeight: 700, color: s ? t.tx : t.tm, marginBottom: 8 }}>{w}</div>
+                                {s ? (
+                                  <div style={{ fontSize: 12, color: t.ac, fontWeight: 600, fontFamily: "monospace", lineHeight: 1.5 }}>
+                                    <div>{s.start_time?.slice(0, 5)}</div>
+                                    <div>{s.end_time?.slice(0, 5)}</div>
+                                  </div>
+                                ) : (
+                                  <div style={{ fontSize: 12, color: t.td, fontWeight: 500 }}>休息</div>
+                                )}
                               </div>
                             )
                           })}
@@ -873,25 +939,38 @@ export default function EmployeeManager({ user, t, tk }) {
                     <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
                     <div>
                       <SectionTitle t={t}>假期余额</SectionTitle>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
-                        <div style={{ padding: "18px 20px", borderRadius: 16, background: "rgba(255,255,255,0.72)", border: `1px solid ${t.ac}30` }}>
-                          <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, letterSpacing: 0.5 }}>有休余额</div>
-                          <div style={{ fontSize: 30, fontWeight: 700, color: t.ac, marginTop: 6, lineHeight: 1 }}>{leaveBal.paid.balance}<span style={{ fontSize: 14, marginLeft: 2 }}>天</span></div>
-                          <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>本年 {leaveBal.paid.currentGrant} + 繰越 {leaveBal.paid.carryOver} − 已用 {leaveBal.paid.used}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+                        {/* 有休 */}
+                        <div style={{ backgroundColor: `${t.gn}0D`, border: `1px solid ${t.gn}33`, padding: 20, borderRadius: 16 }}>
+                          <div style={{ fontSize: 13, color: t.ts, marginBottom: 8 }}>有休余额</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: t.gn, marginBottom: 4, lineHeight: 1 }}>
+                            {leaveBal.paid.balance} <span style={{ fontSize: 14, fontWeight: 500 }}>天</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: t.tm }}>本年 {leaveBal.paid.currentGrant} + 繰越 {leaveBal.paid.carryOver} − 已用 {leaveBal.paid.used}</div>
                         </div>
-                        <div style={{ padding: "18px 20px", borderRadius: 16, background: "rgba(255,255,255,0.72)", border: "1px solid rgba(139,92,246,0.25)" }}>
-                          <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, letterSpacing: 0.5 }}>代休余额</div>
-                          <div style={{ fontSize: 30, fontWeight: 700, color: "#8B5CF6", marginTop: 6, lineHeight: 1 }}>{leaveBal.compUnused}<span style={{ fontSize: 14, marginLeft: 2 }}>天</span></div>
-                          <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>累计 {leaveBal.compTotal} 次换休</div>
+                        {/* 代休 */}
+                        <div style={{ backgroundColor: `${t.ac}0D`, border: `1px solid ${t.ac}33`, padding: 20, borderRadius: 16 }}>
+                          <div style={{ fontSize: 13, color: t.ts, marginBottom: 8 }}>代休余额</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: t.ac, marginBottom: 4, lineHeight: 1 }}>
+                            {leaveBal.compUnused} <span style={{ fontSize: 14, fontWeight: 500 }}>天</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: t.tm }}>累计 {leaveBal.compTotal} 次换休</div>
                         </div>
-                        <div style={{ padding: "18px 20px", borderRadius: 16, background: "rgba(255,255,255,0.72)", border: `1px solid ${leaveBal.expiringSoon > 0 ? t.rd : t.gn}30` }}>
-                          <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, letterSpacing: 0.5 }}>即将过期代休</div>
-                          <div style={{ fontSize: 30, fontWeight: 700, color: leaveBal.expiringSoon > 0 ? t.rd : t.gn, marginTop: 6, lineHeight: 1 }}>{leaveBal.expiringSoon}<span style={{ fontSize: 14, marginLeft: 2 }}>天</span></div>
-                          <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>{leaveBal.expiringSoon > 0 ? "14 天内到期" : "暂无到期"}</div>
+                        {/* 即将过期 */}
+                        <div style={{ backgroundColor: `${t.wn}0D`, border: `1px solid ${t.wn}40`, padding: 20, borderRadius: 16 }}>
+                          <div style={{ fontSize: 13, color: t.wn, marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
+                            <AlertTriangle size={14} /> 即将过期（14 天内）
+                          </div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: t.wn, marginBottom: 4, lineHeight: 1 }}>
+                            {leaveBal.expiringSoon} <span style={{ fontSize: 14, fontWeight: 500 }}>天</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: t.wn, opacity: 0.8 }}>
+                            {leaveBal.expiringSoon > 0 ? "请尽快安排休假" : "暂无到期记录"}
+                          </div>
                         </div>
                         {!selected.hire_date && (
-                          <div style={{ padding: "18px 20px", borderRadius: 16, background: `${t.wn}10`, border: `1px dashed ${t.wn}` }}>
-                            <div style={{ fontSize: 12, color: t.wn, fontWeight: 600 }}>未设定入职日期</div>
+                          <div style={{ padding: 20, borderRadius: 16, background: `${t.wn}10`, border: `1px dashed ${t.wn}` }}>
+                            <div style={{ fontSize: 13, color: t.wn, fontWeight: 600 }}>未设定入职日期</div>
                             <div style={{ fontSize: 11, color: t.tm, marginTop: 6 }}>请在「归属与状态」中填写</div>
                           </div>
                         )}
