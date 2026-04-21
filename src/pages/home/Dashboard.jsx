@@ -589,24 +589,6 @@ export default function Dashboard({ user, t, tk, onNav }) {
             )}
           </div>
 
-          {/* 待提交工时报表（仅 baito）— 每个月一条 home-banner */}
-          {isHourly && unsubmittedMonths.map(({ year, month }) => (
-            <button key={`sub-${year}-${month}`} onClick={() => onNav("work")} className="home-banner span-4">
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(254,215,170,.5)", border: "1px solid rgba(254,215,170,.8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fb923c" }}>
-                  <AlertCircle size={14} strokeWidth={2} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(234,88,12,.9)", letterSpacing: ".02em" }}>{year}年 {month}月 工时报表待提交</div>
-                  <div style={{ fontSize: 11, color: "rgba(249,115,22,.7)", marginTop: 2 }}>每月 5 号前提交上个月工时</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", color: "rgba(249,115,22,.8)", fontSize: 12, fontWeight: 500, letterSpacing: ".08em", whiteSpace: "nowrap" }}>
-                前往填写 <ChevronRight size={14} />
-              </div>
-            </button>
-          ))}
-
           {/* 本月出勤 / 上班天数 */}
           <div className="glass-card stat-card hv-emerald span-2">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -618,6 +600,27 @@ export default function Dashboard({ user, t, tk, onNav }) {
               <span className="stat-sub">天</span>
             </div>
           </div>
+
+          {/* 待提交工时报表（仅 baito） */}
+          {isHourly && unsubmittedMonths.length > 0 && (
+            <button onClick={() => onNav("work")} className="glass-card stat-card hv-amber span-2" style={{ border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: "inherit" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="stat-label">待提交报表</span>
+                <AlertCircle size={16} color="rgba(245,158,11,.7)" strokeWidth={1.5} />
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span className="stat-value amber">{unsubmittedMonths.length}</span>
+                  <span className="stat-sub">月</span>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {unsubmittedMonths.slice(-3).map(({ year, month }) => (
+                    <span key={`${year}-${month}`} className="home-chip">{month}月</span>
+                  ))}
+                </div>
+              </div>
+            </button>
+          )}
 
           {/* 本月工时（全职） */}
           {!isHourly && (
