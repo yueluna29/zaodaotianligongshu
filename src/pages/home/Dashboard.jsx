@@ -536,7 +536,7 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
             <div style={{ color: "rgba(59,130,246,.8)", fontSize: 11, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>早稲田理工塾 OS</div>
             <h1 style={{ fontSize: 20, fontWeight: 500, color: "#1e293b", marginTop: 4, letterSpacing: ".04em" }}>{user.name} · 我的面板</h1>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", position: "relative" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", position: "relative", alignSelf: "flex-end" }}>
             <button className="icon-btn" onClick={() => bellOpen ? setBellOpen(false) : openBell()} aria-label="通知">
               <Bell size={18} strokeWidth={1.6} />
               {unreadAnnos.length > 0 && <span className="bell-dot" />}
