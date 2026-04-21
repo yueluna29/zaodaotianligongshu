@@ -436,9 +436,14 @@ export default function EmployeeManager({ user, t, tk }) {
                   <ArrowLeft size={20} />
                 </HoverButton>
               )}
-              <h2 style={{ margin: 0, color: "#1E293B", fontSize: 22, fontWeight: 700 }}>
-                {creating ? "新增社员档案" : (editing ? "编辑档案" : (isAdmin ? "人事档案" : "入职信息"))}
-              </h2>
+              <div>
+                <div style={{ color: "rgba(59,130,246,.8)", fontSize: 10, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>
+                  {creating ? "新建" : (editing ? "编辑中" : (isAdmin ? "员工档案" : "我的信息"))}
+                </div>
+                <h1 style={{ margin: "2px 0 0", color: "#1e293b", fontSize: 20, fontWeight: 500, letterSpacing: ".04em" }}>
+                  {creating ? "新增社员档案" : (editing ? "编辑档案" : (isAdmin ? "人事档案" : "入职信息"))}
+                </h1>
+              </div>
             </div>
             {(isAdmin || isSelf) && (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1009,12 +1014,13 @@ export default function EmployeeManager({ user, t, tk }) {
         {/* 头部 */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
           <div>
-            <h1 style={{ fontSize: 28, color: "#1E293B", margin: "0 0 4px", fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
-              <Users size={24} color={t.ac} />
+            <div style={{ color: "rgba(59,130,246,.8)", fontSize: 11, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>员工管理</div>
+            <h1 style={{ margin: "4px 0 6px", fontSize: 22, color: "#1e293b", fontWeight: 500, letterSpacing: ".04em", display: "flex", alignItems: "center", gap: 10 }}>
+              <Users size={20} color={t.ac} />
               人事档案库
-              <span style={{ color: t.td, fontSize: 20, fontWeight: 500 }}>({processedEmployees.length})</span>
+              <span style={{ color: t.td, fontSize: 18, fontWeight: 400 }}>({processedEmployees.length})</span>
             </h1>
-            <p style={{ color: t.ts, margin: 0, fontSize: 13 }}>管理世家学舍 / 紫陽花教育 / 早稻大连 / 早理金华 员工档案</p>
+            <p style={{ color: t.ts, margin: 0, fontSize: 12 }}>管理世家学舍 / 紫陽花教育 / 早稻大连 / 早理金华 员工档案</p>
           </div>
           <HoverButton primary onClick={startCreate} t={t}>
             <Plus size={16} /> 新增社员

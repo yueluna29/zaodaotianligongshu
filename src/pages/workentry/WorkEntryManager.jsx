@@ -452,7 +452,10 @@ export default function WorkEntryManager({ user, t, tk }) {
           {/* 顶部 */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: t.tx }}>工资总表</h1>
+              <div>
+                <div style={{ color: "rgba(59,130,246,.8)", fontSize: 11, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>月度工资</div>
+                <h1 style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 500, color: "#1e293b", letterSpacing: ".04em" }}>工资总表</h1>
+              </div>
               <div style={{ display: "inline-flex", alignItems: "center", background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 12, padding: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.02)" }}>
                 <button onClick={() => chgMonth(-1)} style={{ padding: 6, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", color: t.ts, display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronLeft size={17} /></button>
                 <div style={{ padding: "0 14px", fontSize: 14, fontWeight: 700, color: t.ac, fontVariantNumeric: "tabular-nums" }}>{year}年 {month}月</div>
@@ -601,10 +604,13 @@ export default function WorkEntryManager({ user, t, tk }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
             {isAdmin && <HoverBtn onClick={() => setSelectedEmp(null)} t={t} style={{ padding: "7px 10px" }}><ArrowLeft size={14} /></HoverBtn>}
-            <FileText size={22} strokeWidth={1.8} color={t.ac} />
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {isAdmin ? `${selectedEmp?.name} 的工资报表` : "工资报表"}
-            </h2>
+            <FileText size={20} strokeWidth={1.8} color={t.ac} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: "rgba(59,130,246,.8)", fontSize: 10, fontWeight: 600, letterSpacing: ".2em", textTransform: "uppercase" }}>{month}月 · 工时明细</div>
+              <h1 style={{ fontSize: 20, fontWeight: 500, color: "#1e293b", margin: "2px 0 0", letterSpacing: ".04em", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {isAdmin ? `${selectedEmp?.name} · 工资报表` : "工资报表"}
+              </h1>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {hasChanges && !locked && <HoverBtn primary disabled={sv} onClick={saveAll} t={t}><Save size={14} /> {sv ? "保存中..." : "保存全部"}</HoverBtn>}
