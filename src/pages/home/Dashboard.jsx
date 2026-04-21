@@ -593,7 +593,7 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
           </div>
 
           {/* 本月出勤 / 上班天数 */}
-          <div className="glass-card stat-card hv-emerald span-2">
+          <div className={`glass-card stat-card hv-emerald span-2${isHourly ? " m-half" : ""}`}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span className="stat-label">{isHourly ? "本月上班天数" : "本月出勤"}</span>
               <Users size={16} color="rgba(16,185,129,.7)" strokeWidth={1.5} />
@@ -606,7 +606,7 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
 
           {/* 待提交工时报表（仅 baito） */}
           {isHourly && unsubmittedMonths.length > 0 && (
-            <button onClick={() => onNav("work")} className="glass-card stat-card hv-amber span-2" style={{ border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: "inherit" }}>
+            <button onClick={() => onNav("work")} className="glass-card stat-card hv-amber span-2 m-half" style={{ border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: "inherit" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="stat-label">待提交报表</span>
                 <AlertCircle size={16} color="rgba(245,158,11,.7)" strokeWidth={1.5} />
