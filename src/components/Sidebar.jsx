@@ -19,7 +19,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
   return (
     <div style={{ width: 210, background: t.bgS, borderRight: `1px solid ${t.bd}`, display: "flex", flexDirection: "column", height: "100vh", flexShrink: 0 }}>
       <div style={{ padding: "18px 16px 14px", borderBottom: `1px solid ${t.bd}` }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: t.ac, letterSpacing: ".06em" }}>早稲田理工塾</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: t.ac, letterSpacing: ".06em" }}>早稲田理工塾 OS</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: t.tx, marginTop: 3 }}>管理系统</div>
       </div>
       <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>

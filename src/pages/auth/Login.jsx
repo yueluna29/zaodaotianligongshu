@@ -319,7 +319,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
       <button onClick={toggleTheme} style={{ position: "fixed", top: 20, right: 20, background: "none", border: "none", fontSize: 22, cursor: "pointer", zIndex: 10 }}>{theme === "dark" ? "☀️" : "🌙"}</button>
       <div style={{ width: "100%", maxWidth: mode === "register" ? 560 : 400, margin: "24px 16px", background: t.bgC, borderRadius: 20, border: `1px solid ${t.bd}`, padding: mode === "register" ? "32px 32px 28px" : "44px 36px", boxShadow: theme === "dark" ? "0 25px 60px rgba(0,0,0,.5)" : "0 25px 60px rgba(0,0,0,.08)" }}>
         <div style={{ textAlign: "center", marginBottom: mode === "register" ? 18 : 28 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: t.ac, letterSpacing: ".08em", marginBottom: 6 }}>早稲田理工塾</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: t.ac, letterSpacing: ".08em", marginBottom: 6 }}>早稲田理工塾 OS</div>
           <h1 style={{ fontSize: 21, fontWeight: 700, color: t.tx, margin: 0 }}>勤怠管理系统</h1>
           <p style={{ fontSize: 12, color: t.tm, marginTop: 8 }}>
             {mode === "login" ? "登录" : mode === "forgot" ? "找回登录ID" : `新员工入职登记 · ${stepTitle} (${step}/4)`}

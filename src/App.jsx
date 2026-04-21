@@ -84,8 +84,8 @@ export default function App() {
           {mobile && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>勤怠管理</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾 OS</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{user.name}</div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
