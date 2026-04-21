@@ -89,9 +89,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [submission, setSubmission] = useState(null) // { id, status, submitted_at, unlocked_at, unlocked_by }
   const [submitModal, setSubmitModal] = useState(false)
   const [submittingReport, setSubmittingReport] = useState(false)
-  const [sectionConfirms, setSectionConfirms] = useState({}) // { expenses?: row, commissions?: row }
-  const [confirmSectionModal, setConfirmSectionModal] = useState(null) // "expenses" | "commissions"
-  const [confirmingSection, setConfirmingSection] = useState(false)
+  const [sectionPreview, setSectionPreview] = useState({ expenses: false, commissions: false }) // 客户端视图切换，非锁定
   const [errorModal, setErrorModal] = useState(null) // { title, message }
 
   const now = new Date()
@@ -116,16 +114,12 @@ export default function WorkEntryManager({ user, t, tk }) {
     const sd = `${year}-${pad(month)}-01`
     const ed = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`
     const empQ = `employee_id=eq.${targetEmpId}&`
-    const [r, c, sub, secs] = await Promise.all([
+    const [r, c, sub] = await Promise.all([
       sbGet(`work_entries?${empQ}work_date=gte.${sd}&work_date=lt.${ed}&order=work_date,created_at&select=*`, tk),
       sbGet(`commission_entries?${empQ}entry_date=gte.${sd}&entry_date=lt.${ed}&order=entry_date,seq_number&select=*`, tk),
       sbGet(`monthly_report_submissions?${empQ}year=eq.${year}&month=eq.${month}&select=*`, tk),
-      sbGet(`monthly_section_confirmations?${empQ}year=eq.${year}&month=eq.${month}&select=*`, tk),
     ])
     setSubmission((sub && sub[0]) || null)
-    const confMap = {}
-    for (const s of (secs || [])) confMap[s.section] = s
-    setSectionConfirms(confMap)
     const loaded = (r || []).map(e => {
       const isExp = !e.business_type && (Number(e.other_expense) > 0 || e.other_expense_note)
       return {
@@ -199,6 +193,9 @@ export default function WorkEntryManager({ user, t, tk }) {
     const ym = `${year}-${pad(month)}`
     if (!selectedDate.startsWith(ym)) setSelectedDate(`${ym}-01`)
   }, [year, month, selectedDate])
+
+  // 切月时重置分段预览视图
+  useEffect(() => { setSectionPreview({ expenses: false, commissions: false }) }, [year, month, targetEmpId])
 
   const getRateForType = (bt) => { const r = rates.find(r => r.business_type === bt); return r ? Number(r.hourly_rate) : 0 }
   const calcMin = (s, e) => { if (!s || !e) return 0; const [sh, sm] = s.split(":").map(Number), [eh, em] = e.split(":").map(Number); const m = (eh * 60 + em) - (sh * 60 + sm); return m > 0 ? m : 0 }
@@ -306,9 +303,9 @@ export default function WorkEntryManager({ user, t, tk }) {
   // 提交状态：已提交且非管理员 → 锁定
   const isSubmitted = submission?.status === "submitted"
   const locked = isSubmitted && !isAdmin
-  // 分段确认 = 只读显示（有 编辑 按钮可切回编辑态）；全月提交则整页锁（admin 可解锁）
-  const expensesLocked = isSubmitted || !!sectionConfirms.expenses
-  const commissionsLocked = isSubmitted || !!sectionConfirms.commissions
+  // 分段预览 = 纯客户端视图切换（无 DB 持久化）；全月提交才是真锁（admin 可解锁）
+  const expensesLocked = isSubmitted || sectionPreview.expenses
+  const commissionsLocked = isSubmitted || sectionPreview.commissions
   const canSubmit = !isAdmin && !isSubmitted && savedWork.length > 0 && !hasChanges
 
   const submitReport = async () => {
@@ -339,28 +336,7 @@ export default function WorkEntryManager({ user, t, tk }) {
     await load()
   }
 
-  const confirmSection = async (section) => {
-    if (confirmingSection) return
-    setConfirmingSection(true)
-    const res = await sbPost("monthly_section_confirmations", { employee_id: targetEmpId, year, month, section, confirmed_by: user.id }, tk)
-    setConfirmingSection(false)
-    if (res && !Array.isArray(res) && (res.code || res.message)) {
-      setErrorModal({ title: "确认失败", message: res.message || res.code })
-      return
-    }
-    setConfirmSectionModal(null)
-    const label = section === "expenses" ? "其他报销" : "签单提成"
-    setSaveMsg(`已确认 ${month}月 ${label}`)
-    setTimeout(() => setSaveMsg(""), 5000)
-    await load()
-  }
-
-  const editSection = async (section) => {
-    const conf = sectionConfirms[section]
-    if (!conf) return
-    await sbDel(`monthly_section_confirmations?id=eq.${conf.id}`, tk)
-    await load()
-  }
+  const togglePreview = (section, on) => setSectionPreview(p => ({ ...p, [section]: on }))
 
   // hooks 必须在 early return 之前调用，所以写在这里
   const datesWithEntries = useMemo(() => {
@@ -730,11 +706,11 @@ export default function WorkEntryManager({ user, t, tk }) {
                   </h3>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     {!expensesLocked && <HoverBtn onClick={addExpForDay} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
-                    {!expensesLocked && !isSubmitted && savedExp.length > 0 && !hasChanges && !sectionConfirms.expenses && (
-                      <HoverBtn onClick={() => setConfirmSectionModal("expenses")} title="确认报销" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
+                    {!expensesLocked && dayExp.length > 0 && (
+                      <HoverBtn onClick={() => togglePreview("expenses", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                     )}
-                    {sectionConfirms.expenses && !isSubmitted && (
-                      <HoverBtn onClick={() => editSection("expenses")} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
+                    {sectionPreview.expenses && !isSubmitted && (
+                      <HoverBtn onClick={() => togglePreview("expenses", false)} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
                     )}
                   </div>
                 </div>
@@ -774,11 +750,11 @@ export default function WorkEntryManager({ user, t, tk }) {
                     </h3>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       {!commissionsLocked && <HoverBtn onClick={addCommRow} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
-                      {!commissionsLocked && !isSubmitted && savedComm.length > 0 && !hasChanges && !sectionConfirms.commissions && (
-                        <HoverBtn onClick={() => setConfirmSectionModal("commissions")} title="确认提成" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
+                      {!commissionsLocked && commRows.length > 0 && (
+                        <HoverBtn onClick={() => togglePreview("commissions", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                       )}
-                      {sectionConfirms.commissions && !isSubmitted && (
-                        <HoverBtn onClick={() => editSection("commissions")} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
+                      {sectionPreview.commissions && !isSubmitted && (
+                        <HoverBtn onClick={() => togglePreview("commissions", false)} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
                       )}
                     </div>
                   </div>
@@ -913,38 +889,6 @@ export default function WorkEntryManager({ user, t, tk }) {
           </div>
         </div>
       )}
-
-      {/* 分段确认 Modal */}
-      {confirmSectionModal && (() => {
-        const label = confirmSectionModal === "expenses" ? "其他报销" : "签单提成"
-        const total = confirmSectionModal === "expenses" ? totalOther : totalComm
-        const count = confirmSectionModal === "expenses" ? savedExp.length : savedComm.length
-        return (
-          <div onClick={() => !confirmingSection && setConfirmSectionModal(null)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "rgba(255,255,255,0.98)", borderRadius: 24, maxWidth: 460, width: "100%", padding: 28, boxShadow: "0 30px 80px -20px rgba(15,23,42,0.3)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
-                  <Check size={18} color={t.ac} /> 确认 {month}月 {label}
-                </h3>
-                <button onClick={() => !confirmingSection && setConfirmSectionModal(null)} style={{ background: "transparent", border: "none", color: t.tm, cursor: "pointer", padding: 4, display: "inline-flex", fontFamily: "inherit" }}><XIcon size={18} /></button>
-              </div>
-              <p style={{ margin: "0 0 16px", fontSize: 13, color: t.tm, lineHeight: 1.6 }}>
-                确认后「{label}」段将被锁定，无法继续添加或修改，除非联系管理员解锁。
-              </p>
-              <div style={{ padding: 16, borderRadius: 14, background: `${t.ac}08`, border: `1px solid ${t.ac}22`, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <span style={{ fontSize: 12, color: t.tm }}>{count} 笔 · 合计</span>
-                <span style={{ fontSize: 22, fontWeight: 800, color: t.ac }}>¥{total.toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <HoverBtn onClick={() => setConfirmSectionModal(null)} disabled={confirmingSection} t={t}>取消</HoverBtn>
-                <HoverBtn primary onClick={() => confirmSection(confirmSectionModal)} disabled={confirmingSection} t={t}>
-                  <Check size={14} /> {confirmingSection ? "确认中..." : "确认锁定"}
-                </HoverBtn>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* 提交确认 Modal */}
       {submitModal && (
