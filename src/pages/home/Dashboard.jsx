@@ -501,7 +501,7 @@ export default function Dashboard({ user, t, tk, onNav }) {
   const barColor = pct >= 95 ? "#10b981" : pct >= 80 ? "#f59e0b" : "#f43f5e"
 
   const userStateLabel = (() => {
-    if (!canClock) return `本日时薪记录 · ${user.name}`
+    if (!canClock) return `${user.name} 老师，辛苦了`
     if (!ci) return "Current Status · 未打卡"
     if (co) return `已退勤 ${co.slice(0, 5)} · 辛苦了`
     if (bs && !be) return `休息中 ${bs.slice(0, 5)}~`
@@ -611,7 +611,7 @@ export default function Dashboard({ user, t, tk, onNav }) {
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
                   <span className="stat-value amber">{unsubmittedMonths.length}</span>
-                  <span className="stat-sub">月</span>
+                  <span className="stat-sub">个月</span>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                   {unsubmittedMonths.slice(-3).map(({ year, month }) => (
