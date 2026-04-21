@@ -286,20 +286,22 @@ export default function AttendanceList({ user, t, tk }) {
           }, tk)
         }
       }
-    } else { // 代休：写入 day_swap_requests
+    } else { // 代休：写入 day_swap_requests。语义：休日出勤 + 換休 + swap_date 已填 = 已消化代休
       if (!histFm.work_date || !histFm.dates[0]) return
       setHistSub(true)
       if (histEditId?.table === "swap") {
         await sbPatch(`day_swap_requests?id=eq.${histEditId.id}`, {
           original_date: histFm.work_date, swap_date: histFm.dates[0],
-          reason: histFm.reason || null,
+          reason: histFm.reason.trim(),
         }, tk)
       } else {
+        const d = new Date(histFm.work_date); d.setDate(d.getDate() + 60)
         await sbPost("day_swap_requests", {
-          employee_id: (isAdmin && leaveViewEmp) ? leaveViewEmp : user.id, swap_type: "休日出勤", compensation_type: "代休",
+          employee_id: (isAdmin && leaveViewEmp) ? leaveViewEmp : user.id, swap_type: "休日出勤", compensation_type: "換休",
           original_date: histFm.work_date, swap_date: histFm.dates[0],
-          reason: histFm.reason || null,
+          reason: histFm.reason.trim(),
           status: "承認", approved_at: new Date().toISOString(), is_confirmed: true,
+          deadline: d.toISOString().split("T")[0],
         }, tk)
       }
     }
@@ -984,7 +986,8 @@ export default function AttendanceList({ user, t, tk }) {
             {(() => {
               const histLeave = leaveReqs.filter(r => r.status === "承認" && r.leave_type === "有休")
                 .map(r => ({ ...r, _table: "leave", _sortDate: r.leave_date }))
-              const histDaikyu = swapReqs.filter(r => r.status === "承認" && r.compensation_type === "代休" && r.swap_type === "休日出勤")
+              // 已消化代休 = 休日出勤 + 換休 + swap_date 已填
+              const histDaikyu = swapReqs.filter(r => r.status === "承認" && r.swap_type === "休日出勤" && r.compensation_type === "換休" && r.swap_date)
                 .map(r => ({ ...r, _table: "swap", _sortDate: r.swap_date || r.original_date }))
               const histAll = [...histLeave, ...histDaikyu].sort((a, b) => (b._sortDate || "").localeCompare(a._sortDate || ""))
               if (!histAll.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>还没有历史记录，点上面的「记录」按钮添加</div>
