@@ -20,21 +20,34 @@ const GRANT_TABLE = [
   }
   
   export function calcPaidLeave(hireDateStr, usedRecords = []) {
-    if (!hireDateStr) return { currentGrant: 0, carryOver: 0, used: 0, balance: 0, totalAvailable: 0, timeline: [] }
-  
+    const emptyResult = { currentGrant: 0, carryOver: 0, used: 0, balance: 0, totalAvailable: 0, timeline: [], thisYearUsed: 0, mandatoryRequired: 0, mandatoryRemaining: 0, currentGrantDate: null, nextGrantDate: null }
+    if (!hireDateStr) return emptyResult
+
     const hire = new Date(hireDateStr)
     const now = new Date()
     const diffMonths = (now.getFullYear() - hire.getFullYear()) * 12 + (now.getMonth() - hire.getMonth())
-  
-    if (diffMonths < 6) return { currentGrant: 0, carryOver: 0, used: 0, balance: 0, totalAvailable: 0, timeline: [{ label: "初回付与", grantDate: fmtDate(addMonths(hire, 6)), days: 10, expiresDate: fmtDate(addMonths(hire, 6 + 24)), status: "未到达" }] }
-  
+
+    if (diffMonths < 6) return { ...emptyResult, timeline: [{ label: "初回付与", grantDate: fmtDate(addMonths(hire, 6)), days: 10, expiresDate: fmtDate(addMonths(hire, 6 + 24)), status: "未到达" }] }
+
     const grants = GRANT_TABLE.filter(g => diffMonths >= g.months)
     const currentGrant = grants[grants.length - 1].days
     const carryOver = grants.length >= 2 ? grants[grants.length - 2].days : 0
-  
+
     const used = usedRecords.reduce((sum, r) => sum + (r.is_half_day ? 0.5 : 1), 0)
     const totalAvailable = currentGrant + carryOver
     const balance = Math.max(0, totalAvailable - used)
+
+    // 義務残（日本労基法）：年 10 日以上付与時、付与基準日から 1 年以内に 5 日以上取得必須
+    const currentGrantDate = addMonths(hire, grants[grants.length - 1].months)
+    const nextGrantDate = addMonths(currentGrantDate, 12)
+    const thisYearUsed = usedRecords.reduce((sum, r) => {
+      if (!r.leave_date) return sum
+      const d = new Date(r.leave_date + "T00:00:00")
+      if (d >= currentGrantDate && d < nextGrantDate) return sum + (r.is_half_day ? 0.5 : 1)
+      return sum
+    }, 0)
+    const mandatoryRequired = currentGrant >= 10 ? 5 : 0
+    const mandatoryRemaining = Math.max(0, mandatoryRequired - thisYearUsed)
   
     // 生成时间线
     const timeline = GRANT_TABLE.map((g, i) => {
@@ -54,5 +67,5 @@ const GRANT_TABLE = [
       }
     })
   
-    return { currentGrant, carryOver, used, balance, totalAvailable, timeline }
+    return { currentGrant, carryOver, used, balance, totalAvailable, timeline, thisYearUsed, mandatoryRequired, mandatoryRemaining, currentGrantDate: fmtDate(currentGrantDate), nextGrantDate: fmtDate(nextGrantDate) }
   }

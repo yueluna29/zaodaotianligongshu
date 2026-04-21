@@ -931,6 +931,23 @@ export default function EmployeeManager({ user, t, tk }) {
                           </div>
                           <div style={{ fontSize: 12, color: t.tm }}>本年 {leaveBal.paid.currentGrant} + 繰越 {leaveBal.paid.carryOver} − 已用 {leaveBal.paid.used}</div>
                         </div>
+                        {/* 義務残 */}
+                        <div style={{ backgroundColor: leaveBal.paid.mandatoryRequired === 0 ? `${t.td}0D` : leaveBal.paid.mandatoryRemaining > 0 ? `${t.wn}0D` : `${t.gn}0D`, border: `1px solid ${leaveBal.paid.mandatoryRequired === 0 ? t.bd : leaveBal.paid.mandatoryRemaining > 0 ? t.wn + "40" : t.gn + "40"}`, padding: 20, borderRadius: 16 }}>
+                          <div style={{ fontSize: 13, color: t.ts, marginBottom: 8 }}>義務残（有休年 5 日）</div>
+                          {leaveBal.paid.mandatoryRequired === 0 ? (
+                            <>
+                              <div style={{ fontSize: 20, fontWeight: 700, color: t.td, marginBottom: 4, lineHeight: 1 }}>—</div>
+                              <div style={{ fontSize: 12, color: t.tm }}>付与未满 10 日不適用</div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 28, fontWeight: 700, color: leaveBal.paid.mandatoryRemaining > 0 ? t.wn : t.gn, marginBottom: 4, lineHeight: 1 }}>
+                                {leaveBal.paid.mandatoryRemaining} <span style={{ fontSize: 14, fontWeight: 500 }}>天</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: t.tm }}>本年须取 {leaveBal.paid.mandatoryRequired} 日 · 已取 {leaveBal.paid.thisYearUsed}</div>
+                            </>
+                          )}
+                        </div>
                         {/* 代休 */}
                         <div style={{ backgroundColor: `${t.ac}0D`, border: `1px solid ${t.ac}33`, padding: 20, borderRadius: 16 }}>
                           <div style={{ fontSize: 13, color: t.ts, marginBottom: 8 }}>代休余额</div>

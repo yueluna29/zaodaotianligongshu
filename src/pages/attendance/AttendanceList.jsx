@@ -593,6 +593,7 @@ export default function AttendanceList({ user, t, tk }) {
           } else if (mainTab === "leave") {
             cards.push(
               { l: "有休余额", v: `${bal.balance}天`, c: t.ac, sub: `本年${bal.currentGrant}+繰越${bal.carryOver}-已用${bal.used}`, click: () => setShowTL(p => !p) },
+              { l: "義務残", v: bal.mandatoryRequired > 0 ? `${bal.mandatoryRemaining}天` : "—", c: bal.mandatoryRemaining > 0 ? t.wn : t.gn, sub: bal.mandatoryRequired > 0 ? `本年度必须取 ${bal.mandatoryRequired} 日 · 已取 ${bal.thisYearUsed}` : "付与未满 10 日免" },
               { l: "代休余额", v: `${Math.max(0, compBal + unusedComp - usedViaSwap)}天`, c: "#8B5CF6" },
             )
           } else { // expense
@@ -634,6 +635,7 @@ export default function AttendanceList({ user, t, tk }) {
                   ["有休余", "right"],
                   ["代休余", "right"],
                   ["即将过期代休", "right"],
+                  ["義務残", "right"],
                   ["本年休假总天数", "right"],
                 ].map(([h, a], i) => (
                   <th key={i} style={{ padding: "10px 12px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: a, borderBottom: `1px solid ${t.bd}`, whiteSpace: "nowrap" }}>{h}</th>
@@ -641,7 +643,7 @@ export default function AttendanceList({ user, t, tk }) {
               </tr></thead>
               <tbody>
                 {overview.length === 0 ? (
-                  <tr><td colSpan={10} style={{ padding: 40, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无符合条件的员工</td></tr>
+                  <tr><td colSpan={11} style={{ padding: 40, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无符合条件的员工</td></tr>
                 ) : overview.map(r => (
                   <tr key={r.emp.id} style={{ borderBottom: `1px solid ${t.bl}` }}>
                     <td style={{ padding: "10px 12px" }}>
@@ -655,6 +657,9 @@ export default function AttendanceList({ user, t, tk }) {
                     <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", color: r.paid.balance <= 0 ? t.rd : t.ac, fontWeight: 700 }}>{r.paid.balance}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", color: "#8B5CF6", fontWeight: 600 }}>{r.compUnused}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", color: r.compExpiring > 0 ? t.rd : t.td, fontWeight: r.compExpiring > 0 ? 700 : 400 }}>{r.compExpiring > 0 ? r.compExpiring : "—"}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", color: r.paid.mandatoryRequired === 0 ? t.td : r.paid.mandatoryRemaining > 0 ? t.wn : t.gn, fontWeight: r.paid.mandatoryRemaining > 0 ? 700 : 500 }}>
+                      {r.paid.mandatoryRequired === 0 ? "—" : `${r.paid.mandatoryRemaining}/${r.paid.mandatoryRequired}`}
+                    </td>
                     <td style={{ padding: "10px 12px", textAlign: "right", color: t.ts, fontFamily: "monospace" }}>{r.thisYearTotal}{Object.keys(r.byType).length > 0 && <div style={{ fontSize: 9, color: t.tm, marginTop: 2 }}>{Object.entries(r.byType).map(([k, v]) => `${k}${v}`).join(" · ")}</div>}</td>
                   </tr>
                 ))}
