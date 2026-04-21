@@ -979,7 +979,7 @@ function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates,
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: t.tx, cursor: locked ? "default" : "pointer", fontWeight: 600 }}>
               <input type="checkbox" disabled={locked} checked={!!r.eju_bonus} onChange={e => onUpdate(r._key, "eju_bonus", e.target.checked)} style={{ width: 16, height: 16, accentColor: "#10B981", cursor: locked ? "default" : "pointer" }} />
               <Sparkles size={14} color="#10B981" />
-              <span>申报 +¥{EJU_BONUS_PER_HOUR}/h 班课绩效</span>
+              <span>申报 +¥{EJU_BONUS_PER_HOUR} 班课绩效</span>
             </label>
             <button type="button" onClick={() => setNoticeOpen(v => !v)} style={{ background: "transparent", border: "none", color: "#10B981", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textAlign: "left", padding: 0, display: "inline-flex", alignItems: "center", gap: 4 }}>
               <ChevronRight size={12} style={{ transform: noticeOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.2s" }} />
