@@ -502,7 +502,7 @@ export default function WorkEntryManager({ user, t, tk }) {
         </div>
 
         {saveMsg && (() => { const ok = saveMsg.startsWith("已保存"), err = saveMsg.startsWith("保存失败"); const c = err ? t.rd : ok ? t.gn : t.wn; return <div style={{ padding: 10, borderRadius: 10, background: `${c}15`, border: `1px solid ${c}33`, marginBottom: 14, fontSize: 12, color: c }}>{saveMsg}</div> })()}
-        {!rates.length && <div style={{ padding: 12, borderRadius: 10, background: `${t.wn}15`, border: `1px solid ${t.wn}33`, marginBottom: 14, fontSize: 12, color: t.wn, display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> 该员工尚未配置时薪，请先在人事档案中设定</div>}
+        {!rates.length && isAdmin && <div style={{ padding: 12, borderRadius: 10, background: `${t.wn}15`, border: `1px solid ${t.wn}33`, marginBottom: 14, fontSize: 12, color: t.wn, display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> 该员工尚未配置时薪，请先在人事档案中设定</div>}
 
         {ld ? <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div> : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
@@ -568,14 +568,19 @@ export default function WorkEntryManager({ user, t, tk }) {
               </div>
 
               {/* 时薪参考（来自 pay_rates） */}
-              {rates.length > 0 && (
-                <div style={{ ...glassCard, padding: 16 }}>
-                  <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, marginBottom: 8 }}>我的时薪（参考）</div>
+              <div style={{ ...glassCard, padding: 16 }}>
+                <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, marginBottom: 8 }}>我的时薪（参考）</div>
+                {rates.length > 0 ? (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {rates.map(r => <span key={r.business_type} style={{ padding: "3px 9px", borderRadius: 8, fontSize: 11, fontWeight: 600, color: colorFor(r.business_type), background: `${colorFor(r.business_type)}15` }}>{r.business_type} ¥{Number(r.hourly_rate).toLocaleString()}/h</span>)}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10, background: `${t.wn}12`, border: `1px solid ${t.wn}33`, color: t.wn, fontSize: 12, lineHeight: 1.5 }}>
+                    <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                    <span>还没设置时薪，请联系管理员配置</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ======= 右栏：选中日详情 ======= */}
