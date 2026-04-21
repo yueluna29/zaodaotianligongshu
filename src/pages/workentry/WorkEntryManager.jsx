@@ -634,25 +634,52 @@ export default function WorkEntryManager({ user, t, tk }) {
               {/* 签单提成（月度，不按日） */}
               {showComm && (
                 <div style={{ ...glassCard, padding: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
                     <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
-                      <FileText size={16} color="#EC4899" /> 签单提成（{month}月全月）
+                      <FileText size={16} color="#EC4899" /> 签单提成
+                      <span style={{ fontSize: 11, color: t.tm, fontWeight: 500 }}>（{month}月 · {commRows.filter(r => !r._isNew).length}笔）</span>
+                      {totalComm > 0 && <span style={{ fontSize: 13, fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums", background: "rgba(236,72,153,0.1)", padding: "3px 10px", borderRadius: 8 }}>¥{totalComm.toLocaleString()}</span>}
                     </h3>
                     <HoverBtn onClick={addCommRow} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Plus size={13} /> 加一笔</HoverBtn>
                   </div>
+
                   {commRows.length === 0 ? (
-                    <div style={{ fontSize: 12, color: t.td }}>本月无签单提成记录</div>
+                    <div style={{ padding: "30px 16px", textAlign: "center", color: t.td, fontSize: 12, borderRadius: 12, border: `1px dashed ${t.bd}`, background: "rgba(255,255,255,0.4)" }}>本月暂无签单提成记录，点右上角「加一笔」添加</div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {commRows.map(r => (
-                        <div key={r._key} style={{ display: "grid", gridTemplateColumns: "130px 60px 1fr 120px 80px 120px 44px", gap: 8, alignItems: "center" }}>
-                          <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={inputStyle(t)} />
-                          <input type="number" placeholder="#" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} style={{ ...inputStyle(t), textAlign: "center" }} />
-                          <input placeholder="学生姓名" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} style={inputStyle(t)} />
-                          <input type="number" placeholder="学费" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...inputStyle(t), textAlign: "right" }} />
-                          <input type="number" placeholder="%" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...inputStyle(t), textAlign: "right" }} />
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#EC4899", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.commission_amount || 0).toLocaleString()}</div>
-                          <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={14} /></HoverBtn>
+                      {commRows.map((r, idx) => (
+                        <div key={r._key} style={{ padding: 14, background: "rgba(236,72,153,0.04)", borderRadius: 12, border: "1px solid rgba(236,72,153,0.18)", display: "flex", flexDirection: "column", gap: 10 }}>
+                          {/* 第一行：日期 + 序号 + 学生 + 删除 */}
+                          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                            <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...inputStyle(t), width: 140 }} />
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#fff", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 10, padding: "4px 8px" }}>
+                              <span style={{ fontSize: 11, color: "#EC4899", fontWeight: 700 }}>第</span>
+                              <input type="number" placeholder="1" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} style={{ width: 36, border: "none", outline: "none", background: "transparent", fontSize: 13, fontWeight: 700, color: "#EC4899", textAlign: "center", fontFamily: "inherit" }} />
+                              <span style={{ fontSize: 11, color: "#EC4899", fontWeight: 700 }}>签</span>
+                            </div>
+                            <input placeholder="学生姓名" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} style={{ ...inputStyle(t), flex: "1 1 160px", minWidth: 120 }} />
+                            <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 8, flexShrink: 0 }}><Trash2 size={14} /></HoverBtn>
+                          </div>
+
+                          {/* 第二行：学费 × 提成率 = 提成 */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 8, borderTop: "1px dashed rgba(236,72,153,0.2)", flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 140px" }}>
+                              <label style={{ fontSize: 10, color: t.tm, fontWeight: 600 }}>学费（円）</label>
+                              <input type="number" placeholder="0" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...inputStyle(t), textAlign: "right", background: "#fff" }} />
+                            </div>
+                            <span style={{ fontSize: 18, color: t.td, paddingTop: 14 }}>×</span>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, width: 100 }}>
+                              <label style={{ fontSize: 10, color: t.tm, fontWeight: 600 }}>提成率 %</label>
+                              <input type="number" placeholder="0" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...inputStyle(t), textAlign: "right", background: "#fff" }} />
+                            </div>
+                            <span style={{ fontSize: 18, color: t.td, paddingTop: 14 }}>=</span>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 120, marginLeft: "auto", textAlign: "right" }}>
+                              <label style={{ fontSize: 10, color: t.tm, fontWeight: 600 }}>提成金额</label>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums", padding: "8px 12px" }}>
+                                ¥{Number(r.commission_amount || 0).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
