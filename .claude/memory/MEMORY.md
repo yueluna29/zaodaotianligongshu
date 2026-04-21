@@ -1,0 +1,2 @@
+- [每次改完都 push 到 main](feedback_auto_deploy.md) — 项目靠线上部署查看，做完默认 commit+push
+- [全站 UI 玻璃质感风格](feedback_design_style.md) — glass-card / ambient glow / 细字重细线图标，新设计默认沿用
