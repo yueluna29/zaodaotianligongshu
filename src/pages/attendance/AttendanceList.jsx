@@ -286,19 +286,19 @@ export default function AttendanceList({ user, t, tk }) {
           }, tk)
         }
       }
-    } else { // 代休：写入 day_swap_requests。语义：休日出勤 + 換休 + swap_date 已填 = 已消化代休
-      if (!histFm.work_date || !histFm.dates[0]) return
+    } else { // 代休：写入 day_swap_requests。语义：休日出勤 + 換休，swap_date 已填=已消化，空=待定
+      if (!histFm.work_date) return
       setHistSub(true)
       if (histEditId?.table === "swap") {
         await sbPatch(`day_swap_requests?id=eq.${histEditId.id}`, {
-          original_date: histFm.work_date, swap_date: histFm.dates[0],
+          original_date: histFm.work_date, swap_date: histFm.dates[0] || null,
           reason: histFm.reason.trim(),
         }, tk)
       } else {
         const d = new Date(histFm.work_date); d.setDate(d.getDate() + 60)
         await sbPost("day_swap_requests", {
           employee_id: (isAdmin && leaveViewEmp) ? leaveViewEmp : user.id, swap_type: "休日出勤", compensation_type: "換休",
-          original_date: histFm.work_date, swap_date: histFm.dates[0],
+          original_date: histFm.work_date, swap_date: histFm.dates[0] || null,
           reason: histFm.reason.trim(),
           status: "承認", approved_at: new Date().toISOString(), is_confirmed: true,
           deadline: d.toISOString().split("T")[0],
@@ -920,7 +920,7 @@ export default function AttendanceList({ user, t, tk }) {
       {/* ====== 过去记录 Tab（自助补录历史 有休/代休） ====== */}
       {mainTab === "leave" && tab === "history" && (() => {
         const isDaikyu = histFm.leave_type === "代休"
-        const canSubmit = isDaikyu ? !!(histFm.work_date && histFm.dates[0]) : histFm.dates.length > 0
+        const canSubmit = isDaikyu ? !!histFm.work_date : histFm.dates.length > 0
         return (
         <div>
           <div style={{ padding: "10px 14px", borderRadius: 8, background: `${t.ac}08`, border: `1px solid ${t.ac}20`, marginBottom: 12, fontSize: 11, color: t.tm, lineHeight: 1.5 }}>
@@ -949,7 +949,7 @@ export default function AttendanceList({ user, t, tk }) {
                     <input type="date" value={histFm.work_date} onChange={(e) => setHistFm(p => ({ ...p, work_date: e.target.value }))} style={fmS} />
                   </div>
                   <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>代休日期</label>
+                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>代休日期（留空=待定，以后再填）</label>
                     <input type="date" value={histFm.dates[0] || ""} onChange={(e) => setHistFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
                   </div>
                 </>
@@ -988,8 +988,8 @@ export default function AttendanceList({ user, t, tk }) {
             {(() => {
               const histLeave = leaveReqs.filter(r => r.status === "承認" && r.leave_type === "有休")
                 .map(r => ({ ...r, _table: "leave", _sortDate: r.leave_date }))
-              // 已消化代休 = 休日出勤 + 換休 + swap_date 已填
-              const histDaikyu = swapReqs.filter(r => r.status === "承認" && r.swap_type === "休日出勤" && r.compensation_type === "換休" && r.swap_date)
+              // 代休记录：休日出勤 + 換休，swap_date 已填=已消化，空=待定
+              const histDaikyu = swapReqs.filter(r => r.status === "承認" && r.swap_type === "休日出勤" && r.compensation_type === "換休")
                 .map(r => ({ ...r, _table: "swap", _sortDate: r.swap_date || r.original_date }))
               const histAll = [...histLeave, ...histDaikyu].sort((a, b) => (b._sortDate || "").localeCompare(a._sortDate || ""))
               if (!histAll.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>还没有历史记录，点上面的「记录」按钮添加</div>
@@ -1000,10 +1000,13 @@ export default function AttendanceList({ user, t, tk }) {
                   <div key={`${r._table}-${r.id}`} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{isLeave ? "有休" : "代休"}</span>
+                      {!isLeave && !r.swap_date && (
+                        <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: t.wn, background: `${t.wn}20` }}>待定</span>
+                      )}
                       {isLeave ? (
                         <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.leave_date)}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
                       ) : (
-                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>休 <strong>{r.swap_date ? fmtDateW(r.swap_date) : "—"}</strong> <span style={{ fontSize: 10, color: t.tm }}>(出勤 {fmtDateW(r.original_date)})</span></span>
+                        <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>休 <strong>{r.swap_date ? fmtDateW(r.swap_date) : <span style={{ color: t.td }}>未消化</span>}</strong> <span style={{ fontSize: 10, color: t.tm }}>(出勤 {fmtDateW(r.original_date)})</span></span>
                       )}
                       {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                     </div>

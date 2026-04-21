@@ -82,11 +82,13 @@ export default function App() {
         <div className="home-ambient home-ambient-br" />
         <div style={{ position: "relative", zIndex: 1, padding: mobile ? "16px 14px 80px" : "24px 28px", minHeight: "100%", boxSizing: "border-box" }}>
           {mobile && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾 OS</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{user.name}</div>
-              </div>
+            <div style={{ display: "flex", justifyContent: view === "home" ? "flex-end" : "space-between", alignItems: "center", marginBottom: 16 }}>
+              {view !== "home" && (
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾 OS</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{user.name}</div>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
                 <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
