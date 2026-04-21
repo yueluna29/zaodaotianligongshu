@@ -89,14 +89,14 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [submission, setSubmission] = useState(null) // { id, status, submitted_at, unlocked_at, unlocked_by }
   const [submitModal, setSubmitModal] = useState(false)
   const [submittingReport, setSubmittingReport] = useState(false)
-  const [sectionPreview, setSectionPreview] = useState({ expenses: false, commissions: false }) // 客户端视图切换，非锁定
+  const [sectionPreview, setSectionPreview] = useState({ work: false, expenses: false, commissions: false }) // 客户端视图切换，非锁定
   const [errorModal, setErrorModal] = useState(null) // { title, message }
 
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [selectedDate, setSelectedDate] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`)
-  const [viewMode, setViewMode] = useState("month") // month | week
+  const [viewMode, setViewMode] = useState("week") // month | week — baito 默认周历
 
   const targetEmpId = selectedEmp?.id || user.id
 
@@ -195,7 +195,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   }, [year, month, selectedDate])
 
   // 切月时重置分段预览视图
-  useEffect(() => { setSectionPreview({ expenses: false, commissions: false }) }, [year, month, targetEmpId])
+  useEffect(() => { setSectionPreview({ work: false, expenses: false, commissions: false }) }, [year, month, targetEmpId])
 
   const getRateForType = (bt) => { const r = rates.find(r => r.business_type === bt); return r ? Number(r.hourly_rate) : 0 }
   const calcMin = (s, e) => { if (!s || !e) return 0; const [sh, sm] = s.split(":").map(Number), [eh, em] = e.split(":").map(Number); const m = (eh * 60 + em) - (sh * 60 + sm); return m > 0 ? m : 0 }
@@ -304,6 +304,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   const isSubmitted = submission?.status === "submitted"
   const locked = isSubmitted && !isAdmin
   // 分段预览 = 纯客户端视图切换（无 DB 持久化）；全月提交才是真锁（admin 可解锁）
+  const workLocked = isSubmitted || sectionPreview.work
   const expensesLocked = isSubmitted || sectionPreview.expenses
   const commissionsLocked = isSubmitted || sectionPreview.commissions
   const canSubmit = !isAdmin && !isSubmitted && savedWork.length > 0 && !hasChanges
@@ -857,18 +858,22 @@ export default function WorkEntryManager({ user, t, tk }) {
             <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: 20, minWidth: 0, paddingBottom: 80 }}>
 
               {/* 当日标题 */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: `2px solid ${t.bd}`, paddingBottom: 12 }}>
-                <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: `2px solid ${t.bd}`, paddingBottom: 12, gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 12, color: t.tm, fontWeight: 600, marginBottom: 2 }}>选中日期</div>
                   <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.8, color: t.tx }}>
                     {fmtDateW(selectedDate)}
                   </h1>
                 </div>
-                {!locked && (
-                  <button onClick={addWorkForDay} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: t.ac, fontWeight: 600, fontSize: 13, cursor: "pointer", padding: "4px 8px", fontFamily: "inherit" }}>
-                    <Plus size={14} /> 快捷添加
-                  </button>
-                )}
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, paddingBottom: 2 }}>
+                  {!isSubmitted && <HoverBtn onClick={() => { togglePreview("work", false); addWorkForDay() }} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
+                  {!workLocked && dayWork.length > 0 && (
+                    <HoverBtn onClick={() => togglePreview("work", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
+                  )}
+                  {sectionPreview.work && !isSubmitted && (
+                    <HoverBtn onClick={() => togglePreview("work", false)} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
+                  )}
+                </div>
               </div>
 
               {/* 工时时间轴 */}
@@ -881,7 +886,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                 ) : dayWork.map((r, idx) => (
                   <WorkTimelineCard key={r._key} r={r} isLast={idx === dayWork.length - 1}
                     onUpdate={updateRow} onRemove={removeRow} onDelExisting={delExisting}
-                    rates={rates} t={t} locked={locked} />
+                    rates={rates} t={t} locked={workLocked} />
                 ))}
               </div>
             </div>
@@ -944,9 +949,9 @@ export default function WorkEntryManager({ user, t, tk }) {
       )}
 
       {/* 悬浮添加按钮 */}
-      {selectedEmp && !ld && !locked && (
+      {selectedEmp && !ld && !isSubmitted && (
         <button
-          onClick={addWorkForDay}
+          onClick={() => { togglePreview("work", false); addWorkForDay() }}
           aria-label="添加工时"
           style={{
             position: "fixed", bottom: 32, right: 28, zIndex: 500,
@@ -1067,32 +1072,53 @@ function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates,
       <div style={{ position: "absolute", left: 0, top: 16, width: 12, height: 12, borderRadius: "50%", border: `3px solid ${color}`, background: "#fff", zIndex: 2, transform: "translateX(-4px)" }} />
       {!isLast && <div style={{ position: "absolute", left: 1, top: 28, bottom: 0, width: 2, background: t.bd, zIndex: 1 }} />}
 
-      <div style={{ ...glassCard, padding: 18, display: "flex", flexDirection: "column", gap: 14, opacity: locked ? 0.75 : 1 }}>
+      <div style={{ ...glassCard, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* 第一行：时间 + 业务类型 + 删除 */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: t.bgI, padding: 4, borderRadius: 10, border: `1px solid ${t.bd}` }}>
-            <Clock size={15} color={t.tm} style={{ marginLeft: 6 }} />
-            <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} disabled={locked} value={r.start_time}
-              onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "start_time", v) }}
-              style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
-            <span style={{ color: t.td }}>-</span>
-            <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} disabled={locked} value={r.end_time}
-              onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "end_time", v) }}
-              style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
-          </div>
-          <select value={r.business_type} disabled={locked} onChange={e => onUpdate(r._key, "business_type", e.target.value)}
-            style={{ ...inputStyle(t), width: "auto", flex: 1, minWidth: 140, background: `${color}10`, color, borderColor: `${color}40`, fontWeight: 600 }}>
-            <option value="">选择业务类型</option>
-            {rates.map(rt => <option key={rt.business_type} value={rt.business_type}>{rt.business_type}</option>)}
-            {hasEjuInRates ? null : isEju ? <option value={EJU_TYPE}>{EJU_TYPE}</option> : null}
-          </select>
+          {locked ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: t.bgI, padding: "8px 14px", borderRadius: 10, border: `1px solid ${t.bd}` }}>
+              <Clock size={14} color={t.tm} />
+              <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{r.start_time || "—"}</span>
+              <span style={{ color: t.td }}>-</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{r.end_time || "—"}</span>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: t.bgI, padding: 4, borderRadius: 10, border: `1px solid ${t.bd}` }}>
+              <Clock size={15} color={t.tm} style={{ marginLeft: 6 }} />
+              <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.start_time}
+                onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "start_time", v) }}
+                style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
+              <span style={{ color: t.td }}>-</span>
+              <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.end_time}
+                onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "end_time", v) }}
+                style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
+            </div>
+          )}
+          {locked ? (
+            <div style={{ flex: 1, minWidth: 140, background: `${color}10`, color, border: `1px solid ${color}40`, fontWeight: 600, padding: "8px 14px", borderRadius: 10, fontSize: 13 }}>
+              {r.business_type || "—"}
+            </div>
+          ) : (
+            <select value={r.business_type} onChange={e => onUpdate(r._key, "business_type", e.target.value)}
+              style={{ ...inputStyle(t), width: "auto", flex: 1, minWidth: 140, background: `${color}10`, color, borderColor: `${color}40`, fontWeight: 600 }}>
+              <option value="">选择业务类型</option>
+              {rates.map(rt => <option key={rt.business_type} value={rt.business_type}>{rt.business_type}</option>)}
+              {hasEjuInRates ? null : isEju ? <option value={EJU_TYPE}>{EJU_TYPE}</option> : null}
+            </select>
+          )}
           {!locked && <HoverBtn danger onClick={() => r._isNew ? onRemove(r._key) : onDelExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={15} /></HoverBtn>}
         </div>
 
         {/* EJU 绩效勾选 + 申报须知 */}
-        {isEju && (
+        {isEju && (locked ? (r.eju_bonus && (
+          <div style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.3)", display: "flex", alignItems: "center", gap: 8, color: "#047857", fontSize: 13, fontWeight: 600 }}>
+            <Sparkles size={14} color="#10B981" />
+            <span>已申报 +¥{EJU_BONUS_PER_HOUR} 班课绩效</span>
+          </div>
+        )) : (
           <div style={{ padding: 12, borderRadius: 12, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.25)", display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: t.tx, cursor: locked ? "default" : "pointer", fontWeight: 600 }}>
-              <input type="checkbox" disabled={locked} checked={!!r.eju_bonus} onChange={e => onUpdate(r._key, "eju_bonus", e.target.checked)} style={{ width: 16, height: 16, accentColor: "#10B981", cursor: locked ? "default" : "pointer" }} />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: t.tx, cursor: "pointer", fontWeight: 600 }}>
+              <input type="checkbox" checked={!!r.eju_bonus} onChange={e => onUpdate(r._key, "eju_bonus", e.target.checked)} style={{ width: 16, height: 16, accentColor: "#10B981", cursor: "pointer" }} />
               <Sparkles size={14} color="#10B981" />
               <span>申报 +¥{EJU_BONUS_PER_HOUR} 班课绩效</span>
             </label>
@@ -1106,23 +1132,32 @@ function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates,
               </div>
             )}
           </div>
-        )}
+        ))}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
           <div style={{ flex: "1 1 120px" }}>
             <label style={{ fontSize: 11, color: t.tm, display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}><User size={11} /> 学生姓名</label>
-            <input placeholder="不填则为空" disabled={locked} value={r.student_name} onChange={e => onUpdate(r._key, "student_name", e.target.value)} style={inputStyle(t)} />
+            {locked
+              ? <div style={{ fontSize: 14, color: t.tx, fontWeight: 500, padding: "4px 0" }}>{r.student_name || <span style={{ color: t.td }}>—</span>}</div>
+              : <input placeholder="不填则为空" value={r.student_name} onChange={e => onUpdate(r._key, "student_name", e.target.value)} style={inputStyle(t)} />
+            }
           </div>
           <div style={{ flex: "2 1 200px" }}>
             <label style={{ fontSize: 11, color: t.tm, display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}><FileText size={11} /> 工作内容 / 课程</label>
-            <input placeholder="简述内容" disabled={locked} value={r.course_name} onChange={e => onUpdate(r._key, "course_name", e.target.value)} style={inputStyle(t)} />
+            {locked
+              ? <div style={{ fontSize: 14, color: t.tx, fontWeight: 500, padding: "4px 0" }}>{r.course_name || <span style={{ color: t.td }}>—</span>}</div>
+              : <input placeholder="简述内容" value={r.course_name} onChange={e => onUpdate(r._key, "course_name", e.target.value)} style={inputStyle(t)} />
+            }
           </div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 10, borderTop: `1px dashed ${t.bd}`, gap: 14, flexWrap: "wrap" }}>
           <div style={{ width: 150 }}>
             <label style={{ fontSize: 11, color: t.tm, display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}><Car size={11} /> 交通费 (円)</label>
-            <input type="number" placeholder="0" disabled={locked} value={r.transport_fee} onChange={e => onUpdate(r._key, "transport_fee", e.target.value)} style={{ ...inputStyle(t), background: "rgba(255,255,255,0.9)" }} />
+            {locked
+              ? <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, padding: "4px 0", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.transport_fee || 0).toLocaleString()}</div>
+              : <input type="number" placeholder="0" value={r.transport_fee} onChange={e => onUpdate(r._key, "transport_fee", e.target.value)} style={{ ...inputStyle(t), background: "rgba(255,255,255,0.9)" }} />
+            }
           </div>
           <div style={{ textAlign: "right", minWidth: 160 }}>
             <div style={{ fontSize: 11, color: t.tm, marginBottom: 2 }}>
