@@ -1,7 +1,7 @@
 import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
 import { isHourly as empIsHourly } from "../config/constants"
 
-export default function MobileNav({ user, view, onNav, t, badge }) {
+export default function MobileNav({ user, view, onNav, t, badge, workBadge }) {
   const isA = user.role === "admin"
   const et = user.employment_type || "正社員"
   const isHourly = empIsHourly(et)
@@ -38,6 +38,9 @@ export default function MobileNav({ user, view, onNav, t, badge }) {
             {it.l}
             {it.id === "approve" && badge > 0 && (
               <span style={{ position: "absolute", top: 0, right: 2, background: t.rd, color: "#fff", fontSize: 8, borderRadius: 8, padding: "0 4px", fontWeight: 700 }}>{badge}</span>
+            )}
+            {it.id === "work" && isA && workBadge > 0 && (
+              <span style={{ position: "absolute", top: 0, right: 2, background: t.ac, color: "#fff", fontSize: 8, borderRadius: 8, padding: "0 4px", fontWeight: 700 }}>{workBadge}</span>
             )}
           </button>
         )

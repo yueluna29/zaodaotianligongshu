@@ -26,6 +26,7 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem("kintai_theme") || "light")
   const [mobile, setMobile] = useState(false)
   const [badge, setBadge] = useState(0)
+  const [workBadge, setWorkBadge] = useState(0)
   const t = themes[theme]
 
   useEffect(() => {
@@ -38,12 +39,16 @@ export default function App() {
   useEffect(() => {
     if (!user || user.role !== "admin") return
     const poll = async () => {
-      const [lr, sw, tc] = await Promise.all([
+      const now = new Date()
+      const y = now.getFullYear(), m = now.getMonth() + 1
+      const [lr, sw, tc, sub] = await Promise.all([
         sbGet("leave_requests?status=eq.申請中&select=id", user.token),
         sbGet("day_swap_requests?status=eq.申請中&select=id", user.token),
         sbGet("transport_change_requests?status=eq.申請中&select=id", user.token),
+        sbGet(`monthly_report_submissions?status=eq.submitted&year=eq.${y}&month=eq.${m}&select=id`, user.token),
       ])
       setBadge((lr?.length || 0) + (sw?.length || 0) + (tc?.length || 0))
+      setWorkBadge(sub?.length || 0)
     }
     poll()
     const iv = setInterval(poll, 30000)
@@ -76,7 +81,7 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", background: t.bg, color: t.tx, overflow: "hidden" }}>
-      {!mobile && <Sidebar user={user} view={view} onNav={setView} onLogout={logout} t={t} theme={theme} toggleTheme={toggleTheme} badge={badge} />}
+      {!mobile && <Sidebar user={user} view={view} onNav={setView} onLogout={logout} t={t} theme={theme} toggleTheme={toggleTheme} badge={badge} workBadge={workBadge} />}
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", position: "relative" }}>
         <div className="home-ambient home-ambient-tl" />
         <div className="home-ambient home-ambient-br" />
@@ -98,7 +103,7 @@ export default function App() {
           {pages[view] || <Dashboard user={user} t={t} tk={user.token} />}
         </div>
       </div>
-      {mobile && <MobileNav user={user} view={view} onNav={setView} t={t} badge={badge} />}
+      {mobile && <MobileNav user={user} view={view} onNav={setView} t={t} badge={badge} workBadge={workBadge} />}
     </div>
   )
 }

@@ -589,28 +589,23 @@ export default function Dashboard({ user, t, tk, onNav }) {
             )}
           </div>
 
-          {/* 待提交工时报表（仅 baito） */}
-          {isHourly && unsubmittedMonths.length > 0 && (
-            <div className="glass-card span-4" style={{ padding: "18px 22px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                <AlertCircle size={16} color="#F59E0B" strokeWidth={1.8} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: t.tx }}>待提交的工时报表</span>
-                <span style={{ fontSize: 10, color: t.tm }}>· 每月 5 号前提交上个月报表</span>
+          {/* 待提交工时报表（仅 baito）— 每个月一条 home-banner */}
+          {isHourly && unsubmittedMonths.map(({ year, month }) => (
+            <button key={`sub-${year}-${month}`} onClick={() => onNav("work")} className="home-banner span-4">
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(254,215,170,.5)", border: "1px solid rgba(254,215,170,.8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fb923c" }}>
+                  <AlertCircle size={14} strokeWidth={2} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(234,88,12,.9)", letterSpacing: ".02em" }}>{year}年 {month}月 工时报表待提交</div>
+                  <div style={{ fontSize: 11, color: "rgba(249,115,22,.7)", marginTop: 2 }}>每月 5 号前提交上个月工时</div>
+                </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {unsubmittedMonths.map(({ year, month }) => (
-                  <button key={`${year}-${month}`} onClick={() => onNav("work")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(245,158,11,0.3)", background: "rgba(254,243,199,0.4)", color: t.tx, fontSize: 13, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all .2s" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(254,243,199,0.7)"; e.currentTarget.style.transform = "translateX(2px)" }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(254,243,199,0.4)"; e.currentTarget.style.transform = "translateX(0)" }}>
-                    <span><strong>{year}年 {month}月</strong> 工时报表</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#D97706", fontWeight: 600 }}>
-                      未提交 <ChevronRight size={12} />
-                    </span>
-                  </button>
-                ))}
+              <div style={{ display: "flex", alignItems: "center", color: "rgba(249,115,22,.8)", fontSize: 12, fontWeight: 500, letterSpacing: ".08em", whiteSpace: "nowrap" }}>
+                前往填写 <ChevronRight size={14} />
               </div>
-            </div>
-          )}
+            </button>
+          ))}
 
           {/* 本月出勤 / 上班天数 */}
           <div className="glass-card stat-card hv-emerald span-2">

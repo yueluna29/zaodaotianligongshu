@@ -1,7 +1,7 @@
 import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
 import { isHourly as empIsHourly } from "../config/constants"
 
-export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge }) {
+export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge, workBadge }) {
   const isA = user.role === "admin"
   const et = user.employment_type || "正社員"
   const isHourly = empIsHourly(et)
@@ -35,6 +35,9 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
               <Icon size={16} strokeWidth={1.8} />{it.l}
               {it.id === "approve" && badge > 0 && (
                 <span style={{ position: "absolute", right: 10, background: t.rd, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 10, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{badge}</span>
+              )}
+              {it.id === "work" && isA && workBadge > 0 && (
+                <span style={{ position: "absolute", right: 10, background: t.ac, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 10, padding: "1px 6px", minWidth: 18, textAlign: "center" }}>{workBadge}</span>
               )}
             </button>
           )

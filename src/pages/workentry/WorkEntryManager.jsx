@@ -76,6 +76,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [companyFilter, setCompanyFilter] = useState("all") // "all" | number
   const [typeFilter, setTypeFilter] = useState("all") // "all" | type string
   const [adminAgg, setAdminAgg] = useState({}) // { [empId]: { hours, wage, transport, other, commission } }
+  const [adminSubmitted, setAdminSubmitted] = useState(new Set()) // baito 本月已提交的 employee_id 集合
   const [adminLd, setAdminLd] = useState(false)
   const [selectedEmp, setSelectedEmp] = useState(isAdmin ? null : { id: user.id, name: user.name, has_commission: user.has_commission })
 
@@ -155,9 +156,10 @@ export default function WorkEntryManager({ user, t, tk }) {
     setAdminLd(true)
     const sd = `${year}-${pad(month)}-01`
     const ed = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`
-    const [we, ce] = await Promise.all([
-      sbGet(`work_entries?work_date=gte.${sd}&work_date=lt.${ed}&select=employee_id,work_minutes,hourly_rate,transport_fee,other_expense,business_type`, tk),
+    const [we, ce, subs] = await Promise.all([
+      sbGet(`work_entries?work_date=gte.${sd}&work_date=lt.${ed}&select=employee_id,work_minutes,hourly_rate,transport_fee,other_expense,business_type,eju_bonus`, tk),
       sbGet(`commission_entries?entry_date=gte.${sd}&entry_date=lt.${ed}&select=employee_id,commission_amount`, tk),
+      sbGet(`monthly_report_submissions?status=eq.submitted&year=eq.${year}&month=eq.${month}&select=employee_id`, tk),
     ])
     const agg = {}
     for (const r of (we || [])) {
@@ -165,7 +167,9 @@ export default function WorkEntryManager({ user, t, tk }) {
       const hrs = (r.work_minutes || 0) / 60
       if (r.business_type) {
         a.hours += hrs
-        a.wage += Math.round(hrs * (Number(r.hourly_rate) || 0))
+        const baseRate = Number(r.hourly_rate) || 0
+        const bonus = r.eju_bonus && r.business_type === EJU_TYPE ? EJU_BONUS_PER_HOUR : 0
+        a.wage += Math.round(hrs * (baseRate + bonus))
         a.transport += Number(r.transport_fee || 0)
       } else {
         a.other += Number(r.other_expense || 0)
@@ -176,6 +180,7 @@ export default function WorkEntryManager({ user, t, tk }) {
       a.commission += Number(r.commission_amount || 0)
     }
     setAdminAgg(agg)
+    setAdminSubmitted(new Set((subs || []).map(s => s.employee_id)))
     setAdminLd(false)
   }, [isAdmin, selectedEmp, year, month, tk])
 
@@ -365,6 +370,8 @@ export default function WorkEntryManager({ user, t, tk }) {
     const filteredEmps = allEmps.filter(e => {
       if (companyFilter !== "all" && e.company_id !== companyFilter) return false
       if (typeFilter !== "all" && e.employment_type !== typeFilter) return false
+      // baito / 外部：只显示已提交本月报表的
+      if (isHourly(e.employment_type) && !adminSubmitted.has(e.id)) return false
       return true
     })
 
@@ -372,6 +379,7 @@ export default function WorkEntryManager({ user, t, tk }) {
     const hourlySum = rowsWithTotals.filter(r => r.isH).reduce((s, r) => s + r.total, 0)
     const fulltimeSum = rowsWithTotals.filter(r => !r.isH).reduce((s, r) => s + r.total, 0)
     const grandTotal = hourlySum + fulltimeSum
+    const unsubmittedBaitoCount = allEmps.filter(e => isHourly(e.employment_type) && !adminSubmitted.has(e.id)).length
 
     const exportCSV = () => {
       const rows = [["姓名", "公司", "雇佣类型", "部门", "工时(h)", "课时费", "交通费", "其他报销", "签单提成", "合计"]]
@@ -466,6 +474,14 @@ export default function WorkEntryManager({ user, t, tk }) {
               </div>
             </div>
           </div>
+
+          {/* 尚未提交的 baito 提示 */}
+          {unsubmittedBaitoCount > 0 && (
+            <div style={{ padding: 12, borderRadius: 12, background: `${t.wn}12`, border: `1px solid ${t.wn}40`, marginBottom: 16, fontSize: 12, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertCircle size={14} color={t.wn} />
+              <span>本月尚有 <strong style={{ color: t.wn }}>{unsubmittedBaitoCount}</strong> 位时薪员工未提交工时报表，未提交的不在下方列表中显示。</span>
+            </div>
+          )}
 
           {/* 员工列表 */}
           {adminLd ? (
