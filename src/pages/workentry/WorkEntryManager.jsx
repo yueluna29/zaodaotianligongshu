@@ -224,9 +224,27 @@ export default function WorkEntryManager({ user, t, tk }) {
     }))
   }
 
-  const addWorkForDay = () => setRows(prev => [...prev, { ...mkWork(), work_date: selectedDate, _dirty: true }])
-  const addExpForDay = () => setRows(prev => [...prev, { ...mkExp(), work_date: selectedDate, _dirty: true }])
-  const addCommRow = () => setCommRows(prev => [...prev, { ...mkComm(), entry_date: selectedDate, _dirty: true }])
+  const scrollToNewRow = (key) => {
+    setTimeout(() => {
+      const el = document.querySelector(`[data-row-key="${key}"]`)
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" })
+    }, 60)
+  }
+  const addWorkForDay = () => {
+    const nr = { ...mkWork(), work_date: selectedDate, _dirty: true }
+    setRows(prev => [...prev, nr])
+    scrollToNewRow(nr._key)
+  }
+  const addExpForDay = () => {
+    const nr = { ...mkExp(), work_date: selectedDate, _dirty: true }
+    setRows(prev => [...prev, nr])
+    scrollToNewRow(nr._key)
+  }
+  const addCommRow = () => {
+    const nr = { ...mkComm(), entry_date: selectedDate, _dirty: true }
+    setCommRows(prev => [...prev, nr])
+    scrollToNewRow(nr._key)
+  }
 
   const removeRow = (key) => setRows(prev => prev.filter(r => r._key !== key))
   const removeComm = (key) => setCommRows(prev => prev.filter(r => r._key !== key))
@@ -730,7 +748,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {dayExp.map(r => (
-                      <div key={r._key} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <div key={r._key} data-row-key={r._key} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", scrollMarginTop: 80 }}>
                         <input type="number" placeholder="金额 (円)" value={r.other_expense} onChange={e => updateRow(r._key, "other_expense", e.target.value)} style={{ ...inputStyle(t), width: 130 }} />
                         <input placeholder="报销说明（如：文具）" value={r.other_expense_note} onChange={e => updateRow(r._key, "other_expense_note", e.target.value)} style={{ ...inputStyle(t), flex: 1, minWidth: 180 }} />
                         <HoverBtn danger onClick={() => r._isNew ? removeRow(r._key) : delExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={14} /></HoverBtn>
@@ -807,7 +825,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                     // ===== 编辑模式：上下分层卡片（身份 + 算钱引擎） =====
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       {commRows.map(r => (
-                        <div key={r._key} style={{ background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+                        <div key={r._key} data-row-key={r._key} style={{ background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.02)", scrollMarginTop: 80 }}>
                           {/* 上半层：日期 / 签号 / 学生 */}
                           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                             <div style={{ flex: "1 1 120px" }}>
@@ -953,8 +971,9 @@ export default function WorkEntryManager({ user, t, tk }) {
         <button
           onClick={() => { togglePreview("work", false); addWorkForDay() }}
           aria-label="添加工时"
+          className="fab-add"
           style={{
-            position: "fixed", bottom: 32, right: 28, zIndex: 500,
+            zIndex: 500,
             width: 56, height: 56, borderRadius: "50%",
             backgroundColor: t.ac, color: "#fff",
             border: "none", cursor: "pointer",
@@ -1068,7 +1087,7 @@ function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates,
   const [noticeOpen, setNoticeOpen] = useState(false)
   const hasEjuInRates = rates.some(rt => rt.business_type === EJU_TYPE)
   return (
-    <div style={{ position: "relative", paddingLeft: 28, paddingBottom: 28 }}>
+    <div data-row-key={r._key} style={{ position: "relative", paddingLeft: 28, paddingBottom: 28, scrollMarginTop: 80 }}>
       <div style={{ position: "absolute", left: 0, top: 16, width: 12, height: 12, borderRadius: "50%", border: `3px solid ${color}`, background: "#fff", zIndex: 2, transform: "translateX(-4px)" }} />
       {!isLast && <div style={{ position: "absolute", left: 1, top: 28, bottom: 0, width: 2, background: t.bd, zIndex: 1 }} />}
 
