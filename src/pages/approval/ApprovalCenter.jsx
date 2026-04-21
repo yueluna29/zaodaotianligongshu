@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPatch } from "../../api/supabase"
 import { LEAVE_TYPES, fmtDateW } from "../../config/constants"
-import { Palmtree, ArrowLeftRight, CheckCircle, Train, ChevronDown, ChevronUp, Check, X, Clock, Calendar, FileText, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
+import { Palmtree, ArrowLeftRight, CheckCircle, Train, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Check, X, Clock, Calendar, FileText, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
 
 const BUCKET_MS = 10 * 60 * 1000
 
@@ -63,6 +63,8 @@ export default function ApprovalCenter({ user, t, tk }) {
   const [rejectModal, setRejectModal] = useState(null)
   const [rejectReason, setRejectReason] = useState("")
   const [rejectSub, setRejectSub] = useState(false)
+  const [donePage, setDonePage] = useState({ leave: 0, swap: 0, trans: 0 })
+  const PAGE_SIZE = 5
 
   const load = useCallback(async () => {
     sLd(true)
@@ -121,9 +123,9 @@ export default function ApprovalCenter({ user, t, tk }) {
   const pendL = lr.filter((r) => r.status === "申請中")
   const pendS = sw.filter((r) => r.status === "申請中")
   const pendTc = tcr.filter((r) => r.status === "申請中")
-  const doneL = lr.filter((r) => r.status !== "申請中").slice(0, 30)
-  const doneS = sw.filter((r) => r.status !== "申請中").slice(0, 30)
-  const doneTc = tcr.filter((r) => r.status !== "申請中").slice(0, 30)
+  const doneL = lr.filter((r) => r.status !== "申請中")
+  const doneS = sw.filter((r) => r.status !== "申請中")
+  const doneTc = tcr.filter((r) => r.status !== "申請中")
 
   const leaveTypeCounts = useMemo(() => {
     const m = {}
@@ -418,6 +420,36 @@ export default function ApprovalCenter({ user, t, tk }) {
     </h3>
   )
 
+  const Pager = ({ total, page, onPage }) => {
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    if (totalPages <= 1) return null
+    const safePage = Math.min(page, totalPages - 1)
+    const from = safePage * PAGE_SIZE + 1
+    const to = Math.min(total, (safePage + 1) * PAGE_SIZE)
+    const btn = (disabled) => ({
+      padding: "6px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgC,
+      color: disabled ? t.td : t.ts, fontSize: 12, fontWeight: 500,
+      cursor: disabled ? "not-allowed" : "pointer",
+      display: "inline-flex", alignItems: "center", gap: 4,
+    })
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 8, flexWrap: "wrap" }}>
+        <button disabled={safePage === 0} onClick={() => onPage(safePage - 1)} style={btn(safePage === 0)}>
+          <ChevronLeft size={14} /> 上一页
+        </button>
+        <span style={{ fontSize: 12, color: t.ts, minWidth: 80, textAlign: "center" }}>
+          第 <strong style={{ color: t.ac }}>{safePage + 1}</strong> / {totalPages} 页 · 共 {total} 条
+        </span>
+        <button disabled={safePage >= totalPages - 1} onClick={() => onPage(safePage + 1)} style={btn(safePage >= totalPages - 1)}>
+          下一页 <ChevronRight size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  const slicePage = (arr, page) => arr.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const setPage = (key, p) => setDonePage((prev) => ({ ...prev, [key]: Math.max(0, p) }))
+
   const totalPending = pendL.length + pendS.length + pendTc.length
 
   return (
@@ -495,13 +527,14 @@ export default function ApprovalCenter({ user, t, tk }) {
           {doneL.length > 0 && (
             <>
               <SectionTitle text={`最近已处理（${doneL.length}件）`} color={t.ts} />
-              {doneL.map((r) => <div key={r.id}>{renderSingleCard({
+              {slicePage(doneL, donePage.leave).map((r) => <div key={r.id}>{renderSingleCard({
                 rec: r,
                 badge: leaveBadge(r),
                 dateText: fmtDateW(r.leave_date),
                 isPending: false,
                 approverName: r.approved_by ? emps[r.approved_by]?.name : null,
               })}</div>)}
+              <Pager total={doneL.length} page={donePage.leave} onPage={(p) => setPage("leave", p)} />
             </>
           )}
         </div>
@@ -544,13 +577,14 @@ export default function ApprovalCenter({ user, t, tk }) {
           {doneS.length > 0 && (
             <>
               <SectionTitle text={`最近已处理（${doneS.length}件）`} color={t.ts} />
-              {doneS.map((r) => <div key={r.id}>{renderSingleCard({
+              {slicePage(doneS, donePage.swap).map((r) => <div key={r.id}>{renderSingleCard({
                 rec: r,
                 badge: swapBadge(r),
                 dateText: `${fmtDateW(r.original_date)} → ${r.swap_date ? fmtDateW(r.swap_date) : "待定"}`,
                 isPending: false,
                 approverName: r.approved_by ? emps[r.approved_by]?.name : null,
               })}</div>)}
+              <Pager total={doneS.length} page={donePage.swap} onPage={(p) => setPage("swap", p)} />
             </>
           )}
         </div>
@@ -569,7 +603,8 @@ export default function ApprovalCenter({ user, t, tk }) {
           {doneTc.length > 0 && (
             <>
               <SectionTitle text={`最近已处理（${doneTc.length}件）`} color={t.ts} />
-              {doneTc.map((r) => renderTransCard(r, false))}
+              {slicePage(doneTc, donePage.trans).map((r) => renderTransCard(r, false))}
+              <Pager total={doneTc.length} page={donePage.trans} onPage={(p) => setPage("trans", p)} />
             </>
           )}
         </div>
