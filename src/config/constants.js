@@ -5,6 +5,7 @@ export const LEAVE_TYPES = [
   { v: "病假", l: "病假", c: "#DC2626", bg: "#FEE2E2", i: "🏥" },
   { v: "特休", l: "特休", c: "#7C3AED", bg: "#EDE9FE", i: "⭐" },
   { v: "欠勤", l: "欠勤", c: "#6B7280", bg: "#F3F4F6", i: "✖" },
+  { v: "赤日休", l: "赤日休", c: "#F97316", bg: "#FFEDD5", i: "🎌" },
 ]
 
 export const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"]

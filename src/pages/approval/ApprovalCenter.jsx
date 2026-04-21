@@ -173,7 +173,9 @@ export default function ApprovalCenter({ user, t, tk }) {
   }
   const swapBadge = (r) => {
     const swapColor = r.swap_type === "休日出勤" ? "#8B5CF6" : "#F59E0B"
-    const compColor = r.compensation_type === "換休" ? "#8B5CF6" : t.rd
+    const compColor = r.compensation_type === "換休" ? "#8B5CF6"
+      : r.compensation_type === "使用代休" ? "#0EA5E9"
+      : t.rd
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
         <span style={{ padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, color: swapColor, background: `${swapColor}18`, border: `1px solid ${swapColor}40`, whiteSpace: "nowrap" }}>{r.swap_type}</span>

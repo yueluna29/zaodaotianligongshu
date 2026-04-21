@@ -3,7 +3,7 @@ import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes, isFullTime, fmtDateW } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
-import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks, History, Users } from "lucide-react"
+import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks, History, Users, Flag } from "lucide-react"
 
 const mkTrans = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, claim_date: "", route: "", round_trip: true, amount: "", note: "" })
 const mkComm = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, entry_date: "", seq_number: "", student_name: "", tuition_amount: "", commission_rate: "", commission_amount: 0 })
@@ -38,6 +38,12 @@ export default function AttendanceList({ user, t, tk }) {
   const [compBal, setCompBal] = useState(0)
   const [showTL, setShowTL] = useState(false)
   const [leaveHistMode, setLeaveHistMode] = useState(false)
+
+  // ====== 红日子休息记录 (赤日休) ======
+  const [akaShow, setAkaShow] = useState(false)
+  const [akaSub, setAkaSub] = useState(false)
+  const [akaFm, setAkaFm] = useState({ dates: [], reason: "" })
+  const [akaEditId, setAkaEditId] = useState(null)
 
   // ====== 换休 ======
   const [swapReqs, setSwapReqs] = useState([])
@@ -205,14 +211,14 @@ export default function AttendanceList({ user, t, tk }) {
   const resetLeaveForm = () => { setLeaveFm({ leave_type: "有休", dates: [], reason: "", is_half_day: false }); setLeaveEditId(null); setLeaveShow(false) }
 
   const submitLeave = async () => {
-    if (!leaveFm.dates.length) return
+    if (!leaveFm.dates.length || !leaveFm.reason.trim()) return
     setLeaveSub(true)
     const targetId = leaveHistMode && selEmp ? selEmp : user.id
     if (leaveEditId) {
-      await sbPatch(`leave_requests?id=eq.${leaveEditId}`, { leave_type: leaveFm.leave_type, leave_date: leaveFm.dates[0], reason: leaveFm.reason || null, is_half_day: leaveFm.is_half_day }, tk)
+      await sbPatch(`leave_requests?id=eq.${leaveEditId}`, { leave_type: "有休", leave_date: leaveFm.dates[0], reason: leaveFm.reason.trim(), is_half_day: leaveFm.is_half_day }, tk)
     } else {
       for (const date of leaveFm.dates) {
-        const rec = { employee_id: targetId, leave_type: leaveFm.leave_type, leave_date: date, reason: leaveFm.reason || null, is_half_day: leaveFm.is_half_day }
+        const rec = { employee_id: targetId, leave_type: "有休", leave_date: date, reason: leaveFm.reason.trim(), is_half_day: leaveFm.is_half_day }
         if (leaveHistMode) { rec.status = "承認"; rec.approved_at = new Date().toISOString() }
         await sbPost("leave_requests", rec, tk)
       }
@@ -231,10 +237,38 @@ export default function AttendanceList({ user, t, tk }) {
     await sbDel(`leave_requests?id=eq.${id}`, tk); await load()
   }
 
+  // ==================== 红日子休息记录 (赤日休) ====================
+  const resetAkaForm = () => { setAkaFm({ dates: [], reason: "" }); setAkaEditId(null); setAkaShow(false) }
+
+  const submitAka = async () => {
+    if (!akaFm.dates.length || !akaFm.reason.trim()) return
+    setAkaSub(true)
+    const targetId = (isAdmin && leaveViewEmp) ? leaveViewEmp : user.id
+    if (akaEditId) {
+      await sbPatch(`leave_requests?id=eq.${akaEditId}`, {
+        leave_date: akaFm.dates[0], reason: akaFm.reason.trim(),
+      }, tk)
+    } else {
+      for (const date of akaFm.dates) {
+        await sbPost("leave_requests", {
+          employee_id: targetId, leave_type: "赤日休", leave_date: date,
+          reason: akaFm.reason.trim(), is_half_day: false,
+        }, tk)
+      }
+    }
+    await load(); resetAkaForm(); setAkaSub(false)
+  }
+
+  const startAkaEdit = (r) => {
+    setAkaFm({ dates: [r.leave_date], reason: r.reason || "" })
+    setAkaEditId(r.id); setAkaShow(true); setTab("aka")
+  }
+
   // ==================== 过去记录（自助补录） ====================
   const resetHistForm = () => { setHistFm({ leave_type: "有休", dates: [], reason: "", is_half_day: false, work_date: "" }); setHistEditId(null); setHistShow(false) }
 
   const submitHist = async () => {
+    if (!histFm.reason.trim()) return
     if (histFm.leave_type === "有休") {
       if (!histFm.dates.length) return
       setHistSub(true)
@@ -291,18 +325,31 @@ export default function AttendanceList({ user, t, tk }) {
   const resetSwapForm = () => { setSwapFm({ swap_type: "休日出勤", original_dates: [], swap_date: "", compensation_type: "換休", reason: "" }); setSwapEditId(null); setSwapShow(false) }
 
   const submitSwap = async () => {
-    if (!swapFm.original_dates.length) return
+    if (!swapFm.original_dates.length || !swapFm.reason.trim()) return
+    if (swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "使用代休") {
+      const available = Math.max(0, compBal + unusedComp - usedViaSwap)
+      if (available < swapFm.original_dates.length) {
+        alert(`代休余额不足：申请 ${swapFm.original_dates.length} 天，可用 ${available} 天`)
+        return
+      }
+    }
     setSwapSub(true)
     const targetId = swapHistMode && selEmp ? selEmp : user.id
+    // compensation_type：休日出勤 -> 換休/加班；出勤日休息 -> NULL（補班）或 使用代休
+    const compTypeOf = () => {
+      if (swapFm.swap_type === "休日出勤") return swapFm.compensation_type
+      if (swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "使用代休") return "使用代休"
+      return null
+    }
     if (swapEditId) {
-      const patch = { swap_type: swapFm.swap_type, original_date: swapFm.original_dates[0], swap_date: swapFm.swap_date || null, compensation_type: swapFm.swap_type === "休日出勤" ? swapFm.compensation_type : null, reason: swapFm.reason || null }
+      const patch = { swap_type: swapFm.swap_type, original_date: swapFm.original_dates[0], swap_date: swapFm.swap_date || null, compensation_type: compTypeOf(), reason: swapFm.reason.trim() }
       if (swapFm.swap_type === "休日出勤" && swapFm.compensation_type === "換休") {
         const d = new Date(swapFm.original_dates[0]); d.setDate(d.getDate() + 60); patch.deadline = d.toISOString().split("T")[0]
       } else { patch.deadline = null }
       await sbPatch(`day_swap_requests?id=eq.${swapEditId}`, patch, tk)
     } else {
       for (const date of swapFm.original_dates) {
-        const payload = { employee_id: targetId, swap_type: swapFm.swap_type, original_date: date, swap_date: swapFm.original_dates.length === 1 ? (swapFm.swap_date || null) : null, compensation_type: swapFm.swap_type === "休日出勤" ? swapFm.compensation_type : null, reason: swapFm.reason || null }
+        const payload = { employee_id: targetId, swap_type: swapFm.swap_type, original_date: date, swap_date: swapFm.original_dates.length === 1 ? (swapFm.swap_date || null) : null, compensation_type: compTypeOf(), reason: swapFm.reason.trim() }
         if (swapFm.swap_type === "休日出勤" && swapFm.compensation_type === "換休") {
           const d = new Date(date); d.setDate(d.getDate() + 60); payload.deadline = d.toISOString().split("T")[0]
         }
@@ -314,7 +361,8 @@ export default function AttendanceList({ user, t, tk }) {
   }
 
   const startSwapEdit = (r) => {
-    setSwapFm({ swap_type: r.swap_type, original_dates: [r.original_date], swap_date: r.swap_date || "", compensation_type: r.compensation_type || "換休", reason: r.reason || "" })
+    const defaultComp = r.compensation_type ?? (r.swap_type === "休日出勤" ? "換休" : "")
+    setSwapFm({ swap_type: r.swap_type, original_dates: [r.original_date], swap_date: r.swap_date || "", compensation_type: defaultComp, reason: r.reason || "" })
     setSwapEditId(r.id); setSwapShow(true); setTab("swap")
   }
 
@@ -423,7 +471,9 @@ export default function AttendanceList({ user, t, tk }) {
 
   const swapApproved = swapReqs.filter(r => r.status === "承認")
   const unusedComp = swapApproved.filter(r => r.swap_type === "休日出勤" && r.compensation_type === "換休" && !r.swap_date).length
-  const leavePending = leaveReqs.filter(r => r.status === "申請中").length
+  const usedViaSwap = swapApproved.filter(r => r.swap_type === "出勤日休息" && r.compensation_type === "使用代休").length
+  const leavePending = leaveReqs.filter(r => r.status === "申請中" && r.leave_type !== "赤日休").length
+  const akaPending = leaveReqs.filter(r => r.status === "申請中" && r.leave_type === "赤日休").length
   const swapPending = swapReqs.filter(r => r.status === "申請中").length
 
   // ==================== 样式 ====================
@@ -471,9 +521,10 @@ export default function AttendanceList({ user, t, tk }) {
 
   // ==================== Tab 定义 ====================
   const leaveSubTabs = [
-    { key: "leave", label: "假期申请", icon: CalendarX2, badge: leavePending },
+    { key: "leave", label: "带薪休假申请", icon: CalendarX2, badge: leavePending },
+    { key: "aka", label: "红日子休息记录", icon: Flag, badge: akaPending },
+    { key: "swap", label: "换休申请", icon: ArrowLeftRight, badge: swapPending },
     { key: "history", label: "过去记录", icon: History },
-    { key: "swap", label: "换休管理", icon: ArrowLeftRight, badge: swapPending },
   ]
   const expenseSubTabs = [
     { key: "summary", label: "报销一览", icon: ListChecks },
@@ -489,7 +540,7 @@ export default function AttendanceList({ user, t, tk }) {
   }
   const mainTabsDef = [
     { key: "work", label: "勤务时间登记", icon: ClipboardList },
-    { key: "leave", label: "假期管理", icon: CalendarX2, badge: leavePending + swapPending },
+    { key: "leave", label: "假期管理", icon: CalendarX2, badge: leavePending + akaPending + swapPending },
     ...(isAdmin ? [{ key: "overview", label: "团队假期总览", icon: Users }] : []),
     { key: "expense", label: "报销", icon: Banknote },
   ]
@@ -542,7 +593,7 @@ export default function AttendanceList({ user, t, tk }) {
           } else if (mainTab === "leave") {
             cards.push(
               { l: "有休余额", v: `${bal.balance}天`, c: t.ac, sub: `本年${bal.currentGrant}+繰越${bal.carryOver}-已用${bal.used}`, click: () => setShowTL(p => !p) },
-              { l: "代休余额", v: `${compBal + unusedComp}天`, c: "#8B5CF6" },
+              { l: "代休余额", v: `${Math.max(0, compBal + unusedComp - usedViaSwap)}天`, c: "#8B5CF6" },
             )
           } else { // expense
             cards.push(
@@ -742,11 +793,8 @@ export default function AttendanceList({ user, t, tk }) {
                 <HistModeUI histMode={leaveHistMode} setHistMode={setLeaveHistMode} editId={leaveEditId} />
               </div>
               <HistEmpSelect histMode={leaveHistMode} />
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
-                <select value={leaveFm.leave_type} onChange={(e) => setLeaveFm(p => ({ ...p, leave_type: e.target.value }))} style={fmS}>{LEAVE_TYPES.filter(l => l.v !== "代休").map((l) => <option key={l.v} value={l.v}>{l.l}</option>)}</select>
-                {leaveFm.leave_type === "代休" && <div style={{ fontSize: 10, color: t.wn, marginTop: 4 }}>⚠ 代休请去「换休管理」tab 填消化日期</div>}
-              </div>
+              <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 6, background: `${t.ac}10`, fontSize: 11, color: t.ac, fontWeight: 500 }}>
+                申请类型：<strong>有休（带薪休假）</strong> · 赤日休请到「红日子休息记录」，换休请到「换休申请」</div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{leaveEditId ? "日期" : "选择日期（点击选取，可多选）"}</label>
                 {leaveEditId ? (
@@ -763,39 +811,99 @@ export default function AttendanceList({ user, t, tk }) {
                 <span style={{ fontSize: 10, color: t.tm }}>{leaveFm.is_half_day ? "0.5天" : "1天"}</span>
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>理由</label>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>理由 <span style={{ color: t.rd }}>*</span></label>
                 <input placeholder="例：私事、身体不适" value={leaveFm.reason} onChange={(e) => setLeaveFm(p => ({ ...p, reason: e.target.value }))} style={fmS} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={submitLeave} disabled={leaveSub || !leaveFm.dates.length || (leaveHistMode && !selEmp)} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (leaveSub || !leaveFm.dates.length) ? "not-allowed" : "pointer", opacity: (leaveSub || !leaveFm.dates.length || (leaveHistMode && !selEmp)) ? 0.5 : 1 }}>{leaveSub ? "提交中..." : leaveEditId ? "保存修改" : `提交申请（${leaveFm.dates.length}天）`}</button>
+                <button onClick={submitLeave} disabled={leaveSub || !leaveFm.dates.length || !leaveFm.reason.trim() || (leaveHistMode && !selEmp)} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (leaveSub || !leaveFm.dates.length || !leaveFm.reason.trim()) ? "not-allowed" : "pointer", opacity: (leaveSub || !leaveFm.dates.length || !leaveFm.reason.trim() || (leaveHistMode && !selEmp)) ? 0.5 : 1 }}>{leaveSub ? "提交中..." : leaveEditId ? "保存修改" : `提交申请（${leaveFm.dates.length}天）`}</button>
                 {leaveEditId && <button onClick={resetLeaveForm} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>取消编辑</button>}
               </div>
             </div>
           )}
 
           <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
-            {!leaveReqs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无申请记录</div> : leaveReqs.map((r) => {
-              const lt = LEAVE_TYPES.find((l) => l.v === r.leave_type)
-              const isPending = r.status === "申請中"
-              return (
-                <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{r.leave_type}</span>
-                    <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.leave_date)}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
-                    {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
+            {(() => {
+              const list = leaveReqs.filter(r => r.leave_type === "有休")
+              if (!list.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无申请记录</div>
+              return list.map((r) => {
+                const lt = LEAVE_TYPES.find((l) => l.v === r.leave_type)
+                const isPending = r.status === "申請中"
+                return (
+                  <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: lt?.c, background: (lt?.bg || "#eee") + "33" }}>{r.leave_type}</span>
+                      <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.leave_date)}{r.is_half_day && <span style={{ fontSize: 9, color: t.ac, marginLeft: 4 }}>半天</span>}</span>
+                      {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {isPending && (
+                        <button onClick={() => startLeaveEdit(r)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
+                      )}
+                      <span style={statusBadge(r.status)}>{r.status}</span>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {(isPending || isAdmin) && (
-                      <button onClick={() => startLeaveEdit(r)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
-                    )}
-                    {(isPending || isAdmin) && (
-                      <button onClick={() => delLeave(r.id, r.status)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>{isPending ? "取消" : "删除"}</button>
-                    )}
-                    <span style={statusBadge(r.status)}>{r.status}</span>
+                )
+              })
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ====== 红日子休息记录 Tab (赤日休) ====== */}
+      {mainTab === "leave" && tab === "aka" && (
+        <div>
+          <div style={{ padding: "10px 14px", borderRadius: 8, background: "#F9731610", border: "1px solid #F9731630", marginBottom: 12, fontSize: 11, color: "#C2410C", lineHeight: 1.5 }}>
+            红日子本来就应该休息，但为了记录每位成员当天的状态，<strong>休息了的人也请登记一下</strong>（需要审批）。出勤的人请去「换休申请」登记。
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button onClick={() => { if (akaShow) resetAkaForm(); else setAkaShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: akaShow ? `1px solid ${t.bd}` : "none", background: akaShow ? "transparent" : t.ac, color: akaShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{akaShow ? "✕ 关闭" : <><Plus size={14} /> {leaveViewEmp ? `给 ${allEmps.find(e => e.id === leaveViewEmp)?.name} 登记休息` : "登记休息"}</>}</button>
+          </div>
+
+          {akaShow && (
+            <div style={{ background: t.bgC, borderRadius: 12, padding: 22, border: `2px solid #F9731640`, marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: t.tx, margin: "0 0 14px" }}>{akaEditId ? "编辑红日子休息记录" : "登记红日子休息"}</h3>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{akaEditId ? "日期" : "选择日期（点击选取，可多选；建议仅选红日子）"}</label>
+                {akaEditId ? (
+                  <input type="date" value={akaFm.dates[0] || ""} onChange={(e) => setAkaFm(p => ({ ...p, dates: [e.target.value] }))} style={fmS} />
+                ) : (
+                  <DateMultiPicker selected={akaFm.dates} onChange={(dates) => setAkaFm(p => ({ ...p, dates }))} t={t} tk={tk} />
+                )}
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>理由 <span style={{ color: t.rd }}>*</span></label>
+                <input placeholder="例：元日休息、GW休息、国庆休息" value={akaFm.reason} onChange={(e) => setAkaFm(p => ({ ...p, reason: e.target.value }))} style={fmS} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={submitAka} disabled={akaSub || !akaFm.dates.length || !akaFm.reason.trim()} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: "#F97316", color: "#fff", fontSize: 13, fontWeight: 600, cursor: (akaSub || !akaFm.dates.length || !akaFm.reason.trim()) ? "not-allowed" : "pointer", opacity: (akaSub || !akaFm.dates.length || !akaFm.reason.trim()) ? 0.5 : 1 }}>{akaSub ? "提交中..." : akaEditId ? "保存修改" : `提交登记（${akaFm.dates.length}天）`}</button>
+                {akaEditId && <button onClick={resetAkaForm} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>取消编辑</button>}
+              </div>
+            </div>
+          )}
+
+          <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
+            {(() => {
+              const list = leaveReqs.filter(r => r.leave_type === "赤日休")
+              if (!list.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无红日子休息记录</div>
+              return list.map((r) => {
+                const isPending = r.status === "申請中"
+                return (
+                  <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: "#F97316", background: "#FFEDD555" }}>赤日休</span>
+                      <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.leave_date)}</span>
+                      {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {isPending && (
+                        <button onClick={() => startAkaEdit(r)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
+                      )}
+                      <span style={statusBadge(r.status)}>{r.status}</span>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })
+            })()}
           </div>
         </div>
       )}
@@ -807,7 +915,7 @@ export default function AttendanceList({ user, t, tk }) {
         return (
         <div>
           <div style={{ padding: "10px 14px", borderRadius: 8, background: `${t.ac}08`, border: `1px solid ${t.ac}20`, marginBottom: 12, fontSize: 11, color: t.tm, lineHeight: 1.5 }}>
-            这里补录<strong style={{ color: t.tx }}>已经休过</strong>的有休 / 代休（无需审批，会自动算入余额）。新申请请到「假期申请」或「换休管理」tab。
+            这里补录<strong style={{ color: t.tx }}>已经休过</strong>的有休 / 代休（无需审批，会自动算入余额）。新申请请到「带薪休假申请」或「换休申请」tab。
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button onClick={() => { if (histShow) resetHistForm(); else setHistShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: histShow ? `1px solid ${t.bd}` : "none", background: histShow ? "transparent" : t.ac, color: histShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{histShow ? "✕ 关闭" : <><Plus size={14} /> {leaveViewEmp ? `给 ${allEmps.find(e => e.id === leaveViewEmp)?.name} 记录` : "记录"}</>}</button>
@@ -822,7 +930,7 @@ export default function AttendanceList({ user, t, tk }) {
                   <option value="有休">有休</option>
                   <option value="代休">代休（节假日出勤换的休）</option>
                 </select>
-                {isDaikyu && <div style={{ fontSize: 10, color: t.tm, marginTop: 4 }}>代休需要同时填"出勤日"和"代休日"，会自动同步到换休管理表。</div>}
+                {isDaikyu && <div style={{ fontSize: 10, color: t.tm, marginTop: 4 }}>代休需要同时填"出勤日"和"代休日"，会自动同步到换休申请表。</div>}
               </div>
 
               {isDaikyu ? (
@@ -857,11 +965,11 @@ export default function AttendanceList({ user, t, tk }) {
               )}
 
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>备注（选填）</label>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>理由 <span style={{ color: t.rd }}>*</span></label>
                 <input placeholder={isDaikyu ? "例：清明节加班" : "例：私事、身体不适"} value={histFm.reason} onChange={(e) => setHistFm(p => ({ ...p, reason: e.target.value }))} style={fmS} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={submitHist} disabled={histSub || !canSubmit} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (histSub || !canSubmit) ? "not-allowed" : "pointer", opacity: (histSub || !canSubmit) ? 0.5 : 1 }}>{histSub ? "保存中..." : histEditId ? "保存修改" : isDaikyu ? "记录" : `记录（${histFm.dates.length}天）`}</button>
+                <button onClick={submitHist} disabled={histSub || !canSubmit || !histFm.reason.trim()} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (histSub || !canSubmit || !histFm.reason.trim()) ? "not-allowed" : "pointer", opacity: (histSub || !canSubmit || !histFm.reason.trim()) ? 0.5 : 1 }}>{histSub ? "保存中..." : histEditId ? "保存修改" : isDaikyu ? "记录" : `记录（${histFm.dates.length}天）`}</button>
                 {histEditId && <button onClick={resetHistForm} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>取消编辑</button>}
               </div>
             </div>
@@ -923,20 +1031,25 @@ export default function AttendanceList({ user, t, tk }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>类型</label>
-                  <select value={swapFm.swap_type} onChange={(e) => setSwapFm(p => ({ ...p, swap_type: e.target.value }))} style={fmS}>
+                  <select value={swapFm.swap_type} onChange={(e) => setSwapFm(p => ({ ...p, swap_type: e.target.value, compensation_type: e.target.value === "休日出勤" ? "換休" : "" }))} style={fmS}>
                     <option value="休日出勤">休日出勤（定休日/祝日上班）</option>
                     <option value="出勤日休息">出勤日休息（工作日临时休息）</option>
                   </select>
                 </div>
-                {swapFm.swap_type === "休日出勤" && (
-                  <div>
-                    <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>补偿方式</label>
+                <div>
+                  <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>补偿方式</label>
+                  {swapFm.swap_type === "休日出勤" ? (
                     <select value={swapFm.compensation_type} onChange={(e) => setSwapFm(p => ({ ...p, compensation_type: e.target.value }))} style={fmS}>
                       <option value="換休">換休（换一天休息）</option>
                       <option value="加班">加班（算加班费）</option>
                     </select>
-                  </div>
-                )}
+                  ) : (
+                    <select value={swapFm.compensation_type} onChange={(e) => setSwapFm(p => ({ ...p, compensation_type: e.target.value, swap_date: e.target.value === "使用代休" ? "" : p.swap_date }))} style={fmS}>
+                      <option value="">補班（工作日另补一天）</option>
+                      <option value="使用代休">使用代休余额（消化 1 天代休）</option>
+                    </select>
+                  )}
+                </div>
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>
@@ -948,10 +1061,15 @@ export default function AttendanceList({ user, t, tk }) {
                   <DateMultiPicker selected={swapFm.original_dates} onChange={(dates) => setSwapFm(p => ({ ...p, original_dates: dates }))} t={t} tk={tk} />
                 )}
               </div>
-              {(swapEditId || swapFm.original_dates.length === 1) && (
+              {(swapEditId || swapFm.original_dates.length === 1) && !(swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "使用代休") && (
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{swapFm.swap_type === "休日出勤" ? "换休日期（可留空=待定）" : "补班日期（可留空=待定）"}</label>
                   <input type="date" value={swapFm.swap_date} onChange={(e) => setSwapFm(p => ({ ...p, swap_date: e.target.value }))} style={fmS} />
+                </div>
+              )}
+              {swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "使用代休" && (
+                <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: `${t.ac}10`, fontSize: 10, color: t.ac, lineHeight: 1.5 }}>
+                  该申请批准后将消化 1 天代休余额，不需要额外补班。当前可用代休：<strong>{Math.max(0, compBal + unusedComp - usedViaSwap)}</strong> 天
                 </div>
               )}
               {!swapEditId && swapFm.original_dates.length > 1 && (
@@ -960,11 +1078,11 @@ export default function AttendanceList({ user, t, tk }) {
                 </div>
               )}
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>理由</label>
+                <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>理由 <span style={{ color: t.rd }}>*</span></label>
                 <input placeholder="例：旺季需要出勤" value={swapFm.reason} onChange={(e) => setSwapFm(p => ({ ...p, reason: e.target.value }))} style={fmS} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={submitSwap} disabled={swapSub || !swapFm.original_dates.length || (swapHistMode && !selEmp)} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (swapSub || !swapFm.original_dates.length) ? "not-allowed" : "pointer", opacity: (swapSub || !swapFm.original_dates.length || (swapHistMode && !selEmp)) ? 0.5 : 1 }}>{swapSub ? "提交中..." : swapEditId ? "保存修改" : `提交申请（${swapFm.original_dates.length}天）`}</button>
+                <button onClick={submitSwap} disabled={swapSub || !swapFm.original_dates.length || !swapFm.reason.trim() || (swapHistMode && !selEmp)} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: (swapSub || !swapFm.original_dates.length || !swapFm.reason.trim()) ? "not-allowed" : "pointer", opacity: (swapSub || !swapFm.original_dates.length || !swapFm.reason.trim() || (swapHistMode && !selEmp)) ? 0.5 : 1 }}>{swapSub ? "提交中..." : swapEditId ? "保存修改" : `提交申请（${swapFm.original_dates.length}天）`}</button>
                 {swapEditId && <button onClick={resetSwapForm} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 13, cursor: "pointer" }}>取消编辑</button>}
               </div>
             </div>
@@ -973,22 +1091,23 @@ export default function AttendanceList({ user, t, tk }) {
           <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
             {!swapReqs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无换休记录</div> : swapReqs.map((r) => {
               const isPending = r.status === "申請中"
+              const compColor = r.compensation_type === "換休" ? "#8B5CF6" : r.compensation_type === "使用代休" ? "#0EA5E9" : t.rd
+              const usingDaikyu = r.compensation_type === "使用代休"
               return (
                 <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: r.swap_type === "休日出勤" ? "#8B5CF6" : "#F59E0B", background: r.swap_type === "休日出勤" ? "#8B5CF620" : "#F59E0B20" }}>{r.swap_type}</span>
-                    {r.swap_type === "休日出勤" && <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: r.compensation_type === "換休" ? "#8B5CF6" : t.rd, background: r.compensation_type === "換休" ? "#8B5CF610" : `${t.rd}10` }}>{r.compensation_type}</span>}
+                    {r.compensation_type && <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, color: compColor, background: `${compColor}15` }}>{r.compensation_type}</span>}
                     <span style={{ fontSize: 12, color: t.tx, fontFamily: "monospace" }}>{fmtDateW(r.original_date)}</span>
-                    <span style={{ fontSize: 10, color: t.tm }}>→</span>
-                    <span style={{ fontSize: 12, color: r.swap_date ? t.tx : t.td, fontFamily: "monospace" }}>{r.swap_date ? fmtDateW(r.swap_date) : "待定"}</span>
+                    {!usingDaikyu && (<>
+                      <span style={{ fontSize: 10, color: t.tm }}>→</span>
+                      <span style={{ fontSize: 12, color: r.swap_date ? t.tx : t.td, fontFamily: "monospace" }}>{r.swap_date ? fmtDateW(r.swap_date) : "待定"}</span>
+                    </>)}
                     {r.reason && <span style={{ fontSize: 11, color: t.ts }}>{r.reason}</span>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {(isPending || isAdmin) && (
+                    {isPending && (
                       <button onClick={() => startSwapEdit(r)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 10, cursor: "pointer" }}>编辑</button>
-                    )}
-                    {(isPending || isAdmin) && (
-                      <button onClick={() => delSwap(r.id, r.status)} style={{ padding: "3px 10px", borderRadius: 5, border: `1px solid ${t.rd}33`, background: "transparent", color: t.rd, fontSize: 10, cursor: "pointer" }}>{isPending ? "取消" : "删除"}</button>
                     )}
                     <span style={statusBadge(r.status)}>{r.status}</span>
                   </div>
