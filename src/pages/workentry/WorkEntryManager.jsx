@@ -44,13 +44,13 @@ const AmbientBlobs = () => (
   </>
 )
 
-function HoverBtn({ children, primary, onClick, style, danger, disabled, t }) {
+function HoverBtn({ children, primary, onClick, style, danger, disabled, t, title }) {
   const [hv, setHv] = useState(false)
   const baseBg = primary ? t.ac : (danger ? "transparent" : "transparent")
   const hoverBg = primary ? t.ah : (danger ? `${t.rd}10` : t.bgH)
   const textColor = primary ? "#fff" : (danger ? t.rd : t.ts)
   return (
-    <button
+    <button title={title}
       onMouseEnter={() => setHv(true)} onMouseLeave={() => setHv(false)} onClick={onClick} disabled={disabled}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -306,8 +306,9 @@ export default function WorkEntryManager({ user, t, tk }) {
   // 提交状态：已提交且非管理员 → 锁定
   const isSubmitted = submission?.status === "submitted"
   const locked = isSubmitted && !isAdmin
-  const expensesLocked = (isSubmitted || !!sectionConfirms.expenses) && !isAdmin
-  const commissionsLocked = (isSubmitted || !!sectionConfirms.commissions) && !isAdmin
+  // 分段确认 = 只读显示（有 编辑 按钮可切回编辑态）；全月提交则整页锁（admin 可解锁）
+  const expensesLocked = isSubmitted || !!sectionConfirms.expenses
+  const commissionsLocked = isSubmitted || !!sectionConfirms.commissions
   const canSubmit = !isAdmin && !isSubmitted && savedWork.length > 0 && !hasChanges
 
   const submitReport = async () => {
@@ -354,12 +355,9 @@ export default function WorkEntryManager({ user, t, tk }) {
     await load()
   }
 
-  const unlockSection = async (section) => {
-    if (!isAdmin) return
+  const editSection = async (section) => {
     const conf = sectionConfirms[section]
     if (!conf) return
-    const label = section === "expenses" ? "其他报销" : "签单提成"
-    if (!confirm(`确认解锁 ${month}月 ${label}？员工将可以再次编辑。`)) return
     await sbDel(`monthly_section_confirmations?id=eq.${conf.id}`, tk)
     await load()
   }
@@ -726,30 +724,39 @@ export default function WorkEntryManager({ user, t, tk }) {
 
               {/* 其他报销 */}
               <div style={{ ...glassCard, padding: 20 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
-                    <Receipt size={16} color={t.wn} /> 其他报销（当日）
-                    {sectionConfirms.expenses && <span style={{ fontSize: 10, fontWeight: 600, color: t.gn, background: `${t.gn}18`, padding: "2px 8px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 4 }}><Lock size={10} /> 已确认</span>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <Receipt size={16} color={t.wn} style={{ flexShrink: 0 }} /> 其他报销（当日）
                   </h3>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {!expensesLocked && <HoverBtn onClick={addExpForDay} disabled={locked} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Plus size={13} /> 加一笔</HoverBtn>}
-                    {!isAdmin && !sectionConfirms.expenses && !isSubmitted && savedExp.length > 0 && !hasChanges && (
-                      <HoverBtn onClick={() => setConfirmSectionModal("expenses")} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Check size={13} /> 确认报销</HoverBtn>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    {!expensesLocked && <HoverBtn onClick={addExpForDay} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
+                    {!expensesLocked && !isSubmitted && savedExp.length > 0 && !hasChanges && !sectionConfirms.expenses && (
+                      <HoverBtn onClick={() => setConfirmSectionModal("expenses")} title="确认报销" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                     )}
-                    {isAdmin && sectionConfirms.expenses && (
-                      <HoverBtn onClick={() => unlockSection("expenses")} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Unlock size={13} /> 解锁</HoverBtn>
+                    {sectionConfirms.expenses && !isSubmitted && (
+                      <HoverBtn onClick={() => editSection("expenses")} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
                     )}
                   </div>
                 </div>
                 {dayExp.length === 0 ? (
                   <div style={{ fontSize: 12, color: t.td }}>当日无其他报销记录</div>
+                ) : expensesLocked ? (
+                  // 只读显示模式
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {dayExp.map(r => (
+                      <div key={r._key} style={{ display: "flex", gap: 14, padding: "8px 2px", borderBottom: `1px dashed ${t.bl}`, alignItems: "baseline" }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: t.wn, minWidth: 90, fontVariantNumeric: "tabular-nums" }}>¥{Number(r.other_expense || 0).toLocaleString()}</span>
+                        <span style={{ fontSize: 13, color: t.ts }}>{r.other_expense_note || <span style={{ color: t.td }}>—</span>}</span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {dayExp.map(r => (
                       <div key={r._key} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                        <input type="number" placeholder="金额 (円)" disabled={expensesLocked} value={r.other_expense} onChange={e => updateRow(r._key, "other_expense", e.target.value)} style={{ ...inputStyle(t), width: 130 }} />
-                        <input placeholder="报销说明（如：文具）" disabled={expensesLocked} value={r.other_expense_note} onChange={e => updateRow(r._key, "other_expense_note", e.target.value)} style={{ ...inputStyle(t), flex: 1, minWidth: 180 }} />
-                        {!expensesLocked && <HoverBtn danger onClick={() => r._isNew ? removeRow(r._key) : delExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={14} /></HoverBtn>}
+                        <input type="number" placeholder="金额 (円)" value={r.other_expense} onChange={e => updateRow(r._key, "other_expense", e.target.value)} style={{ ...inputStyle(t), width: 130 }} />
+                        <input placeholder="报销说明（如：文具）" value={r.other_expense_note} onChange={e => updateRow(r._key, "other_expense_note", e.target.value)} style={{ ...inputStyle(t), flex: 1, minWidth: 180 }} />
+                        <HoverBtn danger onClick={() => r._isNew ? removeRow(r._key) : delExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={14} /></HoverBtn>
                       </div>
                     ))}
                   </div>
@@ -759,57 +766,70 @@ export default function WorkEntryManager({ user, t, tk }) {
               {/* 签单提成（月度，不按日） */}
               {showComm && (
                 <div style={{ ...glassCard, padding: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <FileText size={16} color="#EC4899" /> 签单提成
-                      <span style={{ fontSize: 11, color: t.tm, fontWeight: 500 }}>（{month}月 · {commRows.filter(r => !r._isNew).length}笔）</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 10 }}>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                      <FileText size={16} color="#EC4899" style={{ flexShrink: 0 }} /> 签单提成
+                      <span style={{ fontSize: 11, color: t.tm, fontWeight: 500 }}>{month}月 · {commRows.filter(r => !r._isNew).length}笔</span>
                       {totalComm > 0 && <span style={{ fontSize: 13, fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums", background: "rgba(236,72,153,0.1)", padding: "3px 10px", borderRadius: 8 }}>¥{totalComm.toLocaleString()}</span>}
-                      {sectionConfirms.commissions && <span style={{ fontSize: 10, fontWeight: 600, color: t.gn, background: `${t.gn}18`, padding: "2px 8px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 4 }}><Lock size={10} /> 已确认</span>}
                     </h3>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {!commissionsLocked && <HoverBtn onClick={addCommRow} disabled={locked} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Plus size={13} /> 加一笔</HoverBtn>}
-                      {!isAdmin && !sectionConfirms.commissions && !isSubmitted && savedComm.length > 0 && !hasChanges && (
-                        <HoverBtn onClick={() => setConfirmSectionModal("commissions")} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Check size={13} /> 确认提成</HoverBtn>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      {!commissionsLocked && <HoverBtn onClick={addCommRow} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
+                      {!commissionsLocked && !isSubmitted && savedComm.length > 0 && !hasChanges && !sectionConfirms.commissions && (
+                        <HoverBtn onClick={() => setConfirmSectionModal("commissions")} title="确认提成" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                       )}
-                      {isAdmin && sectionConfirms.commissions && (
-                        <HoverBtn onClick={() => unlockSection("commissions")} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Unlock size={13} /> 解锁</HoverBtn>
+                      {sectionConfirms.commissions && !isSubmitted && (
+                        <HoverBtn onClick={() => editSection("commissions")} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
                       )}
                     </div>
                   </div>
 
                   {commRows.length === 0 ? (
-                    <div style={{ padding: "30px 16px", textAlign: "center", color: t.td, fontSize: 12, borderRadius: 12, border: `1px dashed ${t.bd}`, background: "rgba(255,255,255,0.4)" }}>本月暂无签单提成记录，点右上角「加一笔」添加</div>
+                    <div style={{ padding: "30px 16px", textAlign: "center", color: t.td, fontSize: 12, borderRadius: 12, border: `1px dashed ${t.bd}`, background: "rgba(255,255,255,0.4)" }}>本月暂无签单提成记录，点右上角 + 添加</div>
                   ) : (
-                    <div>
-                      {/* 表头 */}
-                      <div style={{ display: "flex", gap: 6, padding: "0 8px 6px", fontSize: 10, color: t.tm, fontWeight: 600, letterSpacing: ".05em", borderBottom: `1px solid ${t.bd}`, marginBottom: 6 }}>
-                        <div style={{ width: 114 }}>日期</div>
-                        <div style={{ width: 56, textAlign: "center" }}>签号</div>
-                        <div style={{ flex: 1, minWidth: 80 }}>学生</div>
-                        <div style={{ width: 90, textAlign: "right" }}>学费</div>
-                        <div style={{ width: 52, textAlign: "right" }}>率%</div>
-                        <div style={{ width: 90, textAlign: "right" }}>提成</div>
-                        {!commissionsLocked && <div style={{ width: 26 }} />}
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        {commRows.map((r, idx) => {
-                          const rowBg = idx % 2 === 1 ? "rgba(236,72,153,0.04)" : "transparent"
-                          const compactInput = { border: `1px solid ${t.bd}`, borderRadius: 7, background: "rgba(255,255,255,0.85)", padding: "5px 8px", fontSize: 12, color: t.tx, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }
-                          return (
-                            <div key={r._key} style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 8px", background: rowBg, borderRadius: 8, flexWrap: "wrap" }}>
-                              <input type="date" disabled={commissionsLocked} value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...compactInput, width: 114 }} />
-                              <div style={{ display: "inline-flex", alignItems: "center", gap: 2, background: "#fff", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 7, padding: "2px 6px", width: 56, justifyContent: "center" }}>
-                                <span style={{ fontSize: 10, color: "#EC4899", fontWeight: 700 }}>#</span>
-                                <input type="number" placeholder="1" disabled={commissionsLocked} value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} style={{ width: 28, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 700, color: "#EC4899", textAlign: "center", fontFamily: "inherit" }} />
+                    <div style={{ overflowX: "auto", margin: "0 -4px" }}>
+                      <div style={{ minWidth: 540, padding: "0 4px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: commissionsLocked ? "116px 56px 1fr 92px 52px 96px" : "116px 56px 1fr 92px 52px 96px 32px", gap: 6, padding: "0 6px 6px", fontSize: 10, color: t.tm, fontWeight: 600, letterSpacing: ".05em", borderBottom: `1px solid ${t.bd}`, marginBottom: 6 }}>
+                          <div>日期</div>
+                          <div style={{ textAlign: "center" }}>签号</div>
+                          <div>学生</div>
+                          <div style={{ textAlign: "right" }}>学费</div>
+                          <div style={{ textAlign: "right" }}>率%</div>
+                          <div style={{ textAlign: "right" }}>提成</div>
+                          {!commissionsLocked && <div />}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          {commRows.map((r, idx) => {
+                            const rowBg = idx % 2 === 1 ? "rgba(236,72,153,0.04)" : "transparent"
+                            const compactInput = { border: `1px solid ${t.bd}`, borderRadius: 7, background: "rgba(255,255,255,0.85)", padding: "5px 8px", fontSize: 12, color: t.tx, outline: "none", fontFamily: "inherit", boxSizing: "border-box", width: "100%" }
+                            const displayText = { fontSize: 12, color: t.ts, padding: "5px 8px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+                            if (commissionsLocked) {
+                              return (
+                                <div key={r._key} style={{ display: "grid", gridTemplateColumns: "116px 56px 1fr 92px 52px 96px", gap: 6, alignItems: "center", padding: "6px", background: rowBg, borderRadius: 8 }}>
+                                  <div style={displayText}>{r.entry_date || "—"}</div>
+                                  <div style={{ ...displayText, textAlign: "center", color: "#EC4899", fontWeight: 700 }}>#{r.seq_number || "?"}</div>
+                                  <div style={displayText}>{r.student_name || "—"}</div>
+                                  <div style={{ ...displayText, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</div>
+                                  <div style={{ ...displayText, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.commission_rate || "0"}%</div>
+                                  <div style={{ ...displayText, textAlign: "right", fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.commission_amount || 0).toLocaleString()}</div>
+                                </div>
+                              )
+                            }
+                            return (
+                              <div key={r._key} style={{ display: "grid", gridTemplateColumns: "116px 56px 1fr 92px 52px 96px 32px", gap: 6, alignItems: "center", padding: "6px", background: rowBg, borderRadius: 8 }}>
+                                <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...compactInput }} />
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: 2, background: "#fff", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 7, padding: "2px 4px", justifyContent: "center" }}>
+                                  <span style={{ fontSize: 10, color: "#EC4899", fontWeight: 700 }}>#</span>
+                                  <input type="number" placeholder="1" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} style={{ width: 28, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 700, color: "#EC4899", textAlign: "center", fontFamily: "inherit", minWidth: 0 }} />
+                                </div>
+                                <input placeholder="学生姓名" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} style={{ ...compactInput }} />
+                                <input type="number" placeholder="0" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...compactInput, textAlign: "right" }} />
+                                <input type="number" placeholder="0" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...compactInput, textAlign: "right" }} />
+                                <div style={{ textAlign: "right", fontSize: 13, fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums", padding: "0 4px" }}>¥{Number(r.commission_amount || 0).toLocaleString()}</div>
+                                <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 4 }}><Trash2 size={12} /></HoverBtn>
                               </div>
-                              <input placeholder="学生姓名" disabled={commissionsLocked} value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} style={{ ...compactInput, flex: 1, minWidth: 80 }} />
-                              <input type="number" placeholder="0" disabled={commissionsLocked} value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...compactInput, width: 90, textAlign: "right" }} />
-                              <input type="number" placeholder="0" disabled={commissionsLocked} value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...compactInput, width: 52, textAlign: "right" }} />
-                              <div style={{ width: 90, textAlign: "right", fontSize: 13, fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.commission_amount || 0).toLocaleString()}</div>
-                              {!commissionsLocked && <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 5 }}><Trash2 size={13} /></HoverBtn>}
-                            </div>
-                          )
-                        })}
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                   )}
