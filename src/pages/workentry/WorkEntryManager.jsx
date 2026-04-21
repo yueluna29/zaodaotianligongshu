@@ -705,7 +705,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                     <Receipt size={16} color={t.wn} style={{ flexShrink: 0 }} /> 其他报销（当日）
                   </h3>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    {!expensesLocked && <HoverBtn onClick={addExpForDay} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
+                    {!isSubmitted && <HoverBtn onClick={() => { togglePreview("expenses", false); addExpForDay() }} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
                     {!expensesLocked && dayExp.length > 0 && (
                       <HoverBtn onClick={() => togglePreview("expenses", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                     )}
@@ -749,7 +749,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                       {totalComm > 0 && <span style={{ fontSize: 13, fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums", background: "rgba(236,72,153,0.1)", padding: "3px 10px", borderRadius: 8 }}>¥{totalComm.toLocaleString()}</span>}
                     </h3>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      {!commissionsLocked && <HoverBtn onClick={addCommRow} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
+                      {!isSubmitted && <HoverBtn onClick={() => { togglePreview("commissions", false); addCommRow() }} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
                       {!commissionsLocked && commRows.length > 0 && (
                         <HoverBtn onClick={() => togglePreview("commissions", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                       )}
@@ -781,20 +781,22 @@ export default function WorkEntryManager({ user, t, tk }) {
                               <div style={{ fontSize: 14, color: t.tx, fontWeight: 500 }}>{r.student_name || <span style={{ color: t.td }}>—</span>}</div>
                             </div>
                           </div>
-                          {/* 下半层：学费 × 率 = 金额 */}
-                          <div style={{ display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap", background: t.bgI, padding: 12, borderRadius: 12, border: `1px dashed ${t.bd}` }}>
-                            <div style={{ flex: "1 1 110px" }}>
-                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>学费总额 (円)</div>
-                              <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</div>
+                          {/* 下半层：学费 × 率（值行）+ = 金额（单独行） */}
+                          <div style={{ background: t.bgI, padding: 12, borderRadius: 12, border: `1px dashed ${t.bd}`, display: "flex", flexDirection: "column", gap: 10 }}>
+                            <div style={{ display: "flex", gap: 16, alignItems: "flex-end" }}>
+                              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                                <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>学费总额 (円)</div>
+                                <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</div>
+                              </div>
+                              <span style={{ color: t.td, fontWeight: 600, flexShrink: 0 }}>×</span>
+                              <div style={{ width: 90, flexShrink: 0 }}>
+                                <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>提成率 (%)</div>
+                                <div style={{ fontSize: 14, color: t.tx, fontWeight: 600 }}>{r.commission_rate || "0"}%</div>
+                              </div>
                             </div>
-                            <span style={{ color: t.td, fontWeight: 600, paddingBottom: 2 }}>×</span>
-                            <div style={{ flex: "0 1 90px" }}>
-                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>提成率 (%)</div>
-                              <div style={{ fontSize: 14, color: t.tx, fontWeight: 600 }}>{r.commission_rate || "0"}%</div>
-                            </div>
-                            <span style={{ color: t.td, fontWeight: 600, paddingBottom: 2 }}>=</span>
-                            <div style={{ marginLeft: "auto", fontSize: 20, fontWeight: 800, color: "#DB2777", letterSpacing: "-0.5px", fontVariantNumeric: "tabular-nums", paddingBottom: 2 }}>
-                              ¥{Number(r.commission_amount || 0).toLocaleString()}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 8, borderTop: `1px dashed ${t.bd}` }}>
+                              <div style={{ fontSize: 11, color: t.tm, fontWeight: 600 }}>= 提成金额</div>
+                              <span style={{ fontSize: 22, fontWeight: 800, color: "#DB2777", letterSpacing: "-0.5px", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.commission_amount || 0).toLocaleString()}</span>
                             </div>
                           </div>
                         </div>
@@ -820,23 +822,27 @@ export default function WorkEntryManager({ user, t, tk }) {
                               <input placeholder="填写姓名" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} style={{ ...inputStyle(t), padding: "8px 12px" }} />
                             </div>
                           </div>
-                          {/* 下半层：算钱引擎 */}
-                          <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", background: t.bgI, padding: 12, borderRadius: 12, border: `1px dashed ${t.bd}` }}>
-                            <div style={{ flex: "1 1 110px" }}>
-                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>学费总额 (円)</div>
-                              <input type="number" placeholder="0" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...inputStyle(t), padding: "8px 12px" }} />
+                          {/* 下半层：算钱引擎（输入一行、金额一行，防止数字长度挤动布局） */}
+                          <div style={{ background: t.bgI, padding: 12, borderRadius: 12, border: `1px dashed ${t.bd}`, display: "flex", flexDirection: "column", gap: 10 }}>
+                            <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+                              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                                <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>学费总额 (円)</div>
+                                <input type="number" placeholder="0" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...inputStyle(t), padding: "8px 12px" }} />
+                              </div>
+                              <span style={{ color: t.td, fontWeight: 600, paddingBottom: 10, flexShrink: 0 }}>×</span>
+                              <div style={{ width: 90, flexShrink: 0 }}>
+                                <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>提成率 (%)</div>
+                                <input type="number" placeholder="0" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...inputStyle(t), padding: "8px 12px" }} />
+                              </div>
                             </div>
-                            <span style={{ color: t.td, fontWeight: 600, paddingBottom: 10 }}>×</span>
-                            <div style={{ flex: "0 1 90px" }}>
-                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>提成率 (%)</div>
-                              <input type="number" placeholder="0" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...inputStyle(t), padding: "8px 12px" }} />
-                            </div>
-                            <span style={{ color: t.td, fontWeight: 600, paddingBottom: 10 }}>=</span>
-                            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, paddingBottom: 2 }}>
-                              <span style={{ fontSize: 20, fontWeight: 800, color: "#DB2777", letterSpacing: "-0.5px", fontVariantNumeric: "tabular-nums" }}>
-                                ¥{Number(r.commission_amount || 0).toLocaleString()}
-                              </span>
-                              <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 8, background: "#fff", border: `1px solid ${t.bd}` }}><Trash2 size={15} /></HoverBtn>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 8, borderTop: `1px dashed ${t.bd}`, gap: 10 }}>
+                              <div style={{ fontSize: 11, color: t.tm, fontWeight: 600 }}>= 提成金额</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                <span style={{ fontSize: 22, fontWeight: 800, color: "#DB2777", letterSpacing: "-0.5px", fontVariantNumeric: "tabular-nums" }}>
+                                  ¥{Number(r.commission_amount || 0).toLocaleString()}
+                                </span>
+                                <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 8, background: "#fff", border: `1px solid ${t.bd}` }}><Trash2 size={15} /></HoverBtn>
+                              </div>
                             </div>
                           </div>
                         </div>
