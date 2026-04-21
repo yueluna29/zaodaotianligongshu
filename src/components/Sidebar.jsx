@@ -44,15 +44,12 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
         })}
       </nav>
       <div style={{ padding: 14, borderTop: `1px solid ${t.bd}` }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg,${isA ? t.wn : t.ac},${isA ? "#B45309" : "#1D4ED8"})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700 }}>{(user.name || "?")[0]}</div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: t.tx }}>{user.name}</div>
-              <div style={{ fontSize: 9, color: t.tm }}>{isA ? "管理者" : et}</div>
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg,${isA ? t.wn : t.ac},${isA ? "#B45309" : "#1D4ED8"})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700 }}>{(user.name || "?")[0]}</div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: t.tx }}>{user.name}</div>
+            <div style={{ fontSize: 9, color: t.tm }}>{isA ? "管理者" : et}</div>
           </div>
-          <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
         </div>
         <button onClick={onLogout} style={{ width: "100%", padding: 8, borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 11, cursor: "pointer" }}>退出登录</button>
       </div>

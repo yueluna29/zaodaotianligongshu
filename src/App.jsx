@@ -65,7 +65,7 @@ export default function App() {
   if (!user) return <Login onAuth={login} theme={theme} t={t} toggleTheme={toggleTheme} />
 
   const pages = {
-    home:    <Dashboard user={user} t={t} tk={user.token} onNav={setView} />,
+    home:    <Dashboard user={user} t={t} tk={user.token} onNav={setView} onLogout={logout} mobile={mobile} />,
     att:     <AttendanceList user={user} t={t} tk={user.token} />,
     leave:   <LeaveRequest user={user} t={t} tk={user.token} />,
     swap:    <DaySwapRequest user={user} t={t} tk={user.token} />,
@@ -86,18 +86,13 @@ export default function App() {
         <div className="home-ambient home-ambient-tl" />
         <div className="home-ambient home-ambient-br" />
         <div style={{ position: "relative", zIndex: 1, padding: mobile ? "16px 14px 80px" : "24px 28px", minHeight: "100%", boxSizing: "border-box" }}>
-          {mobile && (
-            <div style={{ display: "flex", justifyContent: view === "home" ? "flex-end" : "space-between", alignItems: "center", marginBottom: 16 }}>
-              {view !== "home" && (
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾 OS</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{user.name}</div>
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button onClick={toggleTheme} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
-                <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
+          {mobile && view !== "home" && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾 OS</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{user.name}</div>
               </div>
+              <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
             </div>
           )}
           {pages[view] || <Dashboard user={user} t={t} tk={user.token} />}

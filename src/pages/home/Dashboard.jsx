@@ -5,7 +5,7 @@ import { Bell, Plus, Users, AlertCircle, FileText, ChevronRight, Fingerprint, Co
 
 const LAST_SEEN_KEY = "kintai_last_seen_anno_at"
 
-export default function Dashboard({ user, t, tk, onNav }) {
+export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
   const isA = user.role === "admin"
   const isHourly = empIsHourly(user.employment_type)
   const now = new Date()
@@ -541,6 +541,9 @@ export default function Dashboard({ user, t, tk, onNav }) {
               <Bell size={18} strokeWidth={1.6} />
               {unreadAnnos.length > 0 && <span className="bell-dot" />}
             </button>
+            {mobile && onLogout && (
+              <button onClick={onLogout} style={{ padding: "6px 12px", borderRadius: 999, border: `1px solid ${t.bd}`, background: "rgba(255,255,255,0.65)", color: t.tm, fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>退出</button>
+            )}
             {bellOpen && (
               <>
                 <div onClick={() => setBellOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
