@@ -524,7 +524,7 @@ export default function AttendanceList({ user, t, tk }) {
   // ==================== Tab 定义 ====================
   const leaveSubTabs = [
     { key: "leave", label: "带薪休假申请", icon: CalendarX2, badge: leavePending },
-    { key: "aka", label: "红日子休息记录", icon: Flag, badge: akaPending },
+    { key: "aka", label: "红日子情况记录", icon: Flag, badge: akaPending },
     { key: "swap", label: "换休申请", icon: ArrowLeftRight, badge: swapPending },
     { key: "history", label: "过去记录", icon: History },
   ]
@@ -856,19 +856,21 @@ export default function AttendanceList({ user, t, tk }) {
         </div>
       )}
 
-      {/* ====== 红日子休息记录 Tab (赤日休) ====== */}
+      {/* ====== 红日子情况记录 Tab (赤日休) ====== */}
       {mainTab === "leave" && tab === "aka" && (
         <div>
           <div style={{ padding: "10px 14px", borderRadius: 8, background: "#F9731610", border: "1px solid #F9731630", marginBottom: 12, fontSize: 11, color: "#C2410C", lineHeight: 1.5 }}>
-            红日子本来就应该休息，但为了记录每位成员当天的状态，<strong>休息了的人也请登记一下</strong>（需要审批）。出勤的人请去「换休申请」登记。
+            用于记录红日子当天的<strong>在/不在状态</strong>，日历上可以看到谁休息了、谁出勤了。<br />
+            · 当天<strong>休息</strong>：在这里登记（需审批）<br />
+            · 当天<strong>出勤</strong>：请去「换休申请」走 休日出勤 流程（这里不做登记）
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-            <button onClick={() => { if (akaShow) resetAkaForm(); else setAkaShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: akaShow ? `1px solid ${t.bd}` : "none", background: akaShow ? "transparent" : t.ac, color: akaShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{akaShow ? "✕ 关闭" : <><Plus size={14} /> {leaveViewEmp ? `给 ${allEmps.find(e => e.id === leaveViewEmp)?.name} 登记休息` : "登记休息"}</>}</button>
+            <button onClick={() => { if (akaShow) resetAkaForm(); else setAkaShow(true) }} style={{ padding: "8px 18px", borderRadius: 8, border: akaShow ? `1px solid ${t.bd}` : "none", background: akaShow ? "transparent" : t.ac, color: akaShow ? t.ts : "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>{akaShow ? "✕ 关闭" : <><Plus size={14} /> {leaveViewEmp ? `给 ${allEmps.find(e => e.id === leaveViewEmp)?.name} 登记红日子休息` : "登记红日子休息"}</>}</button>
           </div>
 
           {akaShow && (
             <div style={{ background: t.bgC, borderRadius: 12, padding: 22, border: `2px solid #F9731640`, marginBottom: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: t.tx, margin: "0 0 14px" }}>{akaEditId ? "编辑红日子休息记录" : "登记红日子休息"}</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: t.tx, margin: "0 0 14px" }}>{akaEditId ? "编辑红日子休息记录" : "登记红日子休息（当天不在）"}</h3>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{akaEditId ? "日期" : "选择日期（点击选取，可多选；建议仅选红日子）"}</label>
                 {akaEditId ? (
@@ -891,7 +893,7 @@ export default function AttendanceList({ user, t, tk }) {
           <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
             {(() => {
               const list = leaveReqs.filter(r => r.leave_type === "赤日休")
-              if (!list.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无红日子休息记录</div>
+              if (!list.length) return <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无红日子休息登记</div>
               return list.map((r) => {
                 const isPending = r.status === "申請中"
                 return (
