@@ -15,6 +15,7 @@ export default function Dashboard({ user, t, tk, onNav }) {
   const [clocking, setClocking] = useState(false)
   const [time, setTime] = useState(new Date())
   const [pendingProfiles, setPendingProfiles] = useState([])
+  const [unsubmittedMonths, setUnsubmittedMonths] = useState([])
   const [annos, setAnnos] = useState([])
   const [annoShow, setAnnoShow] = useState(false)
   const [annoFm, setAnnoFm] = useState({ title: "", body: "", kind: "info", expires_at: "" })
@@ -143,6 +144,25 @@ export default function Dashboard({ user, t, tk, onNav }) {
       }
     })()
   }, [tk, user.id, isA])
+
+  useEffect(() => {
+    if (isA || !isHourly) return
+    (async () => {
+      const subs = await sbGet(`monthly_report_submissions?employee_id=eq.${user.id}&status=eq.submitted&select=year,month`, tk)
+      const submittedSet = new Set((subs || []).map(s => `${s.year}-${String(s.month).padStart(2, "0")}`))
+      const months = []
+      let yy = 2026, mm = 4
+      const now = new Date()
+      const endY = now.getFullYear(), endM = now.getMonth() + 1
+      while (yy < endY || (yy === endY && mm <= endM)) {
+        const key = `${yy}-${String(mm).padStart(2, "0")}`
+        if (!submittedSet.has(key)) months.push({ year: yy, month: mm })
+        mm++
+        if (mm > 12) { mm = 1; yy++ }
+      }
+      setUnsubmittedMonths(months)
+    })()
+  }, [tk, user.id, isA, isHourly])
 
   const clock = async (action) => {
     setClocking(true)
@@ -568,6 +588,29 @@ export default function Dashboard({ user, t, tk, onNav }) {
               </div>
             )}
           </div>
+
+          {/* 待提交工时报表（仅 baito） */}
+          {isHourly && unsubmittedMonths.length > 0 && (
+            <div className="glass-card span-4" style={{ padding: "18px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <AlertCircle size={16} color="#F59E0B" strokeWidth={1.8} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: t.tx }}>待提交的工时报表</span>
+                <span style={{ fontSize: 10, color: t.tm }}>· 每月 5 号前提交上个月报表</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {unsubmittedMonths.map(({ year, month }) => (
+                  <button key={`${year}-${month}`} onClick={() => onNav("work")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(245,158,11,0.3)", background: "rgba(254,243,199,0.4)", color: t.tx, fontSize: 13, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all .2s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(254,243,199,0.7)"; e.currentTarget.style.transform = "translateX(2px)" }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(254,243,199,0.4)"; e.currentTarget.style.transform = "translateX(0)" }}>
+                    <span><strong>{year}年 {month}月</strong> 工时报表</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#D97706", fontWeight: 600 }}>
+                      未提交 <ChevronRight size={12} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 本月出勤 / 上班天数 */}
           <div className="glass-card stat-card hv-emerald span-2">

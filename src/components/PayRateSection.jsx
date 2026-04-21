@@ -3,7 +3,7 @@ import { sbGet, sbPost, sbPatch, sbDel } from "../api/supabase"
 import { Plus, TrendingUp, History, ChevronDown, ChevronUp, Edit3, Trash2, Check, X } from "lucide-react"
 import { fmtDateW } from "../config/constants"
 
-const COMMON_TYPES = ["事務", "講師（大課）", "講師（一対一）", "答疑做題", "研究計画書修改"]
+const COMMON_TYPES = ["事務", "講師（大課）", "講師（一対一）", "答疑做題", "研究計画書修改", "EJU講師（班課）"]
 
 export default function PayRateSection({ empId, isAdmin, t, tk }) {
   const [rates, setRates] = useState([])

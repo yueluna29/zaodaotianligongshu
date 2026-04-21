@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays, Download, DollarSign, Briefcase, ArrowRight } from "lucide-react"
+import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays, Download, DollarSign, Briefcase, ArrowRight, Lock, Send, Sparkles, Unlock, X as XIcon } from "lucide-react"
 import { fmtDateW, WEEKDAYS, pad, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN } from "../../config/constants"
 
 const DEPTS = ["大学院", "学部", "文书", "语言类"]
-const mkWork = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, _type: "work", work_date: "", business_type: "", start_time: "", end_time: "", work_minutes: 0, hourly_rate: 0, transport_fee: "", subtotal: 0, student_name: "", course_name: "", other_expense: 0, other_expense_note: "" })
+const EJU_TYPE = "EJU講師（班課）"
+const EJU_BONUS_PER_HOUR = 300
+const mkWork = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, _type: "work", work_date: "", business_type: "", start_time: "", end_time: "", work_minutes: 0, hourly_rate: 0, transport_fee: "", subtotal: 0, student_name: "", course_name: "", other_expense: 0, other_expense_note: "", eju_bonus: false })
 const mkExp = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, _type: "expense", work_date: "", other_expense: "", other_expense_note: "" })
 const mkComm = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, entry_date: "", seq_number: "", student_name: "", tuition_amount: "", commission_rate: "", commission_amount: 0 })
 
@@ -14,8 +16,17 @@ const TYPE_COLORS = {
   "講師（一対一）": "#06B6D4",
   "答疑做題": "#F59E0B",
   "研究計画書修改": "#EC4899",
+  [EJU_TYPE]: "#10B981",
 }
 const colorFor = (bt) => TYPE_COLORS[bt] || "#64748B"
+
+const calcRowSubtotal = (row) => {
+  if (row._type !== "work") return parseFloat(row.other_expense) || 0
+  const baseRate = Number(row.hourly_rate) || 0
+  const bonus = row.eju_bonus && row.business_type === EJU_TYPE ? EJU_BONUS_PER_HOUR : 0
+  const hrs = (row.work_minutes || 0) / 60
+  return Math.round(hrs * (baseRate + bonus) + (parseFloat(row.transport_fee) || 0))
+}
 
 const glassCard = {
   background: "rgba(255, 255, 255, 0.65)",
@@ -74,6 +85,9 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [sv, setSv] = useState(false)
   const [rates, setRates] = useState([])
   const [saveMsg, setSaveMsg] = useState("")
+  const [submission, setSubmission] = useState(null) // { id, status, submitted_at, unlocked_at, unlocked_by }
+  const [submitModal, setSubmitModal] = useState(false)
+  const [submittingReport, setSubmittingReport] = useState(false)
 
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -97,10 +111,12 @@ export default function WorkEntryManager({ user, t, tk }) {
     const sd = `${year}-${pad(month)}-01`
     const ed = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`
     const empQ = `employee_id=eq.${targetEmpId}&`
-    const [r, c] = await Promise.all([
+    const [r, c, sub] = await Promise.all([
       sbGet(`work_entries?${empQ}work_date=gte.${sd}&work_date=lt.${ed}&order=work_date,created_at&select=*`, tk),
       sbGet(`commission_entries?${empQ}entry_date=gte.${sd}&entry_date=lt.${ed}&order=entry_date,seq_number&select=*`, tk),
+      sbGet(`monthly_report_submissions?${empQ}year=eq.${year}&month=eq.${month}&select=*`, tk),
     ])
+    setSubmission((sub && sub[0]) || null)
     const loaded = (r || []).map(e => {
       const isExp = !e.business_type && (Number(e.other_expense) > 0 || e.other_expense_note)
       return {
@@ -108,7 +124,8 @@ export default function WorkEntryManager({ user, t, tk }) {
         start_time: e.start_time?.slice(0, 5) || "", end_time: e.end_time?.slice(0, 5) || "",
         transport_fee: e.transport_fee != null ? String(e.transport_fee) : "",
         other_expense: e.other_expense != null ? String(e.other_expense) : "",
-        other_expense_note: e.other_expense_note || "", student_name: e.student_name || "", course_name: e.course_name || ""
+        other_expense_note: e.other_expense_note || "", student_name: e.student_name || "", course_name: e.course_name || "",
+        eju_bonus: !!e.eju_bonus,
       }
     })
     setRows(loaded)
@@ -177,11 +194,13 @@ export default function WorkEntryManager({ user, t, tk }) {
     setRows(prev => prev.map(r => {
       if (r._key !== key) return r
       const next = { ...r, [field]: value, _dirty: true }
-      if (field === "business_type") next.hourly_rate = getRateForType(value)
+      if (field === "business_type") {
+        next.hourly_rate = getRateForType(value)
+        if (value !== EJU_TYPE) next.eju_bonus = false
+      }
       const st = field === "start_time" ? value : next.start_time, et = field === "end_time" ? value : next.end_time
       if (st && et) next.work_minutes = calcMin(st, et)
-      if (next._type === "work") next.subtotal = Math.round((next.work_minutes || 0) / 60 * (next.hourly_rate || 0) + (parseFloat(next.transport_fee) || 0))
-      else next.subtotal = parseFloat(next.other_expense) || 0
+      next.subtotal = calcRowSubtotal(next)
       return next
     }))
   }
@@ -223,10 +242,10 @@ export default function WorkEntryManager({ user, t, tk }) {
     const newExp = rows.filter(validNewExp)
     const dirty = rows.filter(validDirtyWork)
     for (const r of [...newWork, ...newExp]) {
-      await track(r._type === "expense" ? "报销行" : "工时行", sbPost("work_entries", { employee_id: targetEmpId, work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk))
+      await track(r._type === "expense" ? "报销行" : "工时行", sbPost("work_entries", { employee_id: targetEmpId, work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null, eju_bonus: !!r.eju_bonus }, tk))
     }
     for (const r of dirty) {
-      await track("更新", sbPatch(`work_entries?id=eq.${r.id}`, { work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null }, tk))
+      await track("更新", sbPatch(`work_entries?id=eq.${r.id}`, { work_date: r.work_date, business_type: r.business_type || null, start_time: r.start_time ? r.start_time + ":00" : null, end_time: r.end_time ? r.end_time + ":00" : null, work_minutes: r.work_minutes || 0, hourly_rate: r.hourly_rate || 0, subtotal: r.subtotal || 0, transport_fee: parseFloat(r.transport_fee) || 0, other_expense: parseFloat(r.other_expense) || 0, other_expense_note: r.other_expense_note || null, student_name: r.student_name || null, course_name: r.course_name || null, eju_bonus: !!r.eju_bonus }, tk))
     }
     const newCm = commRows.filter(validNewComm)
     const dirtyCm = commRows.filter(validDirtyComm)
@@ -254,11 +273,45 @@ export default function WorkEntryManager({ user, t, tk }) {
   const savedComm = commRows.filter(r => !r._isNew)
   const totalMins = savedWork.reduce((s, e) => s + (e.work_minutes || 0), 0)
   const totalWage = savedWork.reduce((s, e) => s + Math.round((e.work_minutes || 0) / 60 * (Number(e.hourly_rate) || 0)), 0)
+  const totalEjuBonus = savedWork.reduce((s, e) => s + (e.eju_bonus && e.business_type === EJU_TYPE ? Math.round((e.work_minutes || 0) / 60 * EJU_BONUS_PER_HOUR) : 0), 0)
   const totalTrans = savedWork.reduce((s, e) => s + (parseFloat(e.transport_fee) || 0), 0)
   const totalOther = savedExp.reduce((s, e) => s + (parseFloat(e.other_expense) || 0), 0)
   const totalComm = savedComm.reduce((s, e) => s + (e.commission_amount || 0), 0)
-  const totalAll = totalWage + totalTrans + totalOther + totalComm
+  const totalAll = totalWage + totalEjuBonus + totalTrans + totalOther + totalComm
   const hasChanges = rows.some(r => (r._isNew && r._dirty) || validDirtyWork(r)) || commRows.some(r => (r._isNew && r._dirty) || validDirtyComm(r))
+
+  // 提交状态：已提交且非管理员 → 锁定
+  const isSubmitted = submission?.status === "submitted"
+  const locked = isSubmitted && !isAdmin
+  const canSubmit = !isAdmin && !isSubmitted && savedWork.length > 0 && !hasChanges
+
+  const submitReport = async () => {
+    setSubmittingReport(true)
+    const payload = { employee_id: targetEmpId, year, month, status: "submitted", submitted_at: new Date().toISOString(), unlocked_by: null, unlocked_at: null }
+    let res
+    if (submission) {
+      res = await sbPatch(`monthly_report_submissions?id=eq.${submission.id}`, { status: "submitted", submitted_at: payload.submitted_at, unlocked_by: null, unlocked_at: null }, tk)
+    } else {
+      res = await sbPost("monthly_report_submissions", payload, tk)
+    }
+    setSubmittingReport(false)
+    if (res && !Array.isArray(res) && (res.code || res.message)) {
+      setSaveMsg(`提交失败：${res.message || res.code}`)
+      setTimeout(() => setSaveMsg(""), 10000)
+      return
+    }
+    setSubmitModal(false)
+    setSaveMsg(`已提交 ${month}月 工时报表`)
+    setTimeout(() => setSaveMsg(""), 5000)
+    await load()
+  }
+
+  const unlockReport = async () => {
+    if (!submission || !isAdmin) return
+    if (!confirm(`确认解锁 ${month}月 工时报表？员工将可以再次修改并重新提交。`)) return
+    await sbPatch(`monthly_report_submissions?id=eq.${submission.id}`, { status: "unlocked", unlocked_by: user.id, unlocked_at: new Date().toISOString() }, tk)
+    await load()
+  }
 
   // hooks 必须在 early return 之前调用，所以写在这里
   const datesWithEntries = useMemo(() => {
@@ -498,10 +551,36 @@ export default function WorkEntryManager({ user, t, tk }) {
               {isAdmin ? `${selectedEmp?.name} 的工资报表` : "工资报表"}
             </h2>
           </div>
-          {hasChanges && <HoverBtn primary disabled={sv} onClick={saveAll} t={t}><Save size={14} /> {sv ? "保存中..." : "保存全部"}</HoverBtn>}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {hasChanges && !locked && <HoverBtn primary disabled={sv} onClick={saveAll} t={t}><Save size={14} /> {sv ? "保存中..." : "保存全部"}</HoverBtn>}
+            {canSubmit && (
+              <HoverBtn primary onClick={() => setSubmitModal(true)} t={t}><Send size={14} /> 提交 {month}月 报表</HoverBtn>
+            )}
+            {isAdmin && isSubmitted && (
+              <HoverBtn onClick={unlockReport} t={t}><Unlock size={14} /> 解锁 {month}月</HoverBtn>
+            )}
+          </div>
         </div>
 
-        {saveMsg && (() => { const ok = saveMsg.startsWith("已保存"), err = saveMsg.startsWith("保存失败"); const c = err ? t.rd : ok ? t.gn : t.wn; return <div style={{ padding: 10, borderRadius: 10, background: `${c}15`, border: `1px solid ${c}33`, marginBottom: 14, fontSize: 12, color: c }}>{saveMsg}</div> })()}
+        {saveMsg && (() => { const ok = saveMsg.startsWith("已保存") || saveMsg.startsWith("已提交"), err = saveMsg.startsWith("保存失败") || saveMsg.startsWith("提交失败"); const c = err ? t.rd : ok ? t.gn : t.wn; return <div style={{ padding: 10, borderRadius: 10, background: `${c}15`, border: `1px solid ${c}33`, marginBottom: 14, fontSize: 12, color: c }}>{saveMsg}</div> })()}
+
+        {/* 提交状态 banner */}
+        {isSubmitted && (
+          <div style={{ padding: 14, borderRadius: 12, background: `${t.gn}12`, border: `1px solid ${t.gn}40`, marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <Lock size={16} color={t.gn} style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: 13, color: t.tx, fontWeight: 600, flex: 1, minWidth: 200 }}>
+              {month}月 工时报表已提交 <span style={{ color: t.tm, fontWeight: 400, marginLeft: 6 }}>{submission?.submitted_at ? new Date(submission.submitted_at).toLocaleDateString("zh-CN") : ""}</span>
+              {!isAdmin && <div style={{ fontSize: 11, color: t.tm, fontWeight: 400, marginTop: 4 }}>如需修改请联系管理员</div>}
+            </div>
+          </div>
+        )}
+        {submission?.status === "unlocked" && (
+          <div style={{ padding: 12, borderRadius: 10, background: `${t.wn}15`, border: `1px solid ${t.wn}40`, marginBottom: 14, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: t.tx }}>
+            <Unlock size={14} color={t.wn} />
+            <span><strong>{month}月</strong> 已由管理员解锁，请修改后重新提交</span>
+          </div>
+        )}
+
         {!rates.length && isAdmin && <div style={{ padding: 12, borderRadius: 10, background: `${t.wn}15`, border: `1px solid ${t.wn}33`, marginBottom: 14, fontSize: 12, color: t.wn, display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> 该员工尚未配置时薪，请先在人事档案中设定</div>}
 
         {ld ? <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div> : (
@@ -547,26 +626,6 @@ export default function WorkEntryManager({ user, t, tk }) {
                 </div>
               </div>
 
-              {/* 月度合计 */}
-              <div style={{ ...glassCard, padding: 20 }}>
-                <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 4, height: 14, backgroundColor: t.ac, borderRadius: 2 }} />
-                  {month}月 薪资总览
-                </h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <Row label="总工时" value={`${(totalMins / 60).toFixed(1)} h`} t={t} />
-                  <Row label="课时费合计" value={`¥${totalWage.toLocaleString()}`} t={t} />
-                  <Row label="交通费合计" value={`¥${totalTrans.toLocaleString()}`} t={t} />
-                  <Row label="其他报销" value={`¥${totalOther.toLocaleString()}`} t={t} />
-                  {showComm && <Row label="签单提成" value={`¥${totalComm.toLocaleString()}`} t={t} color="#EC4899" />}
-                  <div style={{ height: 1, backgroundColor: t.bd, margin: "4px 0" }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ color: t.tx, fontWeight: 700, fontSize: 14 }}>总合计</span>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: t.ac }}>¥{totalAll.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
               {/* 时薪参考（来自 pay_rates） */}
               <div style={{ ...glassCard, padding: 16 }}>
                 <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, marginBottom: 8 }}>我的时薪</div>
@@ -581,36 +640,26 @@ export default function WorkEntryManager({ user, t, tk }) {
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* ======= 右栏：选中日详情 ======= */}
-            <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: 20, minWidth: 0, paddingBottom: 80 }}>
-
-              {/* 当日标题 */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: `2px solid ${t.bd}`, paddingBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 12, color: t.tm, fontWeight: 600, marginBottom: 2 }}>选中日期</div>
-                  <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.8, color: t.tx }}>
-                    {fmtDateW(selectedDate)}
-                  </h1>
-                </div>
-                <button onClick={addWorkForDay} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: t.ac, fontWeight: 600, fontSize: 13, cursor: "pointer", padding: "4px 8px", fontFamily: "inherit" }}>
-                  <Plus size={14} /> 快捷添加
-                </button>
-              </div>
-
-              {/* 工时时间轴 */}
-              <div style={{ display: "flex", flexDirection: "column", paddingLeft: 8 }}>
-                {dayWork.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "50px 0", color: t.td }}>
-                    <CalendarDays size={42} style={{ margin: "0 auto 12px", opacity: 0.5 }} />
-                    <p style={{ margin: 0, fontSize: 13 }}>今日无工时记录，点右下角 + 添加</p>
+              {/* 月度合计 */}
+              <div style={{ ...glassCard, padding: 20 }}>
+                <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 4, height: 14, backgroundColor: t.ac, borderRadius: 2 }} />
+                  {month}月 薪资总览
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <Row label="总工时" value={`${(totalMins / 60).toFixed(1)} h`} t={t} />
+                  <Row label="课时费合计" value={`¥${totalWage.toLocaleString()}`} t={t} />
+                  {totalEjuBonus > 0 && <Row label="EJU 绩效" value={`¥${totalEjuBonus.toLocaleString()}`} t={t} color="#10B981" />}
+                  <Row label="交通费合计" value={`¥${totalTrans.toLocaleString()}`} t={t} />
+                  <Row label="其他报销" value={`¥${totalOther.toLocaleString()}`} t={t} />
+                  {showComm && <Row label="签单提成" value={`¥${totalComm.toLocaleString()}`} t={t} color="#EC4899" />}
+                  <div style={{ height: 1, backgroundColor: t.bd, margin: "4px 0" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: t.tx, fontWeight: 700, fontSize: 14 }}>总合计</span>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: t.ac }}>¥{totalAll.toLocaleString()}</span>
                   </div>
-                ) : dayWork.map((r, idx) => (
-                  <WorkTimelineCard key={r._key} r={r} isLast={idx === dayWork.length - 1}
-                    onUpdate={updateRow} onRemove={removeRow} onDelExisting={delExisting}
-                    rates={rates} t={t} />
-                ))}
+                </div>
               </div>
 
               {/* 其他报销 */}
@@ -619,7 +668,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
                     <Receipt size={16} color={t.wn} /> 其他报销（当日）
                   </h3>
-                  <HoverBtn onClick={addExpForDay} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Plus size={13} /> 加一笔</HoverBtn>
+                  <HoverBtn onClick={addExpForDay} disabled={locked} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Plus size={13} /> 加一笔</HoverBtn>
                 </div>
                 {dayExp.length === 0 ? (
                   <div style={{ fontSize: 12, color: t.td }}>当日无其他报销记录</div>
@@ -627,9 +676,9 @@ export default function WorkEntryManager({ user, t, tk }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {dayExp.map(r => (
                       <div key={r._key} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                        <input type="number" placeholder="金额 (円)" value={r.other_expense} onChange={e => updateRow(r._key, "other_expense", e.target.value)} style={{ ...inputStyle(t), width: 130 }} />
-                        <input placeholder="报销说明（如：文具）" value={r.other_expense_note} onChange={e => updateRow(r._key, "other_expense_note", e.target.value)} style={{ ...inputStyle(t), flex: 1, minWidth: 180 }} />
-                        <HoverBtn danger onClick={() => r._isNew ? removeRow(r._key) : delExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={14} /></HoverBtn>
+                        <input type="number" placeholder="金额 (円)" disabled={locked} value={r.other_expense} onChange={e => updateRow(r._key, "other_expense", e.target.value)} style={{ ...inputStyle(t), width: 130 }} />
+                        <input placeholder="报销说明（如：文具）" disabled={locked} value={r.other_expense_note} onChange={e => updateRow(r._key, "other_expense_note", e.target.value)} style={{ ...inputStyle(t), flex: 1, minWidth: 180 }} />
+                        {!locked && <HoverBtn danger onClick={() => r._isNew ? removeRow(r._key) : delExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={14} /></HoverBtn>}
                       </div>
                     ))}
                   </div>
@@ -645,7 +694,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                       <span style={{ fontSize: 11, color: t.tm, fontWeight: 500 }}>（{month}月 · {commRows.filter(r => !r._isNew).length}笔）</span>
                       {totalComm > 0 && <span style={{ fontSize: 13, fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums", background: "rgba(236,72,153,0.1)", padding: "3px 10px", borderRadius: 8 }}>¥{totalComm.toLocaleString()}</span>}
                     </h3>
-                    <HoverBtn onClick={addCommRow} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Plus size={13} /> 加一笔</HoverBtn>
+                    <HoverBtn onClick={addCommRow} disabled={locked} t={t} style={{ padding: "6px 12px", fontSize: 12 }}><Plus size={13} /> 加一笔</HoverBtn>
                   </div>
 
                   {commRows.length === 0 ? (
@@ -654,28 +703,26 @@ export default function WorkEntryManager({ user, t, tk }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {commRows.map((r, idx) => (
                         <div key={r._key} style={{ padding: 14, background: "rgba(236,72,153,0.04)", borderRadius: 12, border: "1px solid rgba(236,72,153,0.18)", display: "flex", flexDirection: "column", gap: 10 }}>
-                          {/* 第一行：日期 + 序号 + 学生 + 删除 */}
                           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                            <input type="date" value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...inputStyle(t), width: 140 }} />
+                            <input type="date" disabled={locked} value={r.entry_date} onChange={e => updateComm(r._key, "entry_date", e.target.value)} style={{ ...inputStyle(t), width: 140 }} />
                             <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#fff", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 10, padding: "4px 8px" }}>
                               <span style={{ fontSize: 11, color: "#EC4899", fontWeight: 700 }}>第</span>
-                              <input type="number" placeholder="1" value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} style={{ width: 36, border: "none", outline: "none", background: "transparent", fontSize: 13, fontWeight: 700, color: "#EC4899", textAlign: "center", fontFamily: "inherit" }} />
+                              <input type="number" placeholder="1" disabled={locked} value={r.seq_number} onChange={e => updateComm(r._key, "seq_number", e.target.value)} style={{ width: 36, border: "none", outline: "none", background: "transparent", fontSize: 13, fontWeight: 700, color: "#EC4899", textAlign: "center", fontFamily: "inherit" }} />
                               <span style={{ fontSize: 11, color: "#EC4899", fontWeight: 700 }}>签</span>
                             </div>
-                            <input placeholder="学生姓名" value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} style={{ ...inputStyle(t), flex: "1 1 160px", minWidth: 120 }} />
-                            <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 8, flexShrink: 0 }}><Trash2 size={14} /></HoverBtn>
+                            <input placeholder="学生姓名" disabled={locked} value={r.student_name} onChange={e => updateComm(r._key, "student_name", e.target.value)} style={{ ...inputStyle(t), flex: "1 1 160px", minWidth: 120 }} />
+                            {!locked && <HoverBtn danger onClick={() => r._isNew ? removeComm(r._key) : delCommExisting(r.id, r._key)} t={t} style={{ padding: 8, flexShrink: 0 }}><Trash2 size={14} /></HoverBtn>}
                           </div>
 
-                          {/* 第二行：学费 × 提成率 = 提成 */}
                           <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 8, borderTop: "1px dashed rgba(236,72,153,0.2)", flexWrap: "wrap" }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 140px" }}>
                               <label style={{ fontSize: 10, color: t.tm, fontWeight: 600 }}>学费（円）</label>
-                              <input type="number" placeholder="0" value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...inputStyle(t), textAlign: "right", background: "#fff" }} />
+                              <input type="number" placeholder="0" disabled={locked} value={r.tuition_amount} onChange={e => updateComm(r._key, "tuition_amount", e.target.value)} style={{ ...inputStyle(t), textAlign: "right", background: "#fff" }} />
                             </div>
                             <span style={{ fontSize: 18, color: t.td, paddingTop: 14 }}>×</span>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4, width: 100 }}>
                               <label style={{ fontSize: 10, color: t.tm, fontWeight: 600 }}>提成率 %</label>
-                              <input type="number" placeholder="0" value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...inputStyle(t), textAlign: "right", background: "#fff" }} />
+                              <input type="number" placeholder="0" disabled={locked} value={r.commission_rate} onChange={e => updateComm(r._key, "commission_rate", e.target.value)} style={{ ...inputStyle(t), textAlign: "right", background: "#fff" }} />
                             </div>
                             <span style={{ fontSize: 18, color: t.td, paddingTop: 14 }}>=</span>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 120, marginLeft: "auto", textAlign: "right" }}>
@@ -692,12 +739,81 @@ export default function WorkEntryManager({ user, t, tk }) {
                 </div>
               )}
             </div>
+
+            {/* ======= 右栏：选中日详情 ======= */}
+            <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: 20, minWidth: 0, paddingBottom: 80 }}>
+
+              {/* 当日标题 */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: `2px solid ${t.bd}`, paddingBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: t.tm, fontWeight: 600, marginBottom: 2 }}>选中日期</div>
+                  <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.8, color: t.tx }}>
+                    {fmtDateW(selectedDate)}
+                  </h1>
+                </div>
+                {!locked && (
+                  <button onClick={addWorkForDay} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: t.ac, fontWeight: 600, fontSize: 13, cursor: "pointer", padding: "4px 8px", fontFamily: "inherit" }}>
+                    <Plus size={14} /> 快捷添加
+                  </button>
+                )}
+              </div>
+
+              {/* 工时时间轴 */}
+              <div style={{ display: "flex", flexDirection: "column", paddingLeft: 8 }}>
+                {dayWork.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "50px 0", color: t.td }}>
+                    <CalendarDays size={42} style={{ margin: "0 auto 12px", opacity: 0.5 }} />
+                    <p style={{ margin: 0, fontSize: 13 }}>{locked ? "本月已提交，暂无工时记录" : "今日无工时记录，点右下角 + 添加"}</p>
+                  </div>
+                ) : dayWork.map((r, idx) => (
+                  <WorkTimelineCard key={r._key} r={r} isLast={idx === dayWork.length - 1}
+                    onUpdate={updateRow} onRemove={removeRow} onDelExisting={delExisting}
+                    rates={rates} t={t} locked={locked} />
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
 
+      {/* 提交确认 Modal */}
+      {submitModal && (
+        <div onClick={() => !submittingReport && setSubmitModal(false)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "rgba(255,255,255,0.98)", borderRadius: 24, maxWidth: 520, width: "100%", padding: 28, boxShadow: "0 30px 80px -20px rgba(15,23,42,0.3)", maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
+                <Send size={18} color={t.ac} /> 提交 {year}年 {month}月 工时报表
+              </h3>
+              <button onClick={() => !submittingReport && setSubmitModal(false)} style={{ background: "transparent", border: "none", color: t.tm, cursor: "pointer", padding: 4, display: "inline-flex", fontFamily: "inherit" }}><XIcon size={18} /></button>
+            </div>
+            <p style={{ margin: "0 0 18px", fontSize: 13, color: t.tm, lineHeight: 1.6 }}>
+              请核对本月总览。提交后该月工时将被锁定不可修改，如需变更请联系管理员解锁。
+            </p>
+            <div style={{ padding: 18, borderRadius: 16, background: `${t.ac}08`, border: `1px solid ${t.ac}22`, display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+              <Row label="总工时" value={`${(totalMins / 60).toFixed(1)} h`} t={t} />
+              <Row label="课时费合计" value={`¥${totalWage.toLocaleString()}`} t={t} />
+              {totalEjuBonus > 0 && <Row label="EJU 绩效 (+300円/h)" value={`¥${totalEjuBonus.toLocaleString()}`} t={t} color="#10B981" />}
+              <Row label="交通费合计" value={`¥${totalTrans.toLocaleString()}`} t={t} />
+              <Row label="其他报销" value={`¥${totalOther.toLocaleString()}`} t={t} />
+              {showComm && <Row label="签单提成" value={`¥${totalComm.toLocaleString()}`} t={t} color="#EC4899" />}
+              <div style={{ height: 1, backgroundColor: t.bd, margin: "4px 0" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: t.tx, fontWeight: 700, fontSize: 15 }}>总合计</span>
+                <span style={{ fontSize: 26, fontWeight: 800, color: t.ac }}>¥{totalAll.toLocaleString()}</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <HoverBtn onClick={() => setSubmitModal(false)} disabled={submittingReport} t={t}>取消</HoverBtn>
+              <HoverBtn primary onClick={submitReport} disabled={submittingReport} t={t}>
+                <Send size={14} /> {submittingReport ? "提交中..." : "确认提交"}
+              </HoverBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 悬浮添加按钮 */}
-      {selectedEmp && !ld && (
+      {selectedEmp && !ld && !locked && (
         <button
           onClick={addWorkForDay}
           aria-label="添加工时"
@@ -808,57 +924,78 @@ function Calendar({ year, month, selectedDate, onPick, datesWithEntries, viewMod
   )
 }
 
-function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates, t }) {
+function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates, t, locked }) {
   const color = colorFor(r.business_type)
   const hrs = r.work_minutes > 0 ? (r.work_minutes / 60).toFixed(2) : "0.00"
+  const isEju = r.business_type === EJU_TYPE
+  const effectiveRate = Number(r.hourly_rate || 0) + (r.eju_bonus && isEju ? EJU_BONUS_PER_HOUR : 0)
+  const [noticeOpen, setNoticeOpen] = useState(false)
+  const hasEjuInRates = rates.some(rt => rt.business_type === EJU_TYPE)
   return (
     <div style={{ position: "relative", paddingLeft: 28, paddingBottom: 28 }}>
-      {/* 时间轴点 */}
       <div style={{ position: "absolute", left: 0, top: 16, width: 12, height: 12, borderRadius: "50%", border: `3px solid ${color}`, background: "#fff", zIndex: 2, transform: "translateX(-4px)" }} />
       {!isLast && <div style={{ position: "absolute", left: 1, top: 28, bottom: 0, width: 2, background: t.bd, zIndex: 1 }} />}
 
-      <div style={{ ...glassCard, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* 第一行：时间 + 业务类型 + 删除 */}
+      <div style={{ ...glassCard, padding: 18, display: "flex", flexDirection: "column", gap: 14, opacity: locked ? 0.75 : 1 }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, background: t.bgI, padding: 4, borderRadius: 10, border: `1px solid ${t.bd}` }}>
             <Clock size={15} color={t.tm} style={{ marginLeft: 6 }} />
-            <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.start_time}
+            <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} disabled={locked} value={r.start_time}
               onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "start_time", v) }}
               style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
             <span style={{ color: t.td }}>-</span>
-            <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.end_time}
+            <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} disabled={locked} value={r.end_time}
               onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "end_time", v) }}
               style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
           </div>
-          <select value={r.business_type} onChange={e => onUpdate(r._key, "business_type", e.target.value)}
+          <select value={r.business_type} disabled={locked} onChange={e => onUpdate(r._key, "business_type", e.target.value)}
             style={{ ...inputStyle(t), width: "auto", flex: 1, minWidth: 140, background: `${color}10`, color, borderColor: `${color}40`, fontWeight: 600 }}>
             <option value="">选择业务类型</option>
             {rates.map(rt => <option key={rt.business_type} value={rt.business_type}>{rt.business_type}</option>)}
+            {hasEjuInRates ? null : isEju ? <option value={EJU_TYPE}>{EJU_TYPE}</option> : null}
           </select>
-          <HoverBtn danger onClick={() => r._isNew ? onRemove(r._key) : onDelExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={15} /></HoverBtn>
+          {!locked && <HoverBtn danger onClick={() => r._isNew ? onRemove(r._key) : onDelExisting(r.id, r._key)} t={t} style={{ padding: 8 }}><Trash2 size={15} /></HoverBtn>}
         </div>
 
-        {/* 第二行：学生 + 内容 */}
+        {/* EJU 绩效勾选 + 申报须知 */}
+        {isEju && (
+          <div style={{ padding: 12, borderRadius: 12, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.25)", display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: t.tx, cursor: locked ? "default" : "pointer", fontWeight: 600 }}>
+              <input type="checkbox" disabled={locked} checked={!!r.eju_bonus} onChange={e => onUpdate(r._key, "eju_bonus", e.target.checked)} style={{ width: 16, height: 16, accentColor: "#10B981", cursor: locked ? "default" : "pointer" }} />
+              <Sparkles size={14} color="#10B981" />
+              <span>申报 +¥{EJU_BONUS_PER_HOUR}/h 班课绩效</span>
+            </label>
+            <button type="button" onClick={() => setNoticeOpen(v => !v)} style={{ background: "transparent", border: "none", color: "#10B981", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textAlign: "left", padding: 0, display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <ChevronRight size={12} style={{ transform: noticeOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.2s" }} />
+              班课绩效申报须知
+            </button>
+            {noticeOpen && (
+              <div style={{ fontSize: 11, color: t.tm, lineHeight: 1.8, padding: "8px 10px", background: "rgba(255,255,255,0.6)", borderRadius: 8, whiteSpace: "pre-line" }}>
+                {`本栏勾选 "300" 即代表您确认本次课程教学质量已达优秀标准（考核分 ≥ 90）。\n我们默认每一位勾选的老师都表现优异，因此不做预扣除。\n教务处将进行不定期教学抽查。如经核实实际教学情况与申报不符（未达 90 分标准），我们将不得不撤回该次奖励并启动面谈复盘流程。\n请老师们珍视个人职业信誉，按实申报。`}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
           <div style={{ flex: "1 1 120px" }}>
             <label style={{ fontSize: 11, color: t.tm, display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}><User size={11} /> 学生姓名</label>
-            <input placeholder="不填则为空" value={r.student_name} onChange={e => onUpdate(r._key, "student_name", e.target.value)} style={inputStyle(t)} />
+            <input placeholder="不填则为空" disabled={locked} value={r.student_name} onChange={e => onUpdate(r._key, "student_name", e.target.value)} style={inputStyle(t)} />
           </div>
           <div style={{ flex: "2 1 200px" }}>
             <label style={{ fontSize: 11, color: t.tm, display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}><FileText size={11} /> 工作内容 / 课程</label>
-            <input placeholder="简述内容" value={r.course_name} onChange={e => onUpdate(r._key, "course_name", e.target.value)} style={inputStyle(t)} />
+            <input placeholder="简述内容" disabled={locked} value={r.course_name} onChange={e => onUpdate(r._key, "course_name", e.target.value)} style={inputStyle(t)} />
           </div>
         </div>
 
-        {/* 第三行：交通费 + 小计 */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 10, borderTop: `1px dashed ${t.bd}`, gap: 14, flexWrap: "wrap" }}>
           <div style={{ width: 150 }}>
             <label style={{ fontSize: 11, color: t.tm, display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}><Car size={11} /> 交通费 (円)</label>
-            <input type="number" placeholder="0" value={r.transport_fee} onChange={e => onUpdate(r._key, "transport_fee", e.target.value)} style={{ ...inputStyle(t), background: "rgba(255,255,255,0.9)" }} />
+            <input type="number" placeholder="0" disabled={locked} value={r.transport_fee} onChange={e => onUpdate(r._key, "transport_fee", e.target.value)} style={{ ...inputStyle(t), background: "rgba(255,255,255,0.9)" }} />
           </div>
           <div style={{ textAlign: "right", minWidth: 160 }}>
             <div style={{ fontSize: 11, color: t.tm, marginBottom: 2 }}>
-              {hrs}h × ¥{Number(r.hourly_rate || 0).toLocaleString()} + 交通 ¥{Number(r.transport_fee || 0).toLocaleString()}
+              {hrs}h × ¥{effectiveRate.toLocaleString()}{r.eju_bonus && isEju ? <span style={{ color: "#10B981" }}>（含绩效）</span> : ""} + 交通 ¥{Number(r.transport_fee || 0).toLocaleString()}
             </div>
             <div style={{ fontSize: 20, fontWeight: 800, color: t.tx }}>
               <span style={{ fontSize: 13, color: t.ts, fontWeight: 600, marginRight: 4 }}>小计</span>
