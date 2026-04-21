@@ -437,7 +437,7 @@ export default function EmployeeManager({ user, t, tk }) {
                 </HoverButton>
               )}
               <h2 style={{ margin: 0, color: "#1E293B", fontSize: 22, fontWeight: 700 }}>
-                {creating ? "新增社员档案" : (editing ? "编辑档案" : "人事档案")}
+                {creating ? "新增社员档案" : (editing ? "编辑档案" : (isAdmin ? "人事档案" : "入职信息"))}
               </h2>
             </div>
             {(isAdmin || isSelf) && (
@@ -746,7 +746,7 @@ export default function EmployeeManager({ user, t, tk }) {
                   <div>
                     <SectionTitle t={t}>时薪配置（按业务类型）</SectionTitle>
                     <div style={{ fontSize: 12, color: t.tm, margin: "-12px 0 16px" }}>
-                      按 事務 / 講師（大課）/ 講師（一対一）/ 答疑做題 / 研究計画書修改 等业务类型分别配置时薪，支持涨薪历史。
+                      如果时薪显示不正确，请及时联系财务老师。
                     </div>
                     <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} allEmps={emps} />
                   </div>
@@ -768,15 +768,6 @@ export default function EmployeeManager({ user, t, tk }) {
                       </div>
                     )}
                     <div style={flexRow}>
-                      {(editing ? fm.has_commission : e.has_commission) && (
-                        <Field
-                          label="提成率 (%)"
-                          value={editing ? fm.commission_rate : `${((e.commission_rate || 0) * 100).toFixed(0)}%`}
-                          onChange={(v) => sFm(p => ({ ...p, commission_rate: v }))}
-                          isEditing={editing} isLocked={!isAdmin} type="number"
-                          t={t}
-                        />
-                      )}
                       {!isHourly && (
                         <Field
                           label="固定加班 (h)"

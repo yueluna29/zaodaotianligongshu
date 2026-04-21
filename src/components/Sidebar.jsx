@@ -10,7 +10,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
     { id: "home", l: "首页", ic: Home, show: true },
     { id: "att", l: "勤怠一览", ic: ClipboardList, show: !isHourly || isA },
     { id: "work", l: "工资报表", ic: Clock, show: isHourly || isA },
-    { id: "empmgr", l: "人事档案", ic: Users, show: true },
+    { id: "empmgr", l: isA ? "人事档案" : "入职信息", ic: Users, show: true },
     { id: "approve", l: "承认中心", ic: CheckCircle, show: isA },
     { id: "cal", l: "休假日历", ic: CalendarDays, show: !isHourly || isA },
     { id: "report", l: "月度报告", ic: BarChart3, show: isA },

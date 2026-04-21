@@ -569,7 +569,7 @@ export default function WorkEntryManager({ user, t, tk }) {
 
               {/* 时薪参考（来自 pay_rates） */}
               <div style={{ ...glassCard, padding: 16 }}>
-                <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, marginBottom: 8 }}>我的时薪（参考）</div>
+                <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, marginBottom: 8 }}>我的时薪</div>
                 {rates.length > 0 ? (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {rates.map(r => <span key={r.business_type} style={{ padding: "3px 9px", borderRadius: 8, fontSize: 11, fontWeight: 600, color: colorFor(r.business_type), background: `${colorFor(r.business_type)}15` }}>{r.business_type} ¥{Number(r.hourly_rate).toLocaleString()}/h</span>)}
