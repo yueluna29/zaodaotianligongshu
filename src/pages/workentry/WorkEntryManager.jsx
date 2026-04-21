@@ -762,32 +762,43 @@ export default function WorkEntryManager({ user, t, tk }) {
                   {commRows.length === 0 ? (
                     <div style={{ padding: "30px 16px", textAlign: "center", color: t.td, fontSize: 12, borderRadius: 12, border: `1px dashed ${t.bd}`, background: "rgba(255,255,255,0.4)" }}>本月暂无签单提成记录，点右上角 + 添加</div>
                   ) : commissionsLocked ? (
-                    // ===== 只读显示模式：紧凑表格（确认后） =====
-                    <div style={{ overflowX: "auto", margin: "0 -4px" }}>
-                      <div style={{ minWidth: 540, padding: "0 4px" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "116px 56px 1fr 92px 52px 96px", gap: 6, padding: "0 6px 6px", fontSize: 10, color: t.tm, fontWeight: 600, letterSpacing: ".05em", borderBottom: `1px solid ${t.bd}`, marginBottom: 6 }}>
-                          <div>日期</div>
-                          <div style={{ textAlign: "center" }}>签号</div>
-                          <div>学生</div>
-                          <div style={{ textAlign: "right" }}>学费</div>
-                          <div style={{ textAlign: "right" }}>率%</div>
-                          <div style={{ textAlign: "right" }}>提成</div>
-                        </div>
-                        {commRows.map((r, idx) => {
-                          const rowBg = idx % 2 === 1 ? "rgba(236,72,153,0.04)" : "transparent"
-                          const displayText = { fontSize: 12, color: t.ts, padding: "5px 8px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
-                          return (
-                            <div key={r._key} style={{ display: "grid", gridTemplateColumns: "116px 56px 1fr 92px 52px 96px", gap: 6, alignItems: "center", padding: "6px", background: rowBg, borderRadius: 8 }}>
-                              <div style={displayText}>{r.entry_date || "—"}</div>
-                              <div style={{ ...displayText, textAlign: "center", color: "#EC4899", fontWeight: 700 }}>#{r.seq_number || "?"}</div>
-                              <div style={displayText}>{r.student_name || "—"}</div>
-                              <div style={{ ...displayText, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</div>
-                              <div style={{ ...displayText, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.commission_rate || "0"}%</div>
-                              <div style={{ ...displayText, textAlign: "right", fontWeight: 800, color: "#EC4899", fontVariantNumeric: "tabular-nums" }}>¥{Number(r.commission_amount || 0).toLocaleString()}</div>
+                    // ===== 只读预览模式：跟编辑态同结构的卡片，input 换成纯文字 =====
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {commRows.map(r => (
+                        <div key={r._key} style={{ background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+                          {/* 上半层：日期 / 签号 / 学生 */}
+                          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                            <div style={{ flex: "1 1 120px" }}>
+                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>日期</div>
+                              <div style={{ fontSize: 14, color: t.tx, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{r.entry_date || "—"}</div>
                             </div>
-                          )
-                        })}
-                      </div>
+                            <div style={{ flex: "0 1 90px" }}>
+                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>签号</div>
+                              <div style={{ fontSize: 14, color: "#DB2777", fontWeight: 700 }}>#{r.seq_number || "?"}</div>
+                            </div>
+                            <div style={{ flex: "2 1 140px" }}>
+                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>学生姓名</div>
+                              <div style={{ fontSize: 14, color: t.tx, fontWeight: 500 }}>{r.student_name || <span style={{ color: t.td }}>—</span>}</div>
+                            </div>
+                          </div>
+                          {/* 下半层：学费 × 率 = 金额 */}
+                          <div style={{ display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap", background: t.bgI, padding: 12, borderRadius: 12, border: `1px dashed ${t.bd}` }}>
+                            <div style={{ flex: "1 1 110px" }}>
+                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>学费总额 (円)</div>
+                              <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>¥{Number(r.tuition_amount || 0).toLocaleString()}</div>
+                            </div>
+                            <span style={{ color: t.td, fontWeight: 600, paddingBottom: 2 }}>×</span>
+                            <div style={{ flex: "0 1 90px" }}>
+                              <div style={{ fontSize: 11, color: t.tm, marginBottom: 4, fontWeight: 600 }}>提成率 (%)</div>
+                              <div style={{ fontSize: 14, color: t.tx, fontWeight: 600 }}>{r.commission_rate || "0"}%</div>
+                            </div>
+                            <span style={{ color: t.td, fontWeight: 600, paddingBottom: 2 }}>=</span>
+                            <div style={{ marginLeft: "auto", fontSize: 20, fontWeight: 800, color: "#DB2777", letterSpacing: "-0.5px", fontVariantNumeric: "tabular-nums", paddingBottom: 2 }}>
+                              ¥{Number(r.commission_amount || 0).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     // ===== 编辑模式：上下分层卡片（身份 + 算钱引擎） =====
