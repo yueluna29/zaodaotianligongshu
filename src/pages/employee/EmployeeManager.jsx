@@ -678,9 +678,26 @@ export default function EmployeeManager({ user, t, tk }) {
             {/* ========== Tab 2: 薪资与税务 ========== */}
             {activeTab === "finance" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+                {/* 时薪配置（仅 baito/外部，按业务类型多套时薪 + 涨薪记录 — 这是他们的薪资主体） */}
+                {!creating && isHourly && (
+                  <div>
+                    <SectionTitle t={t}>时薪配置（按业务类型）</SectionTitle>
+                    <div style={{ fontSize: 12, color: t.tm, margin: "-12px 0 16px" }}>
+                      按 事務 / 講師（大課）/ 講師（一対一）/ 答疑做題 / 研究計画書修改 等业务类型分别配置时薪，支持涨薪历史。
+                    </div>
+                    <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} allEmps={emps} />
+                  </div>
+                )}
+                {creating && isHourly && (
+                  <div style={{ padding: 18, borderRadius: 16, background: `${t.wn}10`, border: `1px dashed ${t.wn}60`, color: t.wn, fontSize: 13, fontWeight: 500 }}>
+                    保存新员工后可配置各业务类型时薪
+                  </div>
+                )}
+                {isHourly && <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />}
+
                 {/* 薪资与税务 */}
                 <div>
-                  <SectionTitle t={t}>薪资与税务配置</SectionTitle>
+                  <SectionTitle t={t}>{isHourly ? "税务与合同信息" : "薪资与税务配置"}</SectionTitle>
                   <div style={{ padding: !isAdmin ? 20 : 0, backgroundColor: !isAdmin ? t.bl : "transparent", borderRadius: 16, border: !isAdmin ? `1px dashed ${t.bd}` : "none" }}>
                     {!isAdmin && (
                       <div style={{ color: t.ts, fontSize: 13, display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
@@ -879,17 +896,6 @@ export default function EmployeeManager({ user, t, tk }) {
                           </div>
                         )}
                       </div>
-                    </div>
-                  </>
-                )}
-
-                {/* 时薪配置（仅 hourly） */}
-                {!creating && isHourly && (
-                  <>
-                    <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
-                    <div>
-                      <SectionTitle t={t}>时薪配置</SectionTitle>
-                      <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} allEmps={emps} />
                     </div>
                   </>
                 )}
