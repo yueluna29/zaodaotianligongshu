@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW } from "../../config/constants"
-import { Users } from "lucide-react"
+import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight } from "lucide-react"
 import PayRateSection from "../../components/PayRateSection"
 
 const EMP_TYPES_ALL = [...EMP_TYPES_JP, ...EMP_TYPES_CN]
@@ -33,11 +33,189 @@ const emptyForm = () => ({
   has_commission: false,
 })
 
+const glassCard = {
+  background: "rgba(255, 255, 255, 0.62)",
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
+  borderRadius: 24,
+  border: "1px solid rgba(255, 255, 255, 0.9)",
+  boxShadow: "0 20px 50px -20px rgba(30, 64, 175, 0.06)",
+  position: "relative",
+}
+
+const AmbientBlobs = () => (
+  <>
+    <div style={{ position: "fixed", top: "-15%", left: "-10%", width: "50vw", height: "50vw", minWidth: 400, minHeight: 400, background: "rgba(191,219,254,0.35)", filter: "blur(100px)", borderRadius: "50%", zIndex: 0, pointerEvents: "none" }} />
+    <div style={{ position: "fixed", bottom: "-15%", right: "-5%", width: "60vw", height: "60vw", minWidth: 400, minHeight: 400, background: "rgba(153,246,228,0.30)", filter: "blur(100px)", borderRadius: "50%", zIndex: 0, pointerEvents: "none" }} />
+  </>
+)
+
+function HoverButton({ children, primary, onClick, iconOnly, disabled, t, style }) {
+  const [hv, setHv] = useState(false)
+  const base = {
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+    padding: iconOnly ? 8 : "10px 18px", borderRadius: 12,
+    fontWeight: 600, fontSize: 13, cursor: disabled ? "wait" : "pointer",
+    transition: "all 0.2s ease", whiteSpace: "nowrap", flexShrink: 0,
+    opacity: disabled ? 0.65 : 1,
+    ...style,
+  }
+  const pri = {
+    backgroundColor: hv && !disabled ? t.ah : t.ac, color: "#fff", border: "none",
+    boxShadow: hv && !disabled ? `0 4px 12px ${t.ac}55` : "none",
+  }
+  const sec = {
+    backgroundColor: hv ? t.bgH : "rgba(255,255,255,0.8)",
+    color: iconOnly ? (hv ? t.ac : t.td) : t.tx,
+    border: iconOnly ? "none" : `1px solid ${t.bd}`,
+  }
+  return (
+    <button onMouseEnter={() => setHv(true)} onMouseLeave={() => setHv(false)} onClick={onClick} disabled={disabled}
+      style={{ ...base, ...(primary ? pri : sec) }}>{children}</button>
+  )
+}
+
+function Field({ label, value, onChange, isEditing, isLocked, required, type, options, t, placeholder, fullWidth }) {
+  const flexBasis = fullWidth ? "1 1 100%" : "1 1 220px"
+  if (!isEditing) {
+    let display = value
+    if (value === null || value === undefined || value === "") display = null
+    else if (type === "date" && typeof value === "string") display = fmtDateW(value)
+    else if (type === "select" && options) {
+      const opt = options.find(o => (typeof o === "object" ? o.value : o) === value)
+      if (opt) display = typeof opt === "object" ? opt.label : opt
+    }
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: flexBasis, padding: "8px 0", minWidth: 0 }}>
+        <label style={{ fontSize: 13, color: t.tm, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+          {label}
+          {isLocked && <Lock size={12} color={t.td} />}
+        </label>
+        <div style={{ fontSize: 15, color: isLocked ? t.ts : t.tx, fontWeight: 600, letterSpacing: 0.2, minHeight: 24, wordBreak: "break-word" }}>
+          {display !== null && display !== undefined ? display : <span style={{ color: t.td, fontWeight: 400 }}>—未填写—</span>}
+        </div>
+      </div>
+    )
+  }
+  const iS = {
+    width: "100%", padding: "11px 14px", borderRadius: 12,
+    border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.85)", color: t.tx,
+    outline: "none", boxSizing: "border-box", fontSize: 14, fontFamily: "inherit",
+  }
+  const lS = { ...iS, paddingLeft: 38, border: `1px dashed ${t.td}`, backgroundColor: t.bl, color: t.tm, cursor: "not-allowed" }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: flexBasis, minWidth: 0 }}>
+      <label style={{ fontSize: 13, color: t.ts, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+        {label} {required && <span style={{ color: t.rd }}>*</span>}
+        {isLocked && <Lock size={12} color={t.td} />}
+      </label>
+      {isLocked ? (
+        <div style={{ position: "relative" }}>
+          <Lock size={14} color={t.td} style={{ position: "absolute", left: 13, top: 14 }} />
+          <input style={lS} value={value ?? ""} disabled readOnly />
+        </div>
+      ) : type === "select" ? (
+        <select style={iS} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
+          <option value="">—</option>
+          {(options || []).map(o => typeof o === "object"
+            ? <option key={o.value} value={o.value}>{o.label}</option>
+            : <option key={o} value={o}>{o}</option>
+          )}
+        </select>
+      ) : (
+        <input type={type || "text"} style={iS} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      )}
+    </div>
+  )
+}
+
+function ChipPicker({ label, options, value, onChange, multi, isEditing, isLocked, t }) {
+  if (!isEditing) {
+    const display = multi
+      ? (value || []).length > 0 ? (value || []).join("、") : null
+      : value
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 100%", padding: "8px 0" }}>
+        <label style={{ fontSize: 13, color: t.tm, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+          {label}
+          {isLocked && <Lock size={12} color={t.td} />}
+        </label>
+        <div style={{ fontSize: 15, color: t.tx, fontWeight: 600 }}>
+          {display || <span style={{ color: t.td, fontWeight: 400 }}>—未填写—</span>}
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 1 100%" }}>
+      <label style={{ fontSize: 13, color: t.ts, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+        {label} {isLocked && <Lock size={12} color={t.td} />}
+      </label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {options.map(o => {
+          const active = multi ? (value || []).includes(o) : value === o
+          return (
+            <button key={o} type="button" disabled={isLocked} onClick={() => {
+              if (multi) {
+                const arr = value || []
+                onChange(arr.includes(o) ? arr.filter(x => x !== o) : [...arr, o])
+              } else {
+                onChange(value === o ? "" : o)
+              }
+            }} style={{
+              padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+              color: active ? t.ac : t.ts,
+              backgroundColor: active ? t.tb : t.bl,
+              border: `1px solid ${active ? t.ac : "transparent"}`,
+              cursor: isLocked ? "not-allowed" : "pointer",
+              opacity: isLocked ? 0.6 : 1,
+              fontFamily: "inherit",
+            }}>{o}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function CheckBox({ label, checked, onChange, disabled, t }) {
+  return (
+    <label style={{
+      display: "inline-flex", alignItems: "center", gap: 8,
+      padding: "10px 14px", borderRadius: 12,
+      border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.7)",
+      fontSize: 13, color: disabled ? t.td : t.tx, fontWeight: 500,
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.65 : 1,
+    }}>
+      <input type="checkbox" checked={!!checked} onChange={(e) => !disabled && onChange?.(e.target.checked)} disabled={disabled} />
+      {label}
+      {disabled && <Lock size={12} color={t.td} />}
+    </label>
+  )
+}
+
+function SectionTitle({ children, t }) {
+  return (
+    <h3 style={{ margin: "0 0 20px 0", fontSize: 15, color: t.tx, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ width: 4, height: 14, backgroundColor: t.ac, borderRadius: 2 }} />
+      {children}
+    </h3>
+  )
+}
+
+const chipBadge = (color, bg, border = "transparent") => ({
+  padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+  color, backgroundColor: bg, border: `1px solid ${border}`,
+  display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap",
+})
+
 export default function EmployeeManager({ user, t, tk }) {
   const [emps, sEmps] = useState([])
   const [ld, sLd] = useState(true)
   const [filter, sFilter] = useState("all")
   const [companyFilter, sCompanyFilter] = useState("all")
+  const [searchTerm, setSearchTerm] = useState("")
   const [selected, sSelected] = useState(null)
   const [editing, sEditing] = useState(false)
   const [creating, sCreating] = useState(false)
@@ -47,6 +225,7 @@ export default function EmployeeManager({ user, t, tk }) {
   const [schedules, setSchedules] = useState([])
   const [editSched, setEditSched] = useState(false)
   const [schedFm, setSchedFm] = useState({})
+  const [activeTab, setActiveTab] = useState("basic")
 
   const isAdmin = user && user.role === "admin"
 
@@ -117,19 +296,20 @@ export default function EmployeeManager({ user, t, tk }) {
       bank_account_type: emp.bank_account_type || "普通",
       bank_account_number: emp.bank_account_number || "", bank_account_holder: emp.bank_account_holder || "",
       days_off: emp.days_off || [0, 6], available_days: emp.available_days || [], remarks: emp.remarks || "",
+      has_commission: emp.has_commission || false,
     })
     sEditing(true)
   }
 
-  const startCreate = () => { sSelected({ id: "__new__" }); sCreating(true); sFm(emptyForm()); sEditing(true) }
+  const startCreate = () => { sSelected({ id: "__new__" }); sCreating(true); sFm(emptyForm()); sEditing(true); setActiveTab("basic") }
 
   const startSchedEdit = () => {
-    const fm = {}
+    const nf = {}
     for (let i = 0; i < 7; i++) {
       const s = schedules.find(sc => sc.day_of_week === i)
-      fm[i] = { enabled: !!s, start: s?.start_time?.slice(0, 5) || "09:00", end: s?.end_time?.slice(0, 5) || "18:00" }
+      nf[i] = { enabled: !!s, start: s?.start_time?.slice(0, 5) || "09:00", end: s?.end_time?.slice(0, 5) || "18:00" }
     }
-    setSchedFm(fm); setEditSched(true)
+    setSchedFm(nf); setEditSched(true)
   }
 
   const saveSched = async () => {
@@ -171,40 +351,6 @@ export default function EmployeeManager({ user, t, tk }) {
     sSaving(false)
   }
 
-  const toggleArr = (field, val) => {
-    sFm((p) => {
-      const arr = [...(p[field] || [])]; const idx = arr.indexOf(val)
-      if (idx >= 0) arr.splice(idx, 1); else arr.push(val)
-      return { ...p, [field]: field === "subjects" ? arr : arr.sort() }
-    })
-  }
-
-  // ========== 样式与工具 ==========
-  const iS = { padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box", width: "100%" }
-  const lockS = { ...iS, opacity: 0.5, cursor: "not-allowed" }
-  const secTitle = (text) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "24px 0 14px", paddingBottom: 10, borderBottom: `1px solid ${t.bd}` }}>
-      <div style={{ width: 3, height: 18, background: t.ac, borderRadius: 2 }} />
-      <span style={{ fontSize: 15, fontWeight: 700, color: t.tx }}>{text}</span>
-    </div>
-  )
-  const fieldLabel = (text) => <div style={{ fontSize: 10, color: t.tm, marginBottom: 4, fontWeight: 500 }}>{text}</div>
-  const readField = (label, value) => (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 10, color: t.tm, marginBottom: 4, fontWeight: 500, letterSpacing: 0.3 }}>{label}</div>
-      <div style={{ fontSize: 13, color: t.tx, fontWeight: 500 }}>{value || <span style={{ color: t.td, fontWeight: 400 }}>—</span>}</div>
-    </div>
-  )
-  const chip = (color, label) => (
-    <span style={{ padding: "3px 10px", borderRadius: 12, fontSize: 10, fontWeight: 600, background: `${color}15`, color, border: `1px solid ${color}30` }}>{label}</span>
-  )
-  const g4 = { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 4 }
-  const g2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 4 }
-
-  const filtered = emps
-    .filter((e) => filter === "all" || e.employment_type === filter)
-    .filter((e) => companyFilter === "all" || e.company_id === companyFilter)
-
   if (ld) return <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
 
   // ==================== 档案详情 ====================
@@ -214,438 +360,711 @@ export default function EmployeeManager({ user, t, tk }) {
     const isHourly = empIsHourly(empType)
     const cid = editing ? fm.company_id : e.company_id
     const isCN = isChinaCompany(cid)
+    const isJP = !isCN
     const isExpiring = !creating && !isCN && e.residence_expiry && new Date(e.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
     const yearsOfService = (!creating && e.hire_date) ? ((new Date() - new Date(e.hire_date)) / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1) : null
     const contractExpiring = !creating && e.contract_end_date && new Date(e.contract_end_date) < new Date(new Date().getTime() + 60 * 24 * 60 * 60 * 1000)
-    // admin-only 字段的样式
-    const aS = isAdmin ? iS : lockS
-    const aD = !isAdmin
+    const isSelf = !creating && user && e.id === user.id
+
+    // 字段辅助：非 admin-lock 场景的简写
+    const fld = (name, label, opts = {}) => (
+      <Field
+        key={name}
+        label={label}
+        value={editing ? fm[name] : e[name]}
+        onChange={(v) => sFm(p => ({ ...p, [name]: v }))}
+        isEditing={editing}
+        isLocked={opts.locked}
+        required={opts.required}
+        type={opts.type}
+        options={opts.options}
+        placeholder={opts.placeholder}
+        fullWidth={opts.fullWidth}
+        t={t}
+      />
+    )
+
+    const tabsDef = [
+      { id: "basic", icon: UserIcon, label: "基本与归属" },
+      { id: "finance", icon: CreditCard, label: "薪资与税务" },
+      { id: "schedule", icon: Clock, label: "排班与假期" },
+    ]
+
+    const flexRow = { display: "flex", flexWrap: "wrap", gap: 20 }
 
     return (
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-          {isAdmin && <button onClick={() => { sSelected(null); sEditing(false); sCreating(false) }} style={{ padding: "5px 14px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 11, cursor: "pointer" }}>← 返回列表</button>}
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0, flex: 1, marginLeft: 8 }}>{creating ? "新增社员" : "人事档案"}</h2>
-          {(isAdmin || e.id === user.id) && !editing && !creating && <button onClick={() => startEdit(e)} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>编辑档案</button>}
-          {editing && <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { if (creating) { sSelected(null); sCreating(false) } sEditing(false) }} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
-            <button onClick={save} disabled={saving} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.gn, color: "#fff", fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "保存中..." : "保存"}</button>
-          </div>}
-        </div>
+      <div style={{ minHeight: "100vh", position: "relative" }}>
+        <AmbientBlobs />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "8px 4px" }}>
 
-        {/* ====== 档案头部名片 ====== */}
-        {!creating && (
-          <div style={{ background: t.bgC, borderRadius: 12, padding: "20px 24px", border: `1px solid ${t.bd}`, marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-              <div style={{ width: 64, height: 64, borderRadius: "50%", background: `linear-gradient(135deg, ${t.ac}, ${t.ac}99)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 700, flexShrink: 0, letterSpacing: 0 }}>
-                {(e.name || e.email || "?").slice(0, 1).toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 220 }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: t.tx, lineHeight: 1.2 }}>{e.name || e.email || "—"}</div>
-                <div style={{ fontSize: 11, color: t.tm, marginTop: 4, minHeight: 14 }}>{[e.furigana, e.pinyin].filter(Boolean).join(" ・ ")}</div>
-                {e.login_id && (
-                  <div style={{ fontSize: 11, color: t.ts, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 9px", borderRadius: 6, background: `${t.ac}10`, border: `1px solid ${t.ac}30` }}>
-                    <span style={{ color: t.tm }}>登录ID</span>
-                    <span style={{ fontFamily: "monospace", fontWeight: 600, color: t.ac }}>{e.login_id}</span>
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                  {e.company_id && chip(t.wn, COMPANIES.find(c => c.id === e.company_id)?.name)}
-                  {e.employment_type && chip(t.gn, e.employment_type)}
-                  {isFullTime(e.employment_type) && e.region && chip("#0EA5E9", e.region)}
-                  {e.department && chip(t.ac, e.department)}
-                  {e.role === "admin" && chip("#8B5CF6", "管理者")}
-                  {e.is_teacher && chip(t.ts, "兼任教师")}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontSize: 10, color: t.tm, fontWeight: 500, letterSpacing: 0.3 }}>入职日期</div>
-                  <div style={{ fontSize: 14, color: t.tx, fontWeight: 600, marginTop: 3 }}>{e.hire_date ? fmtDateW(e.hire_date) : "—"}</div>
-                  {yearsOfService && <div style={{ fontSize: 10, color: t.ac, marginTop: 2, fontWeight: 500 }}>在职 {yearsOfService} 年</div>}
-                </div>
-                {e.phone && <div>
-                  <div style={{ fontSize: 10, color: t.tm, fontWeight: 500, letterSpacing: 0.3 }}>联系方式</div>
-                  <div style={{ fontSize: 12, color: t.tx, marginTop: 3 }}>{e.phone}</div>
-                  {e.email && <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>{e.email}</div>}
-                </div>}
-              </div>
+          {/* 顶部操作栏 */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {isAdmin && (
+                <HoverButton iconOnly onClick={() => { sSelected(null); sEditing(false); sCreating(false) }} t={t}>
+                  <ArrowLeft size={20} />
+                </HoverButton>
+              )}
+              <h2 style={{ margin: 0, color: "#1E293B", fontSize: 22, fontWeight: 700 }}>
+                {creating ? "新增社员" : (editing ? "编辑档案" : "人事档案")}
+              </h2>
             </div>
-            {(isExpiring || contractExpiring) && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
-                {isExpiring && (
-                  <div style={{ padding: "8px 12px", borderRadius: 8, background: `${t.rd}10`, border: `1px solid ${t.rd}40`, fontSize: 11, color: t.rd, fontWeight: 500 }}>
-                    在留期限即将过期 · {fmtDateW(e.residence_expiry)}
+            {(isAdmin || isSelf) && (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {editing ? (
+                  <>
+                    <HoverButton onClick={() => { if (creating) { sSelected(null); sCreating(false) } sEditing(false) }} t={t}>
+                      <X size={15} /> 取消
+                    </HoverButton>
+                    <HoverButton primary disabled={saving} onClick={save} t={t}>
+                      <Save size={15} /> {saving ? "保存中..." : "保存更改"}
+                    </HoverButton>
+                  </>
+                ) : (
+                  <HoverButton primary onClick={() => startEdit(e)} t={t}>
+                    <Edit3 size={15} /> 编辑档案
+                  </HoverButton>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Hero 名片（创建模式隐藏） */}
+          {!creating && (
+            <div style={{ ...glassCard, padding: 28, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20 }}>
+                <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{
+                    width: 72, height: 72, borderRadius: "50%",
+                    background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)",
+                    color: "rgba(59,130,246,0.85)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 28, fontWeight: 700, flexShrink: 0,
+                  }}>
+                    {(e.name || e.email || "?").slice(0, 1).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
+                      <h1 style={{ margin: 0, fontSize: 24, color: t.tx, fontWeight: 700 }}>{e.name || e.email || "—"}</h1>
+                      {(e.furigana || e.pinyin) && <span style={{ color: t.ts, fontSize: 13 }}>{[e.furigana, e.pinyin].filter(Boolean).join(" ・ ")}</span>}
+                      {e.login_id && (
+                        <span style={{ fontSize: 11, color: t.ac, fontFamily: "monospace", fontWeight: 600, backgroundColor: t.tb, padding: "3px 10px", borderRadius: 6, border: `1px solid ${t.ac}30` }}>
+                          {e.login_id}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {e.company_id && <span style={chipBadge(t.wn, "#FEF3C7", "transparent")}>{COMPANIES.find(c => c.id === e.company_id)?.name}</span>}
+                      {e.employment_type && <span style={chipBadge(t.gn, "#D1FAE5", "transparent")}>{e.employment_type}</span>}
+                      {isFullTime(e.employment_type) && e.region && <span style={chipBadge(t.ac, t.tb, "transparent")}>{e.region}</span>}
+                      {e.department && <span style={chipBadge(t.ac, t.tb, "transparent")}>{e.department}</span>}
+                      {e.role === "admin" && <span style={chipBadge("#7C3AED", "rgba(124,58,237,0.1)", "transparent")}>管理者</span>}
+                      {e.is_teacher && <span style={chipBadge(t.ts, t.bl, "transparent")}>兼任教师</span>}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 200 }}>
+                  <div style={{ fontSize: 13, color: t.tm }}>
+                    入职于 <strong style={{ color: t.tx }}>{e.hire_date ? fmtDateW(e.hire_date) : "—"}</strong>
+                    {yearsOfService && <span style={{ color: t.ac, marginLeft: 8, fontWeight: 600 }}>在职 {yearsOfService} 年</span>}
+                  </div>
+                  {e.phone && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: t.ts, fontSize: 13 }}>
+                      <Phone size={14} color={t.td} /> {e.phone}
+                    </div>
+                  )}
+                  {e.email && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: t.ts, fontSize: 13 }}>
+                      <Mail size={14} color={t.td} /> {e.email}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {(isExpiring || contractExpiring) && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 20 }}>
+                  {isExpiring && (
+                    <div style={{ backgroundColor: "rgba(255,247,237,0.55)", border: "1px solid rgba(254,215,170,0.7)", color: "rgba(180,83,9,0.9)", padding: "10px 14px", borderRadius: 12, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+                      <AlertCircle size={16} color="#FB923C" />
+                      <strong>在留卡即将过期：</strong> {fmtDateW(e.residence_expiry)}
+                    </div>
+                  )}
+                  {contractExpiring && (
+                    <div style={{ backgroundColor: `${t.wn}10`, border: `1px solid ${t.wn}40`, color: t.wn, padding: "10px 14px", borderRadius: 12, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+                      <AlertCircle size={16} />
+                      <strong>合同即将到期：</strong> {fmtDateW(e.contract_end_date)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 导航 */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
+            {tabsDef.map(tb => {
+              const Icon = tb.icon
+              const active = activeTab === tb.id
+              return (
+                <button key={tb.id} onClick={() => setActiveTab(tb.id)} style={{
+                  padding: "11px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 7,
+                  color: active ? t.ac : t.ts, fontWeight: 600, fontSize: 13,
+                  backgroundColor: active ? "rgba(255,255,255,0.72)" : "transparent",
+                  border: active ? "1px solid rgba(255,255,255,0.9)" : "1px solid transparent",
+                  borderRadius: 16,
+                  boxShadow: active ? "0 4px 12px rgba(0,0,0,0.02)" : "none",
+                  transition: "all 0.2s", whiteSpace: "nowrap", flexShrink: 0,
+                  fontFamily: "inherit",
+                }}>
+                  <Icon size={15} /> {tb.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Tab 内容 */}
+          <div style={{ ...glassCard, padding: 28 }}>
+
+            {/* ========== Tab 1: 基本与归属 ========== */}
+            {activeTab === "basic" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+                {/* 归属与状态 */}
+                <div>
+                  <SectionTitle t={t}>归属与状态</SectionTitle>
+                  <div style={flexRow}>
+                    <Field
+                      label="所属公司"
+                      value={editing ? fm.company_id : e.company_id}
+                      onChange={(v) => {
+                        const nextId = Number(v)
+                        const nextTypes = empTypesFor(nextId)
+                        sFm(p => ({ ...p, company_id: nextId, employment_type: nextTypes.includes(p.employment_type) ? p.employment_type : nextTypes[0] }))
+                      }}
+                      isEditing={editing} isLocked={!isAdmin}
+                      type="select"
+                      options={COMPANIES.map(c => ({ value: c.id, label: c.name }))}
+                      t={t}
+                    />
+                    <Field
+                      label="雇佣类型"
+                      value={editing ? fm.employment_type : e.employment_type}
+                      onChange={(v) => sFm(p => ({ ...p, employment_type: v }))}
+                      isEditing={editing} isLocked={!isAdmin}
+                      type="select"
+                      options={empTypesFor(editing ? fm.company_id : e.company_id)}
+                      t={t}
+                    />
+                    {fld("hire_date", "入职日期", { locked: !isAdmin, type: "date" })}
+                    <Field
+                      label="系统权限"
+                      value={editing ? fm.role : (e.role === "admin" ? "管理者" : "社员")}
+                      onChange={(v) => sFm(p => ({ ...p, role: v }))}
+                      isEditing={editing} isLocked={!isAdmin}
+                      type="select"
+                      options={[{ value: "staff", label: "社员" }, { value: "admin", label: "管理者" }]}
+                      t={t}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+
+                {/* 基本资料 */}
+                <div>
+                  <SectionTitle t={t}>基本资料</SectionTitle>
+                  <div style={flexRow}>
+                    {fld("name", isCN ? "姓名" : "汉字姓名", { required: true })}
+                    {isJP && fld("furigana", "假名 (Furigana)", { placeholder: "セイ メイ" })}
+                    {fld("pinyin", "拼音", { placeholder: "Xing Ming" })}
+                    {fld("phone", "电话号码")}
+                    {fld("email", "电子邮箱", { required: true, fullWidth: isCN })}
+                    {isJP && isFullTime(empType) && (
+                      <ChipPicker
+                        label="地区"
+                        options={REGIONS}
+                        value={editing ? fm.region : e.region}
+                        onChange={(v) => sFm(p => ({ ...p, region: v }))}
+                        isEditing={editing}
+                        t={t}
+                      />
+                    )}
+                    {isCN && fld("id_card_number", "身份证号码", { placeholder: "18 位身份证号" })}
+                    {isCN && fld("birth_date", "出生年月日", { type: "date" })}
+                    {isCN && fld("gender", "性别", { type: "select", options: GENDERS })}
+                  </div>
+
+                  <div style={{ marginTop: 20 }}>
+                    <ChipPicker
+                      label={`负责部门${isFullTime(empType) ? "（教务/咨询/宣传/财务）" : "（大学院/学部/文书/语言类）"}`}
+                      options={deptListFor(empType)}
+                      value={editing ? fm.department : e.department}
+                      onChange={(v) => sFm(p => ({ ...p, department: v }))}
+                      isEditing={editing}
+                      t={t}
+                    />
+                  </div>
+
+                  <div style={{ marginTop: 20 }}>
+                    <ChipPicker
+                      label="担任科目（多选）"
+                      options={SUBJECTS}
+                      value={editing ? fm.subjects : e.subjects}
+                      onChange={(v) => sFm(p => ({ ...p, subjects: v }))}
+                      multi
+                      isEditing={editing}
+                      t={t}
+                    />
+                  </div>
+
+                  <div style={{ ...flexRow, marginTop: 20 }}>
+                    {isJP ? (
+                      <>
+                        <Field label="住址" value={editing ? fm.address : e.address} onChange={(v) => sFm(p => ({ ...p, address: v }))} isEditing={editing} t={t} fullWidth={false} />
+                        {fld("postal_code", "邮编", { placeholder: "123-4567" })}
+                      </>
+                    ) : (
+                      fld("address", "住址", { fullWidth: true })
+                    )}
+                    {fld("remarks", "备注", { fullWidth: true })}
+                  </div>
+
+                  <div style={{ marginTop: 20 }}>
+                    {editing ? (
+                      <CheckBox
+                        label="兼任教师"
+                        checked={fm.is_teacher}
+                        onChange={(v) => sFm(p => ({ ...p, is_teacher: v }))}
+                        t={t}
+                      />
+                    ) : (
+                      <Field label="兼任教师" value={e.is_teacher ? "是" : "否"} isEditing={false} t={t} />
+                    )}
+                  </div>
+                </div>
+
+                {/* 外国人雇佣（仅日本公司） */}
+                {isJP && (
+                  <>
+                    <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+                    <div>
+                      <SectionTitle t={t}>外国人雇佣状况</SectionTitle>
+                      <div style={flexRow}>
+                        {fld("residence_status", "在留资格", { placeholder: "按在留卡如实填写" })}
+                        {fld("residence_card_number", "在留卡号码")}
+                        {fld("residence_expiry", "在留期限", { type: "date" })}
+                        {fld("nationality", "国籍/地域")}
+                        {fld("birth_date", "出生年月日", { type: "date" })}
+                        {fld("gender", "性别", { type: "select", options: GENDERS })}
+                      </div>
+                      <div style={{ marginTop: 20 }}>
+                        {editing ? (
+                          <CheckBox
+                            label="资格外许可（有）"
+                            checked={fm.has_extra_work_permit}
+                            onChange={(v) => sFm(p => ({ ...p, has_extra_work_permit: v }))}
+                            t={t}
+                          />
+                        ) : (
+                          <Field label="资格外许可" value={e.has_extra_work_permit ? "有" : "无"} isEditing={false} t={t} />
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ========== Tab 2: 薪资与税务 ========== */}
+            {activeTab === "finance" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+                {/* 薪资与税务 */}
+                <div>
+                  <SectionTitle t={t}>薪资与税务配置</SectionTitle>
+                  <div style={{ padding: !isAdmin ? 20 : 0, backgroundColor: !isAdmin ? t.bl : "transparent", borderRadius: 16, border: !isAdmin ? `1px dashed ${t.bd}` : "none" }}>
+                    {!isAdmin && (
+                      <div style={{ color: t.ts, fontSize: 13, display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
+                        <Lock size={14} /> 以下部分字段仅管理员可修改
+                      </div>
+                    )}
+                    <div style={flexRow}>
+                      {!isHourly && (
+                        <Field
+                          label="提成率 (%)"
+                          value={editing ? fm.commission_rate : `${((e.commission_rate || 0) * 100).toFixed(0)}%`}
+                          onChange={(v) => sFm(p => ({ ...p, commission_rate: v }))}
+                          isEditing={editing} isLocked={!isAdmin} type="number"
+                          t={t}
+                        />
+                      )}
+                      {!isHourly && (
+                        <Field
+                          label="固定加班 (h)"
+                          value={editing ? fm.fixed_overtime_hours : `${e.fixed_overtime_hours || 20}h`}
+                          onChange={(v) => sFm(p => ({ ...p, fixed_overtime_hours: v }))}
+                          isEditing={editing} isLocked={!isAdmin} type="number"
+                          t={t}
+                        />
+                      )}
+                      {fld("payment_method", "支付方式", { locked: isHourly ? false : !isAdmin, type: "select", options: PAY_METHODS })}
+                      {!isHourly && fld("transport_method", "交通费方式", { locked: !isAdmin, type: "select", options: TRANSPORT_METHODS })}
+                      {!isHourly && (
+                        <Field
+                          label="交通费 (円)"
+                          value={editing ? fm.transport_amount : `¥${Number(e.transport_amount || 0).toLocaleString()}`}
+                          onChange={(v) => sFm(p => ({ ...p, transport_amount: v }))}
+                          isEditing={editing} isLocked={!isAdmin} type="number"
+                          t={t}
+                        />
+                      )}
+                      {!isHourly && (
+                        <Field
+                          label="交通费上限 (円)"
+                          value={editing ? fm.transport_cap : `¥${Number(e.transport_cap || 0).toLocaleString()}`}
+                          onChange={(v) => sFm(p => ({ ...p, transport_cap: v }))}
+                          isEditing={editing} isLocked={!isAdmin} type="number"
+                          t={t}
+                        />
+                      )}
+                      {fld("dependents_count", "扶养人数", { locked: isHourly ? false : !isAdmin, type: "number" })}
+                      {fld("my_number", "My Number", { locked: isHourly ? false : !isAdmin })}
+                      {fld("contract_start_date", "合同开始日", { locked: isHourly ? false : !isAdmin, type: "date" })}
+                      {fld("contract_end_date", "合同结束日", { locked: isHourly ? false : !isAdmin, type: "date" })}
+                    </div>
+                    {editing ? (
+                      <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
+                        {!isHourly && (
+                          <CheckBox
+                            label="扶养控除"
+                            checked={fm.has_dependent_deduction}
+                            onChange={(v) => sFm(p => ({ ...p, has_dependent_deduction: v }))}
+                            disabled={!isAdmin}
+                            t={t}
+                          />
+                        )}
+                        <CheckBox
+                          label="签单提成"
+                          checked={fm.has_commission}
+                          onChange={(v) => sFm(p => ({ ...p, has_commission: v }))}
+                          disabled={!isAdmin}
+                          t={t}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ ...flexRow, marginTop: 20 }}>
+                        {!isHourly && <Field label="扶养控除" value={e.has_dependent_deduction ? "有" : "无"} isEditing={false} t={t} />}
+                        <Field label="签单提成" value={e.has_commission ? "已开启" : "未开启"} isEditing={false} t={t} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+
+                {/* 银行账户 */}
+                <div>
+                  <SectionTitle t={t}>银行账户</SectionTitle>
+                  <div style={flexRow}>
+                    {isCN ? (
+                      <>
+                        {fld("bank_account_holder", "开户名", { placeholder: "张三" })}
+                        {fld("bank_name", "开户银行", { placeholder: "中国工商银行大连支行" })}
+                        {fld("bank_account_number", "账户号码")}
+                      </>
+                    ) : (
+                      <>
+                        {fld("bank_name", "银行名称")}
+                        {fld("bank_branch", "支店名")}
+                        {fld("bank_account_type", "账户类型", { type: "select", options: ACCT_TYPES })}
+                        {fld("bank_account_number", "账号")}
+                        {fld("bank_account_holder", "户名 (カナ)", { fullWidth: true, placeholder: "ヤマダ タロウ" })}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ========== Tab 3: 排班与假期（Gemini 未设计，先用 glass 风格临时实现） ========== */}
+            {activeTab === "schedule" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+                {/* 排班设定 */}
+                {!creating && (
+                  <div>
+                    <SectionTitle t={t}>排班设定</SectionTitle>
+                    {editSched ? (
+                      <div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                          {WEEKDAYS.map((w, i) => (
+                            <div key={i} style={{
+                              display: "flex", alignItems: "center", gap: 12,
+                              padding: "10px 14px", borderRadius: 12,
+                              border: `1px solid ${t.bd}`,
+                              backgroundColor: schedFm[i]?.enabled ? t.tb : "rgba(255,255,255,0.7)",
+                            }}>
+                              <button type="button" onClick={() => setSchedFm(p => ({ ...p, [i]: { ...p[i], enabled: !p[i]?.enabled } }))} style={{
+                                width: 40, height: 40, borderRadius: 10,
+                                border: `1px solid ${schedFm[i]?.enabled ? t.ac : t.bd}`,
+                                backgroundColor: schedFm[i]?.enabled ? `${t.ac}20` : "rgba(255,255,255,0.8)",
+                                color: schedFm[i]?.enabled ? t.ac : t.td,
+                                fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                              }}>{w}</button>
+                              {schedFm[i]?.enabled ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <input type="time" value={schedFm[i]?.start || "09:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], start: ev.target.value } }))} style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.8)", color: t.tx, fontSize: 13, fontFamily: "inherit", width: 120 }} />
+                                  <span style={{ color: t.tm }}>~</span>
+                                  <input type="time" value={schedFm[i]?.end || "18:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], end: ev.target.value } }))} style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.8)", color: t.tx, fontSize: 13, fontFamily: "inherit", width: 120 }} />
+                                </div>
+                              ) : <span style={{ fontSize: 13, color: t.td }}>休息</span>}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", gap: 10 }}>
+                          <HoverButton primary disabled={saving} onClick={saveSched} t={t}>{saving ? "保存中..." : "保存排班"}</HoverButton>
+                          <HoverButton onClick={() => setEditSched(false)} t={t}>取消</HoverButton>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                          {WEEKDAYS.map((w, i) => {
+                            const s = schedules.find(sc => sc.day_of_week === i)
+                            return (
+                              <div key={i} style={{
+                                padding: "12px 16px", borderRadius: 14, minWidth: 84, textAlign: "center",
+                                background: s ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.4)",
+                                border: `1px solid ${s ? t.ac : t.bd}`,
+                              }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: s ? t.ac : t.td }}>{w}</div>
+                                {s
+                                  ? <div style={{ fontSize: 11, color: t.tx, marginTop: 6, fontFamily: "monospace" }}>{s.start_time?.slice(0, 5)}~{s.end_time?.slice(0, 5)}</div>
+                                  : <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>休</div>
+                                }
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {isAdmin && <HoverButton onClick={startSchedEdit} t={t}><Edit3 size={14} /> 编辑排班</HoverButton>}
+                      </div>
+                    )}
                   </div>
                 )}
-                {contractExpiring && (
-                  <div style={{ padding: "8px 12px", borderRadius: 8, background: `${t.wn}10`, border: `1px solid ${t.wn}40`, fontSize: 11, color: t.wn, fontWeight: 500 }}>
-                    合同即将到期 · {fmtDateW(e.contract_end_date)}
+
+                {/* 假期余额（仅正/契） */}
+                {!creating && !isHourly && leaveBal && (
+                  <>
+                    <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+                    <div>
+                      <SectionTitle t={t}>假期余额</SectionTitle>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+                        <div style={{ padding: "18px 20px", borderRadius: 16, background: "rgba(255,255,255,0.72)", border: `1px solid ${t.ac}30` }}>
+                          <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, letterSpacing: 0.5 }}>有休余额</div>
+                          <div style={{ fontSize: 30, fontWeight: 700, color: t.ac, marginTop: 6, lineHeight: 1 }}>{leaveBal.paid.balance}<span style={{ fontSize: 14, marginLeft: 2 }}>天</span></div>
+                          <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>本年 {leaveBal.paid.currentGrant} + 繰越 {leaveBal.paid.carryOver} − 已用 {leaveBal.paid.used}</div>
+                        </div>
+                        <div style={{ padding: "18px 20px", borderRadius: 16, background: "rgba(255,255,255,0.72)", border: "1px solid rgba(139,92,246,0.25)" }}>
+                          <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, letterSpacing: 0.5 }}>代休余额</div>
+                          <div style={{ fontSize: 30, fontWeight: 700, color: "#8B5CF6", marginTop: 6, lineHeight: 1 }}>{leaveBal.compUnused}<span style={{ fontSize: 14, marginLeft: 2 }}>天</span></div>
+                          <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>累计 {leaveBal.compTotal} 次换休</div>
+                        </div>
+                        <div style={{ padding: "18px 20px", borderRadius: 16, background: "rgba(255,255,255,0.72)", border: `1px solid ${leaveBal.expiringSoon > 0 ? t.rd : t.gn}30` }}>
+                          <div style={{ fontSize: 11, color: t.tm, fontWeight: 600, letterSpacing: 0.5 }}>即将过期代休</div>
+                          <div style={{ fontSize: 30, fontWeight: 700, color: leaveBal.expiringSoon > 0 ? t.rd : t.gn, marginTop: 6, lineHeight: 1 }}>{leaveBal.expiringSoon}<span style={{ fontSize: 14, marginLeft: 2 }}>天</span></div>
+                          <div style={{ fontSize: 11, color: t.td, marginTop: 6 }}>{leaveBal.expiringSoon > 0 ? "14 天内到期" : "暂无到期"}</div>
+                        </div>
+                        {!selected.hire_date && (
+                          <div style={{ padding: "18px 20px", borderRadius: 16, background: `${t.wn}10`, border: `1px dashed ${t.wn}` }}>
+                            <div style={{ fontSize: 12, color: t.wn, fontWeight: 600 }}>未设定入职日期</div>
+                            <div style={{ fontSize: 11, color: t.tm, marginTop: 6 }}>请在「归属与状态」中填写</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* 时薪配置（仅 hourly） */}
+                {!creating && isHourly && (
+                  <>
+                    <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+                    <div>
+                      <SectionTitle t={t}>时薪配置</SectionTitle>
+                      <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} allEmps={emps} />
+                    </div>
+                  </>
+                )}
+
+                {creating && (
+                  <div style={{ textAlign: "center", color: t.tm, padding: "40px 20px" }}>
+                    <Clock size={40} color={t.td} style={{ marginBottom: 12 }} />
+                    <div style={{ fontSize: 14, color: t.ts, fontWeight: 500 }}>保存新员工后可配置排班与假期</div>
                   </div>
                 )}
               </div>
             )}
           </div>
-        )}
 
-        <div style={{ background: t.bgC, borderRadius: 12, padding: "20px 24px", border: `1px solid ${t.bd}` }}>
-
-          {/* ====== 1. 归属与状态（全部仅管理者可编辑） ====== */}
-          {secTitle("1. 归属与状态")}
-          {editing ? (
-            <div style={g4}>
-              <div>{fieldLabel("所属公司")}<select value={fm.company_id} onChange={(ev) => {
-                const nextId = Number(ev.target.value)
-                const nextTypes = empTypesFor(nextId)
-                sFm((p) => ({ ...p, company_id: nextId, employment_type: nextTypes.includes(p.employment_type) ? p.employment_type : nextTypes[0] }))
-              }} disabled={aD} style={aS}>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              <div>{fieldLabel("工作类型")}<select value={fm.employment_type} onChange={(ev) => sFm((p) => ({ ...p, employment_type: ev.target.value }))} disabled={aD} style={aS}>{empTypesFor(fm.company_id).map((tp) => <option key={tp} value={tp}>{tp}</option>)}</select></div>
-              <div>{fieldLabel("入职日期")}<input type="date" value={fm.hire_date} onChange={(ev) => sFm((p) => ({ ...p, hire_date: ev.target.value }))} disabled={aD} style={aS} /></div>
-              <div>{fieldLabel("权限")}<select value={fm.role} onChange={(ev) => sFm((p) => ({ ...p, role: ev.target.value }))} disabled={aD} style={aS}><option value="staff">社员</option><option value="admin">管理者</option></select></div>
-            </div>
-          ) : (
-            <div style={g4}>
-              {readField("所属公司", COMPANIES.find((c) => c.id === e.company_id)?.name)}
-              {readField("工作类型", e.employment_type)}
-              {readField("入职日期", e.hire_date && fmtDateW(e.hire_date))}
-              {readField("权限", e.role === "admin" ? "管理者" : "社员")}
-            </div>
-          )}
-
-          {/* ====== 2. 基本信息（可编辑） ====== */}
-          {secTitle("2. 基本信息")}
-          {editing ? (isCN ? (<>
-            <div style={g4}>
-              <div>{fieldLabel("姓名 *")}<input value={fm.name} onChange={(ev) => sFm((p) => ({ ...p, name: ev.target.value }))} style={iS} placeholder="姓 名" /></div>
-              <div>{fieldLabel("拼音 (Pinyin)")}<input value={fm.pinyin} onChange={(ev) => sFm((p) => ({ ...p, pinyin: ev.target.value }))} style={iS} placeholder="Xing Ming" /></div>
-              <div>{fieldLabel("电话号码")}<input value={fm.phone} onChange={(ev) => sFm((p) => ({ ...p, phone: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("邮箱 *")}<input type="email" value={fm.email} onChange={(ev) => sFm((p) => ({ ...p, email: ev.target.value }))} style={iS} /></div>
-            </div>
-            <div style={g4}>
-              <div>{fieldLabel("身份证号码")}<input value={fm.id_card_number} onChange={(ev) => sFm((p) => ({ ...p, id_card_number: ev.target.value }))} style={iS} placeholder="18 位身份证号" /></div>
-              <div>{fieldLabel("出生年月日")}<input type="date" value={fm.birth_date} onChange={(ev) => sFm((p) => ({ ...p, birth_date: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("性别")}<select value={fm.gender} onChange={(ev) => sFm((p) => ({ ...p, gender: ev.target.value }))} style={iS}><option value="">—</option>{GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
-              <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}><label style={{ fontSize: 11, color: t.ts, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={fm.is_teacher} onChange={(ev) => sFm((p) => ({ ...p, is_teacher: ev.target.checked }))} />兼任教师</label></div>
-            </div>
-            <div style={{ marginBottom: 10 }}>{fieldLabel(`负责部门${isFullTime(fm.employment_type) ? "（教务/咨询/宣传/财务）" : "（大学院/学部/文书/语言类）"}`)}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{deptListFor(fm.employment_type).map((d) => <button type="button" key={d} onClick={() => sFm((p) => ({ ...p, department: p.department === d ? "" : d }))} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${fm.department === d ? t.ac : t.bd}`, background: fm.department === d ? `${t.ac}15` : "transparent", color: fm.department === d ? t.ac : t.ts, fontSize: 11, cursor: "pointer" }}>{d}</button>)}</div></div>
-            <div style={{ marginBottom: 10 }}>{fieldLabel("担任科目 (多选)")}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{SUBJECTS.map((s) => <button type="button" key={s} onClick={() => toggleArr("subjects", s)} style={{ padding: "3px 8px", borderRadius: 14, border: `1px solid ${(fm.subjects || []).includes(s) ? t.gn : t.bd}`, background: (fm.subjects || []).includes(s) ? `${t.gn}15` : "transparent", color: (fm.subjects || []).includes(s) ? t.gn : t.ts, fontSize: 10, cursor: "pointer" }}>{s}</button>)}</div></div>
-            <div style={{ marginBottom: 10 }}>{fieldLabel("住址")}<input value={fm.address} onChange={(ev) => sFm((p) => ({ ...p, address: ev.target.value }))} style={iS} /></div>
-            <div>{fieldLabel("备注")}<input value={fm.remarks} onChange={(ev) => sFm((p) => ({ ...p, remarks: ev.target.value }))} style={iS} /></div>
-          </>) : (<>
-            <div style={g4}>
-              <div>{fieldLabel("汉字姓名 *")}<input value={fm.name} onChange={(ev) => sFm((p) => ({ ...p, name: ev.target.value }))} style={iS} placeholder="姓 名" /></div>
-              <div>{fieldLabel("假名 (Furigana)")}<input value={fm.furigana} onChange={(ev) => sFm((p) => ({ ...p, furigana: ev.target.value }))} style={iS} placeholder="セイ メイ" /></div>
-              <div>{fieldLabel("拼音 (Pinyin)")}<input value={fm.pinyin} onChange={(ev) => sFm((p) => ({ ...p, pinyin: ev.target.value }))} style={iS} placeholder="Xing Ming" /></div>
-              <div>{fieldLabel("电话号码")}<input value={fm.phone} onChange={(ev) => sFm((p) => ({ ...p, phone: ev.target.value }))} style={iS} /></div>
-            </div>
-            <div style={g4}>
-              <div style={{ gridColumn: isFullTime(fm.employment_type) ? "span 2" : "span 3" }}>{fieldLabel("邮箱 *")}<input type="email" value={fm.email} onChange={(ev) => sFm((p) => ({ ...p, email: ev.target.value }))} style={iS} /></div>
-              {isFullTime(fm.employment_type) && (
-                <div>{fieldLabel("地区")}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{REGIONS.map((r) => <button type="button" key={r} onClick={() => sFm((p) => ({ ...p, region: p.region === r ? "" : r }))} style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${fm.region === r ? t.ac : t.bd}`, background: fm.region === r ? `${t.ac}15` : "transparent", color: fm.region === r ? t.ac : t.ts, fontSize: 10, cursor: "pointer" }}>{r}</button>)}</div></div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
-                <label style={{ fontSize: 11, color: t.ts, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={fm.is_teacher} onChange={(ev) => sFm((p) => ({ ...p, is_teacher: ev.target.checked }))} />兼任教师</label>
-              </div>
-            </div>
-            <div style={{ marginBottom: 10 }}>{fieldLabel(`负责部门${isFullTime(fm.employment_type) ? "（教务/咨询/宣传/财务）" : "（大学院/学部/文书/语言类）"}`)}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{deptListFor(fm.employment_type).map((d) => <button type="button" key={d} onClick={() => sFm((p) => ({ ...p, department: p.department === d ? "" : d }))} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${fm.department === d ? t.ac : t.bd}`, background: fm.department === d ? `${t.ac}15` : "transparent", color: fm.department === d ? t.ac : t.ts, fontSize: 11, cursor: "pointer" }}>{d}</button>)}</div></div>
-            <div style={{ marginBottom: 10 }}>{fieldLabel("担任科目 (多选)")}<div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{SUBJECTS.map((s) => <button type="button" key={s} onClick={() => toggleArr("subjects", s)} style={{ padding: "3px 8px", borderRadius: 14, border: `1px solid ${(fm.subjects || []).includes(s) ? t.gn : t.bd}`, background: (fm.subjects || []).includes(s) ? `${t.gn}15` : "transparent", color: (fm.subjects || []).includes(s) ? t.gn : t.ts, fontSize: 10, cursor: "pointer" }}>{s}</button>)}</div></div>
-            <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div>{fieldLabel("住址")}<input value={fm.address} onChange={(ev) => sFm((p) => ({ ...p, address: ev.target.value }))} style={iS} /></div>
-              <div>{fieldLabel("邮编")}<input value={fm.postal_code} onChange={(ev) => sFm((p) => ({ ...p, postal_code: ev.target.value }))} style={iS} placeholder="123-4567" /></div>
-            </div>
-            <div>{fieldLabel("备注")}<input value={fm.remarks} onChange={(ev) => sFm((p) => ({ ...p, remarks: ev.target.value }))} style={iS} /></div>
-          </>)) : (isCN ? (<>
-            <div style={g4}>
-              {readField("姓名", e.name)}
-              {readField("拼音", e.pinyin)}
-              {readField("电话", e.phone)}
-              {readField("邮箱", e.email)}
-            </div>
-            <div style={g4}>
-              {readField("身份证号码", e.id_card_number)}
-              {readField("出生年月日", e.birth_date && fmtDateW(e.birth_date))}
-              {readField("性别", e.gender)}
-              {readField("兼任教师", e.is_teacher ? "是" : "否")}
-            </div>
-            <div style={g4}>
-              {readField("负责部门", e.department)}
-              {readField("担任科目", (e.subjects || []).length > 0 ? e.subjects.join("、") : null)}
-              <div style={{ gridColumn: "span 2" }}>{readField("住址", e.address)}</div>
-            </div>
-            <div>{readField("备注", e.remarks)}</div>
-          </>) : (<>
-            <div style={g4}>
-              {readField("汉字姓名", e.name)}
-              {readField("假名", e.furigana)}
-              {readField("拼音", e.pinyin)}
-              {readField("电话", e.phone)}
-            </div>
-            <div style={g4}>
-              {readField("邮箱", e.email)}
-              {readField("负责部门", isFullTime(e.employment_type) ? [e.region, e.department].filter(Boolean).join(" · ") : e.department)}
-              {readField("担任科目", (e.subjects || []).length > 0 ? e.subjects.join("、") : null)}
-              {readField("兼任教师", e.is_teacher ? "是" : "否")}
-            </div>
-            <div style={g2}>
-              {readField("住址", e.address ? `〒${e.postal_code || ""} ${e.address}` : null)}
-              {readField("备注", e.remarks)}
-            </div>
-          </>))}
-
-          {/* ====== 3. 外国人雇佣状况（中国公司隐藏） ====== */}
-          {!isCN && (<>
-            {secTitle("3. 外国人雇佣状况")}
-            {editing ? (<>
-              <div style={g4}>
-                <div>{fieldLabel("在留资格")}<input value={fm.residence_status} onChange={(ev) => sFm((p) => ({ ...p, residence_status: ev.target.value }))} style={iS} placeholder="按在留卡如实填写" /></div>
-                <div>{fieldLabel("在留卡号码")}<input value={fm.residence_card_number} onChange={(ev) => sFm((p) => ({ ...p, residence_card_number: ev.target.value }))} style={iS} /></div>
-                <div>{fieldLabel("在留期限")}<input type="date" value={fm.residence_expiry} onChange={(ev) => sFm((p) => ({ ...p, residence_expiry: ev.target.value }))} style={iS} /></div>
-                <div>{fieldLabel("国籍/地域")}<input value={fm.nationality} onChange={(ev) => sFm((p) => ({ ...p, nationality: ev.target.value }))} style={iS} /></div>
-              </div>
-              <div style={g4}>
-                <div>{fieldLabel("出生年月日")}<input type="date" value={fm.birth_date} onChange={(ev) => sFm((p) => ({ ...p, birth_date: ev.target.value }))} style={iS} /></div>
-                <div>{fieldLabel("性别")}<select value={fm.gender} onChange={(ev) => sFm((p) => ({ ...p, gender: ev.target.value }))} style={iS}><option value="">—</option>{GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
-                <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}><label style={{ fontSize: 11, color: t.ts, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={fm.has_extra_work_permit} onChange={(ev) => sFm((p) => ({ ...p, has_extra_work_permit: ev.target.checked }))} />资格外许可有无</label></div>
-                <div />
-              </div>
-            </>) : (<>
-              <div style={g4}>
-                {readField("在留资格", e.residence_status)}
-                {readField("在留卡号码", e.residence_card_number)}
-                {readField("在留期限", e.residence_expiry && (isExpiring
-                  ? <span style={{ color: t.rd, fontWeight: 700 }}>{fmtDateW(e.residence_expiry)} (即将过期)</span>
-                  : fmtDateW(e.residence_expiry)))}
-                {readField("国籍/地域", e.nationality)}
-              </div>
-              <div style={g4}>
-                {readField("出生年月日", e.birth_date && fmtDateW(e.birth_date))}
-                {readField("性别", e.gender)}
-                {readField("资格外许可", e.has_extra_work_permit ? "有" : "无")}
-                <div />
-              </div>
-            </>)}
-          </>)}
-
-          {/* ====== 4. 薪资与税务（根据类型不同权限不同） ====== */}
-          {secTitle("4. 薪资与税务")}
-          {editing ? (<>
-            {/* 正社員/契約社員: 全部admin-only。アルバイト/外部講師: 部分admin-only、部分可自编 */}
-            <div style={g4}>
-              {!isHourly && <div>{fieldLabel("提成率 %")}<input type="number" value={fm.commission_rate} onChange={(ev) => sFm((p) => ({ ...p, commission_rate: ev.target.value }))} disabled={aD} style={aS} /></div>}
-              {!isHourly && <div>{fieldLabel("固定加班 h")}<input type="number" value={fm.fixed_overtime_hours} onChange={(ev) => sFm((p) => ({ ...p, fixed_overtime_hours: ev.target.value }))} disabled={aD} style={aS} /></div>}
-              <div>{fieldLabel("支付方式")}<select value={fm.payment_method} onChange={(ev) => sFm((p) => ({ ...p, payment_method: ev.target.value }))} disabled={isHourly ? false : aD} style={isHourly ? iS : aS}>{PAY_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
-              {!isHourly && <div>{fieldLabel("交通费方式")}<select value={fm.transport_method} onChange={(ev) => sFm((p) => ({ ...p, transport_method: ev.target.value }))} disabled={aD} style={aS}>{TRANSPORT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>}
-            </div>
-            <div style={g4}>
-              {!isHourly && <div>{fieldLabel("交通费 (円)")}<input type="number" value={fm.transport_amount} onChange={(ev) => sFm((p) => ({ ...p, transport_amount: ev.target.value }))} disabled={aD} style={aS} /></div>}
-              {!isHourly && <div>{fieldLabel("交通费上限 (円)")}<input type="number" value={fm.transport_cap} onChange={(ev) => sFm((p) => ({ ...p, transport_cap: ev.target.value }))} disabled={aD} style={aS} /></div>}
-              <div>{fieldLabel("扶养人数")}<input type="number" value={fm.dependents_count} onChange={(ev) => sFm((p) => ({ ...p, dependents_count: ev.target.value }))} disabled={isHourly ? false : aD} style={isHourly ? iS : aS} /></div>
-              <div>{fieldLabel("My Number")}<input value={fm.my_number} onChange={(ev) => sFm((p) => ({ ...p, my_number: ev.target.value }))} disabled={isHourly ? false : aD} style={isHourly ? iS : aS} /></div>
-            </div>
-            <div style={g2}>
-              <div>{fieldLabel("合同开始日")}<input type="date" value={fm.contract_start_date} onChange={(ev) => sFm((p) => ({ ...p, contract_start_date: ev.target.value }))} disabled={isHourly ? false : aD} style={isHourly ? iS : aS} /></div>
-              <div>{fieldLabel("合同结束日")}<input type="date" value={fm.contract_end_date} onChange={(ev) => sFm((p) => ({ ...p, contract_end_date: ev.target.value }))} disabled={isHourly ? false : aD} style={isHourly ? iS : aS} /></div>
-            </div>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 6, marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: `${t.ac}05`, border: `1px solid ${t.bd}` }}>
-              {!isHourly && (
-                <label style={{ fontSize: 12, color: t.ts, cursor: isAdmin ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 6, opacity: aD ? 0.5 : 1 }}>
-                  <input type="checkbox" checked={fm.has_dependent_deduction} onChange={(ev) => sFm((p) => ({ ...p, has_dependent_deduction: ev.target.checked }))} disabled={aD} />扶养控除
-                </label>
-              )}
-              <label style={{ fontSize: 12, color: isAdmin ? t.ts : t.td, cursor: isAdmin ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 6, opacity: !isAdmin ? 0.5 : 1 }}>
-                <input type="checkbox" checked={fm.has_commission} onChange={(ev) => sFm((p) => ({ ...p, has_commission: ev.target.checked }))} disabled={!isAdmin} />签单提成
-              </label>
-            </div>
-          </>) : (<>
-            <div style={g4}>
-              {!isHourly && readField("提成率", `${((e.commission_rate || 0) * 100).toFixed(0)}%`)}
-              {!isHourly && readField("固定加班", `${e.fixed_overtime_hours || 20}h`)}
-              {readField("支付方式", e.payment_method)}
-              {!isHourly && readField("交通费", `${e.transport_method} ${e.transport_amount ? "¥" + Number(e.transport_amount).toLocaleString() : ""}`)}
-            </div>
-            <div style={g4}>
-              {readField("扶养人数", e.dependents_count)}
-              {readField("My Number", e.my_number)}
-              {readField("合同期间", e.contract_start_date ? `${fmtDateW(e.contract_start_date)} ~ ${e.contract_end_date ? fmtDateW(e.contract_end_date) : ""}` : null)}
-              {readField("签单提成", e.has_commission ? "已开启" : "未开启")}
-              {!isHourly && readField("扶养控除", e.has_dependent_deduction ? "有" : "无")}
-            </div>
-          </>)}
-
-          {/* ====== 5. 银行信息（可编辑） ====== */}
-          {secTitle("5. 银行信息")}
-          {isCN ? (
-            editing ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                <div>{fieldLabel("开户名")}<input value={fm.bank_account_holder} onChange={(ev) => sFm((p) => ({ ...p, bank_account_holder: ev.target.value }))} style={iS} placeholder="张三" /></div>
-                <div>{fieldLabel("开户银行")}<input value={fm.bank_name} onChange={(ev) => sFm((p) => ({ ...p, bank_name: ev.target.value }))} style={iS} placeholder="中国工商银行大连支行" /></div>
-                <div>{fieldLabel("账户号码")}<input value={fm.bank_account_number} onChange={(ev) => sFm((p) => ({ ...p, bank_account_number: ev.target.value }))} style={iS} /></div>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                {readField("开户名", e.bank_account_holder)}
-                {readField("开户银行", e.bank_name)}
-                {readField("账户号码", e.bank_account_number)}
-              </div>
-            )
-          ) : (<>
-            {editing ? (
-              <div style={g4}>
-                <div>{fieldLabel("银行名称")}<input value={fm.bank_name} onChange={(ev) => sFm((p) => ({ ...p, bank_name: ev.target.value }))} style={iS} /></div>
-                <div>{fieldLabel("支店名")}<input value={fm.bank_branch} onChange={(ev) => sFm((p) => ({ ...p, bank_branch: ev.target.value }))} style={iS} /></div>
-                <div>{fieldLabel("账户类型")}<select value={fm.bank_account_type} onChange={(ev) => sFm((p) => ({ ...p, bank_account_type: ev.target.value }))} style={iS}>{ACCT_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
-                <div>{fieldLabel("账号")}<input value={fm.bank_account_number} onChange={(ev) => sFm((p) => ({ ...p, bank_account_number: ev.target.value }))} style={iS} /></div>
-              </div>
-            ) : (
-              <div style={g4}>
-                {readField("银行", e.bank_name)}
-                {readField("支店", e.bank_branch)}
-                {readField("类型", e.bank_account_type)}
-                {readField("账号", e.bank_account_number)}
-              </div>
-            )}
-            {editing ? (
-              <div style={{ marginBottom: 10 }}>{fieldLabel("户名 (カナ)")}<input value={fm.bank_account_holder} onChange={(ev) => sFm((p) => ({ ...p, bank_account_holder: ev.target.value }))} style={{ ...iS, maxWidth: 300 }} placeholder="ヤマダ タロウ" /></div>
-            ) : (
-              <div>{readField("户名", e.bank_account_holder)}</div>
-            )}
-          </>)}
-
-          {/* ====== 6. 排班设定 ====== */}
-          {!creating && (<>
-            {secTitle("6. 排班设定")}
-            {editSched ? (
-              <div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                  {WEEKDAYS.map((w, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: schedFm[i]?.enabled ? `${t.ac}06` : "transparent" }}>
-                      <button type="button" onClick={() => setSchedFm(p => ({ ...p, [i]: { ...p[i], enabled: !p[i]?.enabled } }))} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${schedFm[i]?.enabled ? t.ac : t.bd}`, background: schedFm[i]?.enabled ? `${t.ac}20` : "transparent", color: schedFm[i]?.enabled ? t.ac : t.td, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{w}</button>
-                      {schedFm[i]?.enabled ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <input type="time" value={schedFm[i]?.start || "09:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], start: ev.target.value } }))} style={{ ...iS, width: 110 }} />
-                          <span style={{ color: t.tm, fontSize: 12 }}>~</span>
-                          <input type="time" value={schedFm[i]?.end || "18:00"} onChange={(ev) => setSchedFm(p => ({ ...p, [i]: { ...p[i], end: ev.target.value } }))} style={{ ...iS, width: 110 }} />
-                        </div>
-                      ) : <span style={{ fontSize: 12, color: t.td }}>休息</span>}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={saveSched} disabled={saving} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.gn, color: "#fff", fontSize: 12, fontWeight: 600, cursor: saving ? "wait" : "pointer" }}>{saving ? "保存中..." : "保存排班"}</button>
-                  <button onClick={() => setEditSched(false)} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer" }}>取消</button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                  {WEEKDAYS.map((w, i) => {
-                    const s = schedules.find(sc => sc.day_of_week === i)
-                    return (
-                      <div key={i} style={{ padding: "8px 12px", borderRadius: 8, border: `1px solid ${s ? t.ac : t.bd}`, background: s ? `${t.ac}08` : "transparent", minWidth: 70, textAlign: "center" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: s ? t.ac : t.td }}>{w}</div>
-                        {s ? <div style={{ fontSize: 11, color: t.tx, marginTop: 4 }}>{s.start_time?.slice(0, 5)}~{s.end_time?.slice(0, 5)}</div>
-                          : <div style={{ fontSize: 11, color: t.td, marginTop: 4 }}>休</div>}
-                      </div>
-                    )
-                  })}
-                </div>
-                {isAdmin && <button onClick={startSchedEdit} style={{ padding: "5px 14px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ac, fontSize: 11, cursor: "pointer" }}>编辑排班</button>}
-              </div>
-            )}
-          </>)}
-
-          {/* ====== 7. 时薪配置（正社員/正社员隐藏） ====== */}
-          {!creating && empType !== "正社員" && empType !== "正社员" && (<>
-            {secTitle("7. 时薪配置")}
-            <PayRateSection empId={selected.id} isAdmin={isAdmin} t={t} tk={tk} userId={user.id} allEmps={emps} />
-          </>)}
-
-          {/* ====== 8. 假期余额（アルバイト/外部講師隐藏） ====== */}
-          {!creating && !isHourly && leaveBal && (<>
-            {secTitle("8. 假期余额")}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
-              <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px solid ${t.bd}`, background: `${t.ac}08` }}>
-                <div style={{ fontSize: 9, color: t.tm }}>有休余额</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: t.ac, marginTop: 4 }}>{leaveBal.paid.balance}天</div>
-                <div style={{ fontSize: 9, color: t.td }}>本年{leaveBal.paid.currentGrant} + 繰越{leaveBal.paid.carryOver} - 已用{leaveBal.paid.used}</div>
-              </div>
-              <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px solid ${t.bd}`, background: "#8B5CF608" }}>
-                <div style={{ fontSize: 9, color: t.tm }}>代休余额</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#8B5CF6", marginTop: 4 }}>{leaveBal.compUnused}天</div>
-                <div style={{ fontSize: 9, color: t.td }}>累计{leaveBal.compTotal}次换休</div>
-              </div>
-              <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px solid ${t.bd}`, background: leaveBal.expiringSoon > 0 ? `${t.rd}08` : `${t.gn}08` }}>
-                <div style={{ fontSize: 9, color: t.tm }}>即将过期代休</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: leaveBal.expiringSoon > 0 ? t.rd : t.gn, marginTop: 4 }}>{leaveBal.expiringSoon}天</div>
-                <div style={{ fontSize: 9, color: t.td }}>{leaveBal.expiringSoon > 0 ? "14天内到期" : "暂无到期"}</div>
-              </div>
-              {!selected.hire_date && (
-                <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px dashed ${t.wn}`, background: `${t.wn}08` }}>
-                  <div style={{ fontSize: 11, color: t.wn, fontWeight: 600 }}>未设定入职日期</div>
-                  <div style={{ fontSize: 9, color: t.tm, marginTop: 4 }}>请在"归属与状态"中填写入职日期</div>
-                </div>
-              )}
-            </div>
-          </>)}
         </div>
       </div>
     )
   }
 
-  // ==================== 列表页 ====================
+  // ==================== 档案库列表 ====================
   if (!isAdmin) return <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
+
+  const processedEmployees = emps
+    .filter((em) => filter === "all" || em.employment_type === filter)
+    .filter((em) => companyFilter === "all" || em.company_id === companyFilter)
+    .filter((em) => {
+      if (!searchTerm) return true
+      const term = searchTerm.toLowerCase()
+      return (em.name || "").toLowerCase().includes(term)
+        || (em.furigana || "").toLowerCase().includes(term)
+        || (em.pinyin || "").toLowerCase().includes(term)
+        || (em.email || "").toLowerCase().includes(term)
+        || (em.login_id || "").toLowerCase().includes(term)
+    })
+
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Users size={20} color={t.ac} />
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0 }}>人事档案库 <span style={{ fontSize: 12, fontWeight: 400, color: t.tm }}>({emps.length}名)</span></h2>
+    <div style={{ minHeight: "100vh", position: "relative" }}>
+      <AmbientBlobs />
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1400, margin: "0 auto", padding: "8px 4px" }}>
+
+        {/* 头部 */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
+          <div>
+            <h1 style={{ fontSize: 28, color: "#1E293B", margin: "0 0 4px", fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
+              <Users size={24} color={t.ac} />
+              人事档案库
+              <span style={{ color: t.td, fontSize: 20, fontWeight: 500 }}>({processedEmployees.length})</span>
+            </h1>
+            <p style={{ color: t.ts, margin: 0, fontSize: 13 }}>管理世家学舍 / 紫陽花教育 / 早稻大连 / 早理金华 员工档案</p>
+          </div>
+          <HoverButton primary onClick={startCreate} t={t}>
+            <Plus size={16} /> 新增社员
+          </HoverButton>
         </div>
-        <button onClick={startCreate} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ 新增社员</button>
-      </div>
 
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        {COMPANIES.map((c) => (
-          <button key={c.id} onClick={() => sCompanyFilter(companyFilter === c.id ? "all" : c.id)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${companyFilter === c.id ? t.wn : t.bd}`, background: companyFilter === c.id ? `${t.wn}15` : "transparent", color: companyFilter === c.id ? t.wn : t.ts, fontSize: 10, cursor: "pointer", fontWeight: companyFilter === c.id ? 600 : 400 }}>{c.name}</button>
-        ))}
-        <div style={{ width: 1, height: 16, background: t.bd }} />
-        {["all", ...EMP_TYPES_ALL].map((f) => (
-          <button key={f} onClick={() => sFilter(f)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${filter === f ? t.ac : t.bd}`, background: filter === f ? `${t.ac}15` : "transparent", color: filter === f ? t.ac : t.ts, fontSize: 10, cursor: "pointer", fontWeight: filter === f ? 600 : 400 }}>{f === "all" ? "全部" : f}</button>
-        ))}
-      </div>
+        {/* 筛选区 */}
+        <div style={{ ...glassCard, padding: "20px 22px", marginBottom: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* 搜索框 */}
+          <div style={{ position: "relative" }}>
+            <Search size={18} color={t.tm} style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)" }} />
+            <input
+              type="text"
+              placeholder="搜索姓名、假名、拼音、邮箱或登录 ID..."
+              value={searchTerm}
+              onChange={(ev) => setSearchTerm(ev.target.value)}
+              style={{
+                width: "100%", padding: "12px 16px 12px 44px", borderRadius: 12,
+                border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.8)",
+                color: t.tx, outline: "none", boxSizing: "border-box", fontSize: 14, fontFamily: "inherit",
+                boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)",
+              }}
+            />
+          </div>
 
-      <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead><tr style={{ background: t.bgH }}>
-            {["姓名", "部门", "科目", "工作类型", "在留状态", "操作"].map((h, i) => (
-              <th key={i} style={{ padding: "10px 12px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: i === 5 ? "right" : "left", borderBottom: `1px solid ${t.bd}` }}>{h}</th>
-            ))}
-          </tr></thead>
-          <tbody>
-            {filtered.map((emp) => {
-              const isExp = !isChinaCompany(emp.company_id) && emp.residence_expiry && new Date(emp.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
-              return (
-                <tr key={emp.id} style={{ borderBottom: `1px solid ${t.bl}`, cursor: "pointer" }} onClick={() => { sSelected(emp); sEditing(false); sCreating(false) }}>
-                  <td style={{ padding: "10px 12px" }}>
-                    <div style={{ fontWeight: 600, color: t.tx }}>{emp.name || emp.email}</div>
-                    {emp.furigana && <div style={{ fontSize: 10, color: t.td }}>{emp.furigana}</div>}
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    {isFullTime(emp.employment_type) && emp.region && <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, background: "#0EA5E910", color: "#0EA5E9", marginRight: 4 }}>{emp.region}</span>}
-                    {emp.department && <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, background: `${t.ac}10`, color: t.ts }}>{emp.department}</span>}
-                  </td>
-                  <td style={{ padding: "10px 12px" }}><div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>{(emp.subjects || []).slice(0, 3).map((s, i) => <span key={i} style={{ padding: "1px 6px", borderRadius: 4, fontSize: 9, background: `${t.gn}15`, color: t.gn }}>{s}</span>)}{(emp.subjects || []).length > 3 && <span style={{ fontSize: 9, color: t.tm }}>+{emp.subjects.length - 3}</span>}</div></td>
-                  <td style={{ padding: "10px 12px", color: t.ts }}>{emp.employment_type}</td>
-                  <td style={{ padding: "10px 12px" }}>
-                    {!isChinaCompany(emp.company_id) && emp.residence_status && <div style={{ fontSize: 11, color: t.ts }}>{emp.residence_status}</div>}
-                    {isExp && <div style={{ fontSize: 10, color: t.rd, fontWeight: 600 }}>即将过期 ({fmtDateW(emp.residence_expiry)})</div>}
-                  </td>
-                  <td style={{ padding: "10px 12px", textAlign: "right" }}><span style={{ color: t.ac, fontSize: 11, fontWeight: 600 }}>查看档案</span></td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+          <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+
+          {/* 公司筛选 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: t.tm, fontWeight: 600, width: 40 }}>公司</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[{ id: "all", name: "全部" }, ...COMPANIES].map((c) => {
+                const on = companyFilter === c.id
+                return (
+                  <button key={c.id} onClick={() => sCompanyFilter(on ? "all" : c.id)} style={{
+                    padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                    color: on ? t.ac : t.ts,
+                    backgroundColor: on ? t.tb : t.bl,
+                    border: `1px solid ${on ? t.ac : "transparent"}`,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}>{c.name}</button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+
+          {/* 雇佣类型筛选 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: t.tm, fontWeight: 600, width: 40 }}>雇佣</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {["all", ...EMP_TYPES_ALL].map((f) => {
+                const on = filter === f
+                return (
+                  <button key={f} onClick={() => sFilter(f)} style={{
+                    padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                    color: on ? t.ac : t.ts,
+                    backgroundColor: on ? t.tb : t.bl,
+                    border: `1px solid ${on ? t.ac : "transparent"}`,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}>{f === "all" ? "全部" : f}</button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 卡片网格 */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
+          {processedEmployees.length > 0 ? processedEmployees.map((em) => {
+            const isExp = !isChinaCompany(em.company_id) && em.residence_expiry && new Date(em.residence_expiry) < new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000)
+            const pendingProfile = !em.contract_start_date || !em.my_number
+            return (
+              <div
+                key={em.id}
+                onClick={() => { sSelected(em); sEditing(false); sCreating(false); setActiveTab("basic") }}
+                style={{ ...glassCard, padding: 22, cursor: "pointer" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: "50%",
+                      background: "rgba(59,130,246,0.1)", color: "rgba(59,130,246,0.85)",
+                      border: "1px solid rgba(59,130,246,0.2)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 18, fontWeight: 700, flexShrink: 0,
+                    }}>{(em.name || em.email || "?").slice(0, 1).toUpperCase()}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <h3 style={{ margin: "0 0 2px", color: t.tx, fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>{em.name || em.email}</h3>
+                      <span style={{ color: t.tm, fontSize: 12 }}>{em.furigana || em.pinyin || ""}</span>
+                    </div>
+                  </div>
+                  {em.login_id && <span style={{ fontSize: 11, color: t.tm, fontFamily: "monospace", flexShrink: 0 }}>{em.login_id}</span>}
+                </div>
+
+                <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+                  <span style={chipBadge(t.wn, "#FEF3C7")}>{COMPANIES.find(c => c.id === em.company_id)?.name}</span>
+                  <span style={chipBadge(t.gn, "#D1FAE5")}>{em.employment_type}</span>
+                  {(em.region || em.department) && (
+                    <span style={chipBadge(t.ac, t.tb)}>{[em.region, em.department].filter(Boolean).join(" · ")}</span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: `1px dashed ${t.bd}` }}>
+                  {isExp ? (
+                    <div style={{ backgroundColor: "rgba(255,247,237,0.55)", border: "1px solid rgba(254,215,170,0.7)", color: "rgba(180,83,9,0.85)", padding: "5px 10px", borderRadius: 8, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+                      <AlertCircle size={13} color="#FB923C" /> 在留卡预警
+                    </div>
+                  ) : pendingProfile ? (
+                    <span style={{ fontSize: 11, color: t.wn, fontWeight: 500 }}>档案待完善</span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: t.td }}>档案完整</span>
+                  )}
+                  <ChevronRight size={18} color={t.td} />
+                </div>
+              </div>
+            )
+          }) : (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "60px 20px", color: t.tm, background: "rgba(255,255,255,0.4)", borderRadius: 24, border: `1px dashed ${t.bd}` }}>
+              <Search size={40} color={t.bd} style={{ margin: "0 auto 12px", display: "block" }} />
+              <p style={{ margin: 0 }}>没有匹配的员工</p>
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   )
