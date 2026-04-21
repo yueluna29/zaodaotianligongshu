@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays } from "lucide-react"
-import { fmtDateW, WEEKDAYS, pad } from "../../config/constants"
+import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays, Download, DollarSign, Briefcase, ArrowRight } from "lucide-react"
+import { fmtDateW, WEEKDAYS, pad, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN } from "../../config/constants"
 
 const DEPTS = ["大学院", "学部", "文书", "语言类"]
 const mkWork = () => ({ _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false, _type: "work", work_date: "", business_type: "", start_time: "", end_time: "", work_minutes: 0, hourly_rate: 0, transport_fee: "", subtotal: 0, student_name: "", course_name: "", other_expense: 0, other_expense_note: "" })
@@ -62,6 +62,10 @@ export default function WorkEntryManager({ user, t, tk }) {
 
   const [allEmps, setAllEmps] = useState([])
   const [deptFilter, setDeptFilter] = useState("")
+  const [companyFilter, setCompanyFilter] = useState("all") // "all" | number
+  const [typeFilter, setTypeFilter] = useState("all") // "all" | type string
+  const [adminAgg, setAdminAgg] = useState({}) // { [empId]: { hours, wage, transport, other, commission } }
+  const [adminLd, setAdminLd] = useState(false)
   const [selectedEmp, setSelectedEmp] = useState(isAdmin ? null : { id: user.id, name: user.name, has_commission: user.has_commission })
 
   const [rows, setRows] = useState([])
@@ -82,7 +86,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   useEffect(() => {
     if (!isAdmin) return
     (async () => {
-      const emps = await sbGet("employees?is_active=eq.true&order=department,name&select=id,name,employment_type,department,is_teacher,login_id,has_commission", tk)
+      const emps = await sbGet("employees?is_active=eq.true&order=department,name&select=id,name,furigana,pinyin,employment_type,department,company_id,is_teacher,login_id,has_commission,transport_amount", tk)
       setAllEmps(emps || [])
     })()
   }, [tk, isAdmin])
@@ -127,6 +131,38 @@ export default function WorkEntryManager({ user, t, tk }) {
 
   useEffect(() => { if (selectedEmp) load() }, [load, selectedEmp])
   useEffect(() => { if (selectedEmp) loadRates() }, [loadRates, selectedEmp])
+
+  // admin 列表聚合：按员工聚合本月所有 work_entries + commission_entries
+  const loadAdminAgg = useCallback(async () => {
+    if (!isAdmin || selectedEmp) return
+    setAdminLd(true)
+    const sd = `${year}-${pad(month)}-01`
+    const ed = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`
+    const [we, ce] = await Promise.all([
+      sbGet(`work_entries?work_date=gte.${sd}&work_date=lt.${ed}&select=employee_id,work_minutes,hourly_rate,transport_fee,other_expense,business_type`, tk),
+      sbGet(`commission_entries?entry_date=gte.${sd}&entry_date=lt.${ed}&select=employee_id,commission_amount`, tk),
+    ])
+    const agg = {}
+    for (const r of (we || [])) {
+      const a = agg[r.employee_id] = agg[r.employee_id] || { hours: 0, wage: 0, transport: 0, other: 0, commission: 0 }
+      const hrs = (r.work_minutes || 0) / 60
+      if (r.business_type) {
+        a.hours += hrs
+        a.wage += Math.round(hrs * (Number(r.hourly_rate) || 0))
+        a.transport += Number(r.transport_fee || 0)
+      } else {
+        a.other += Number(r.other_expense || 0)
+      }
+    }
+    for (const r of (ce || [])) {
+      const a = agg[r.employee_id] = agg[r.employee_id] || { hours: 0, wage: 0, transport: 0, other: 0, commission: 0 }
+      a.commission += Number(r.commission_amount || 0)
+    }
+    setAdminAgg(agg)
+    setAdminLd(false)
+  }, [isAdmin, selectedEmp, year, month, tk])
+
+  useEffect(() => { loadAdminAgg() }, [loadAdminAgg])
 
   // 切月时：若 selectedDate 不在当前月，跳到当月 1 号
   useEffect(() => {
@@ -252,42 +288,189 @@ export default function WorkEntryManager({ user, t, tk }) {
 
   // ==================== ADMIN 列表模式 ====================
   if (isAdmin && !selectedEmp) {
+    const isHourly = (et) => et === "アルバイト" || et === "外部講師" || et === "兼职"
+
+    const totalsFor = (emp) => {
+      const a = adminAgg[emp.id] || { hours: 0, wage: 0, transport: 0, other: 0, commission: 0 }
+      if (isHourly(emp.employment_type)) {
+        return {
+          isH: true,
+          hours: a.hours, wage: a.wage, transport: a.transport, other: a.other, commission: a.commission,
+          total: a.wage + a.transport + a.other + a.commission,
+        }
+      }
+      return {
+        isH: false,
+        hours: null, wage: null,
+        transport: Number(emp.transport_amount || 0),
+        other: 0,
+        commission: a.commission,
+        total: Number(emp.transport_amount || 0) + a.commission,
+      }
+    }
+
     const filteredEmps = allEmps.filter(e => {
-      const fullTime = e.employment_type === "正社員" || e.employment_type === "契約社員" || e.employment_type === "正社员"
-      if (fullTime && e.login_id !== "luna") return false
-      if (!deptFilter) return true
-      return e.department === deptFilter
+      if (companyFilter !== "all" && e.company_id !== companyFilter) return false
+      if (typeFilter !== "all" && e.employment_type !== typeFilter) return false
+      return true
     })
 
+    const rowsWithTotals = filteredEmps.map(emp => ({ emp, ...totalsFor(emp) }))
+    const hourlySum = rowsWithTotals.filter(r => r.isH).reduce((s, r) => s + r.total, 0)
+    const fulltimeSum = rowsWithTotals.filter(r => !r.isH).reduce((s, r) => s + r.total, 0)
+    const grandTotal = hourlySum + fulltimeSum
+
+    const exportCSV = () => {
+      const rows = [["姓名", "公司", "雇佣类型", "部门", "工时(h)", "课时费", "交通费", "其他报销", "签单提成", "合计"]]
+      for (const r of rowsWithTotals) {
+        rows.push([
+          r.emp.name,
+          COMPANIES.find(c => c.id === r.emp.company_id)?.name || "",
+          r.emp.employment_type,
+          r.emp.department || "",
+          r.hours == null ? "" : r.hours.toFixed(1),
+          r.wage == null ? "" : r.wage,
+          r.transport, r.other, r.commission, r.total,
+        ])
+      }
+      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url; a.download = `工资总表_${year}年${month}月.csv`; a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    const fmt = (n) => n == null ? "—" : `¥${Number(n).toLocaleString()}`
+    const EMP_TYPES_ALL = [...EMP_TYPES_JP, ...EMP_TYPES_CN]
+
     return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-          <FileText size={20} color={t.ac} />
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: 0 }}>工资报表</h2>
-        </div>
+      <div style={{ minHeight: "100vh", position: "relative" }}>
+        <AmbientBlobs />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 1400, margin: "0 auto", paddingBottom: 40 }}>
 
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-          <button onClick={() => setDeptFilter("")} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${!deptFilter ? t.ac : t.bd}`, background: !deptFilter ? `${t.ac}15` : "transparent", color: !deptFilter ? t.ac : t.ts, fontSize: 11, fontWeight: !deptFilter ? 600 : 400, cursor: "pointer" }}>全部时薪员工</button>
-          {DEPTS.map(d => (
-            <button key={d} onClick={() => setDeptFilter(deptFilter === d ? "" : d)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${deptFilter === d ? t.ac : t.bd}`, background: deptFilter === d ? `${t.ac}15` : "transparent", color: deptFilter === d ? t.ac : t.ts, fontSize: 11, fontWeight: deptFilter === d ? 600 : 400, cursor: "pointer" }}>{d}</button>
-          ))}
-        </div>
-
-        <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
-          {!filteredEmps.length ? (
-            <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>该分类下暂无员工</div>
-          ) : filteredEmps.map(emp => (
-            <div key={emp.id} onClick={() => setSelectedEmp(emp)} style={{ padding: "14px 18px", borderBottom: `1px solid ${t.bl}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "background 0.1s" }} onMouseEnter={e => e.currentTarget.style.background = `${t.ac}06`} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{emp.name}</div>
-                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                  {emp.department && <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, background: `${t.ac}10`, color: t.ac }}>{emp.department}</span>}
-                  <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, background: `#8B5CF615`, color: "#8B5CF6" }}>{emp.employment_type}</span>
-                </div>
+          {/* 顶部 */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: t.tx }}>工资总表</h1>
+              <div style={{ display: "inline-flex", alignItems: "center", background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 12, padding: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.02)" }}>
+                <button onClick={() => chgMonth(-1)} style={{ padding: 6, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", color: t.ts, display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronLeft size={17} /></button>
+                <div style={{ padding: "0 14px", fontSize: 14, fontWeight: 700, color: t.ac, fontVariantNumeric: "tabular-nums" }}>{year}年 {month}月</div>
+                <button onClick={() => chgMonth(1)} style={{ padding: 6, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", color: t.ts, display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronRight size={17} /></button>
               </div>
-              <span style={{ color: t.ac, fontSize: 11, fontWeight: 600 }}>查看报表</span>
             </div>
-          ))}
+            <HoverBtn onClick={exportCSV} t={t}><Download size={14} /> 导出 CSV</HoverBtn>
+          </div>
+
+          {/* 统计卡片 */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 22 }}>
+            <div style={{ ...glassCard, padding: 22, background: `${t.ac}0D`, border: `1px solid ${t.ac}33` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: t.ac, marginBottom: 10 }}>
+                <DollarSign size={17} /> <span style={{ fontSize: 13, fontWeight: 600 }}>本月总支出预估</span>
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 800, color: t.ac, fontVariantNumeric: "tabular-nums", letterSpacing: -1 }}>¥{grandTotal.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: t.tm, marginTop: 6 }}>含时薪员工全额 + 正社员变动项</div>
+            </div>
+
+            <div style={{ ...glassCard, padding: 22 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: t.ts, marginBottom: 10 }}>
+                <Clock size={17} /> <span style={{ fontSize: 13, fontWeight: 600 }}>时薪员工小计</span>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>¥{hourlySum.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: t.tm, marginTop: 6 }}>{rowsWithTotals.filter(r => r.isH).length} 人</div>
+            </div>
+
+            <div style={{ ...glassCard, padding: 22 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: t.ts, marginBottom: 10 }}>
+                <Briefcase size={17} /> <span style={{ fontSize: 13, fontWeight: 600 }}>正社员变动项小计</span>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>¥{fulltimeSum.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: t.wn, fontWeight: 600, marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                <AlertCircle size={13} /> 未含基本给
+              </div>
+            </div>
+          </div>
+
+          {/* 筛选 */}
+          <div style={{ ...glassCard, padding: 18, marginBottom: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: t.tm, fontWeight: 600, width: 40 }}>公司</span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[{ id: "all", name: "全部" }, ...COMPANIES].map(c => {
+                  const on = companyFilter === c.id
+                  return <span key={c.id} onClick={() => setCompanyFilter(c.id)} style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: on ? t.tb : "transparent", color: on ? t.ac : t.ts, border: `1px solid ${on ? t.ac : t.bd}`, transition: "all 0.2s", whiteSpace: "nowrap" }}>{c.name}</span>
+                })}
+              </div>
+            </div>
+            <div style={{ height: 1, background: t.bd, opacity: 0.5 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: t.tm, fontWeight: 600, width: 40 }}>雇佣</span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {["all", ...EMP_TYPES_ALL].map(c => {
+                  const on = typeFilter === c
+                  return <span key={c} onClick={() => setTypeFilter(c)} style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: on ? "#fff" : "transparent", color: on ? t.tx : t.ts, border: `1px solid ${on ? t.tx : t.bd}`, transition: "all 0.2s", whiteSpace: "nowrap" }}>{c === "all" ? "全部" : c}</span>
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* 员工列表 */}
+          {adminLd ? (
+            <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
+          ) : rowsWithTotals.length === 0 ? (
+            <div style={{ ...glassCard, padding: 40, textAlign: "center", color: t.tm, fontSize: 13 }}>
+              当前筛选条件下无员工
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {rowsWithTotals.map(({ emp, isH, hours, wage, transport, other, commission, total }) => (
+                <div key={emp.id} onClick={() => setSelectedEmp(emp)}
+                  style={{ ...glassCard, padding: "18px 22px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 20, cursor: "pointer", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 25px 50px -12px ${t.ac}26`; e.currentTarget.style.borderColor = `${t.ac}50` }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = glassCard.boxShadow; e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)" }}>
+
+                  {/* 名片区 */}
+                  <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 220, flex: "1 1 auto" }}>
+                    <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${t.ac}18`, color: t.ac, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>{(emp.name || "?").slice(0, 1)}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: t.tx }}>{emp.name}</span>
+                        {(emp.furigana || emp.pinyin) && <span style={{ fontSize: 11, color: t.tm }}>{emp.furigana || emp.pinyin}</span>}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {emp.company_id && <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "#FEF3C7", color: t.wn, whiteSpace: "nowrap" }}>{COMPANIES.find(c => c.id === emp.company_id)?.name}</span>}
+                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "#D1FAE5", color: t.gn, whiteSpace: "nowrap" }}>{emp.employment_type}</span>
+                        {emp.department && <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: t.tb, color: t.ac, whiteSpace: "nowrap" }}>{emp.department}</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 数据列 */}
+                  <div style={{ display: "flex", gap: 20, flexWrap: "wrap", flex: "2 1 auto" }}>
+                    <DataCol label="总工时" value={hours == null ? "—" : `${hours.toFixed(1)}h`} isMoney={false} t={t} />
+                    <DataCol label="课时费" value={fmt(wage)} t={t} />
+                    <DataCol label="交通费" value={fmt(transport)} t={t} />
+                    {(other > 0 || commission > 0) && <DataCol label="报销+提成" value={fmt(other + commission)} t={t} />}
+                  </div>
+
+                  {/* 合计 + 详情 */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 18, marginLeft: "auto", paddingLeft: 18, borderLeft: `1px dashed ${t.bd}` }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 11, color: t.tm, marginBottom: 2, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                        本月合计
+                        {!isH && <span style={{ color: t.wn, background: "#FEF3C7", padding: "1px 5px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>未含基本给</span>}
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: t.ac, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5 }}>¥{total.toLocaleString()}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: t.ts, fontWeight: 600 }}>
+                      详情 <ArrowRight size={14} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
         </div>
       </div>
     )
@@ -511,6 +694,17 @@ function Row({ label, value, t, color }) {
     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
       <span style={{ color: t.ts }}>{label}</span>
       <span style={{ fontWeight: 600, color: color || t.tx }}>{value}</span>
+    </div>
+  )
+}
+
+function DataCol({ label, value, isMoney = true, highlight, t }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 80 }}>
+      <span style={{ fontSize: 11, color: t.tm, fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: highlight ? 19 : 14, fontWeight: highlight ? 800 : 600, color: highlight ? t.ac : t.tx, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3 }}>
+        {value}
+      </span>
     </div>
   )
 }
