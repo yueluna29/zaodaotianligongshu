@@ -1238,7 +1238,7 @@ function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates,
             <label style={{ fontSize: 11, color: t.tm, display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}><User size={11} /> 学生姓名</label>
             {locked
               ? <div style={{ fontSize: 14, color: t.tx, fontWeight: 500, padding: "4px 0" }}>{r.student_name || <span style={{ color: t.td }}>—</span>}</div>
-              : <input placeholder="不填则为空" value={r.student_name} onChange={e => onUpdate(r._key, "student_name", e.target.value)} style={inputStyle(t)} />
+              : <input placeholder="请填写学生全名" value={r.student_name} onChange={e => onUpdate(r._key, "student_name", e.target.value)} style={inputStyle(t)} />
             }
           </div>
           <div style={{ flex: "2 1 200px" }}>
