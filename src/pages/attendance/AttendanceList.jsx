@@ -36,6 +36,7 @@ export default function AttendanceList({ user, t, tk }) {
   const [leaveEditId, setLeaveEditId] = useState(null)
   const [bal, sBal] = useState({ currentGrant: 0, carryOver: 0, used: 0, balance: 0, totalAvailable: 0 })
   const [compBal, setCompBal] = useState(0)
+  const [akaOverlap, setAkaOverlap] = useState(0) // 定休日与日本祝日重叠次数
   const [showTL, setShowTL] = useState(false)
   const [leaveHistMode, setLeaveHistMode] = useState(false)
 
@@ -102,7 +103,7 @@ export default function AttendanceList({ user, t, tk }) {
       sbGet(`leave_requests?employee_id=eq.${user.id}&status=eq.承認&leave_type=eq.有休&select=leave_date,is_half_day`, tk),
       sbGet(`day_swap_requests?employee_id=eq.${user.id}&swap_type=eq.休日出勤&compensation_type=eq.換休&status=eq.承認&select=id,swap_date`, tk),
       sbGet(`expense_claims?employee_id=eq.${user.id}&order=claim_date.desc&select=*`, tk),
-      sbGet(`employees?id=eq.${user.id}&select=transport_amount`, tk),
+      sbGet(`employees?id=eq.${user.id}&select=transport_amount,days_off`, tk),
       sbGet(`transport_change_requests?employee_id=eq.${user.id}&order=created_at.desc&select=*`, tk),
     ])
 
@@ -122,6 +123,21 @@ export default function AttendanceList({ user, t, tk }) {
     setExpRecs(expData || [])
     setMyTransAmount(Number(meData?.[0]?.transport_amount || 0))
     setMyTransChangeReqs(myTChg || [])
+
+    // 赤日补休：从 hire_date 到今天，数 日本祝日 落在员工 days_off 上的天数
+    const myDaysOff = meData?.[0]?.days_off || user.days_off || []
+    if (myDaysOff.length > 0 && user.hire_date) {
+      const hs = await sbGet(`japanese_holidays?country=eq.JP&holiday_date=gte.${user.hire_date}&holiday_date=lte.${todayStr()}&select=holiday_date`, tk)
+      const offSet = new Set(myDaysOff.map(Number))
+      let cnt = 0
+      for (const h of hs || []) {
+        const [yr, mo, dy] = h.holiday_date.split("-").map(Number)
+        if (offSet.has(new Date(yr, mo - 1, dy).getDay())) cnt++
+      }
+      setAkaOverlap(cnt)
+    } else {
+      setAkaOverlap(0)
+    }
 
     if (isAdmin && !allEmps.length) {
       const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name,employment_type,hire_date,company_id", tk)
@@ -598,6 +614,7 @@ export default function AttendanceList({ user, t, tk }) {
               { l: "有休余额", v: `${bal.balance}天`, c: t.ac, sub: `本年${bal.currentGrant}+繰越${bal.carryOver}-已用${bal.used}`, click: () => setShowTL(p => !p) },
               { l: "義務残", v: bal.mandatoryRequired > 0 ? `${bal.mandatoryRemaining}天` : "—", c: bal.mandatoryRemaining > 0 ? t.wn : t.gn, sub: bal.mandatoryRequired > 0 ? `本年度必须取 ${bal.mandatoryRequired} 日 · 已取 ${bal.thisYearUsed}` : "付与未满 10 日免" },
               { l: "代休余额", v: `${Math.max(0, compBal + unusedComp - usedViaSwap)}天`, c: "#8B5CF6" },
+              { l: "赤日補休", v: `${akaOverlap}天`, c: "#F97316", sub: akaOverlap > 0 ? `定休与日本祝日重叠 ${akaOverlap} 次` : "定休未与祝日重叠" },
             )
           } else { // expense
             cards.push(
