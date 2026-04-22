@@ -366,6 +366,12 @@ export default function WorkEntryManager({ user, t, tk }) {
 
   const togglePreview = (section, on) => setSectionPreview(p => ({ ...p, [section]: on }))
 
+  // 一时保存：先把当前未保存改动写入 DB（触发 load 重算总合计），再切只读
+  const saveAndPreview = async (section) => {
+    if (hasChanges) await saveAll()
+    togglePreview(section, true)
+  }
+
   const saveNote = async () => {
     setNoteSaving(true)
     const val = noteDraft.trim() ? noteDraft : null
@@ -846,7 +852,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     {!isSubmitted && <HoverBtn onClick={() => { togglePreview("expenses", false); addExpForDay() }} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
                     {!expensesLocked && dayExp.length > 0 && (
-                      <HoverBtn onClick={() => togglePreview("expenses", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
+                      <HoverBtn onClick={() => saveAndPreview("expenses")} title="一时保存" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                     )}
                     {sectionPreview.expenses && !isSubmitted && (
                       <HoverBtn onClick={() => togglePreview("expenses", false)} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
@@ -890,7 +896,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       {!isSubmitted && <HoverBtn onClick={() => { togglePreview("commissions", false); addCommRow() }} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
                       {!commissionsLocked && commRows.length > 0 && (
-                        <HoverBtn onClick={() => togglePreview("commissions", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
+                        <HoverBtn onClick={() => saveAndPreview("commissions")} title="一时保存" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                       )}
                       {sectionPreview.commissions && !isSubmitted && (
                         <HoverBtn onClick={() => togglePreview("commissions", false)} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
@@ -1010,7 +1016,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, paddingBottom: 2 }}>
                   {!isSubmitted && <HoverBtn onClick={() => { togglePreview("work", false); addWorkForDay() }} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
                   {!workLocked && dayWork.length > 0 && (
-                    <HoverBtn onClick={() => togglePreview("work", true)} title="预览（切为只读）" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
+                    <HoverBtn onClick={() => saveAndPreview("work")} title="一时保存" t={t} style={{ padding: 8 }}><Check size={14} /></HoverBtn>
                   )}
                   {sectionPreview.work && !isSubmitted && (
                     <HoverBtn onClick={() => togglePreview("work", false)} title="编辑" t={t} style={{ padding: 8 }}><Pencil size={14} /></HoverBtn>
