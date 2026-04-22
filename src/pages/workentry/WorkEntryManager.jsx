@@ -794,7 +794,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                         }}>
                           {driveId ? (
                             <>
-                              <img src={`https://drive.google.com/thumbnail?id=${driveId}&sz=w200`} alt={`打卡${slot}`}
+                              <img src={`https://cssnsgdawdhrkrmztuas.supabase.co/functions/v1/get-clock-photo?id=${driveId}`} alt={`打卡${slot}`}
                                    style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                               <span style={{ position: "absolute", top: 3, left: 3, width: 16, height: 16, borderRadius: "50%", background: t.gn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                                 <Check size={10} strokeWidth={3} />
