@@ -526,7 +526,8 @@ export default function AttendanceList({ user, t, tk }) {
     { key: "leave", label: "带薪休假申请", icon: CalendarX2, badge: leavePending },
     { key: "aka", label: "红日子情况记录", icon: Flag, badge: akaPending },
     { key: "swap", label: "换休申请", icon: ArrowLeftRight, badge: swapPending },
-    { key: "history", label: "过去记录", icon: History },
+    // 过去记录仅给 baito/外部 及管理员用（正/契日常勤怠即时录，不需要补录入口）
+    ...(!isFullTime(user.employment_type) || isAdmin ? [{ key: "history", label: "过去记录", icon: History }] : []),
   ]
   const expenseSubTabs = [
     { key: "summary", label: "报销一览", icon: ListChecks },

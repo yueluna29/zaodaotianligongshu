@@ -143,7 +143,6 @@ export default function LeaveCalendar({ t, tk }) {
     const resting = rows.length - working.length - onLeave.length
     const isToday = ds === toDateStr(new Date())
 
-    const restingMembers = rows.filter((r) => r.s.kind === "off" || r.s.kind === "unset")
     return (
       <div>
         {/* 概览 */}
@@ -162,17 +161,14 @@ export default function LeaveCalendar({ t, tk }) {
           })}
         </div>
 
-        {/* 出勤 / 休息 名单 */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 10, marginBottom: 14 }}>
-          <NameList t={t} title="出勤" color={t.ac} members={working} tagOf={(r) => r.s.kind === "swap-work" ? "休日出勤" : r.s.sched ? `${r.s.sched.start}-${r.s.sched.end}` : ""} />
-          <NameList t={t} title="休息" color={t.tm} members={restingMembers} tagOf={() => ""} />
-          {onLeave.length > 0 && (
+        {onLeave.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
             <NameList t={t} title="请假/不在" color={t.rd} members={onLeave} tagOf={(r) => {
               const lt = LEAVE_TYPES.find((l) => l.v === r.s.lvReq.leave_type)
               return `${lt?.l || r.s.lvReq.leave_type}${r.s.lvReq.is_half_day ? "(半)" : ""}`
             }} />
-          )}
-        </div>
+          </div>
+        )}
 
         {/* 时间轴 */}
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
@@ -414,7 +410,7 @@ export default function LeaveCalendar({ t, tk }) {
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Legend t={t} color={t.ac} label="出勤" />
             <Legend t={t} color="#8B5CF6" label="休日出勤" />
-            {LEAVE_TYPES.filter(lt => !["振替", "病假"].includes(lt.v)).map((lt) => <Legend key={lt.v} color={lt.c} label={lt.l} t={t} />)}
+            {LEAVE_TYPES.filter(lt => !["振替", "病假", "特休", "欠勤"].includes(lt.v)).map((lt) => <Legend key={lt.v} color={lt.c} label={lt.l} t={t} />)}
             <Legend t={t} color={t.rd} label="日本祝日" round />
             <Legend t={t} color={t.wn} label="中国节日" round />
           </div>
