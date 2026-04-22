@@ -18,6 +18,8 @@ export default function LeaveCalendar({ t, tk }) {
   const [swaps, setSwaps] = useState([])
   const [ld, sLd] = useState(true)
   const [mobile, setMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768)
+  const [regionFilter, setRegionFilter] = useState("all") // all / 日本 / 中国
+  const [deptFilter, setDeptFilter] = useState("all")
   useEffect(() => {
     const check = () => setMobile(window.innerWidth < 768)
     window.addEventListener("resize", check)
@@ -77,6 +79,14 @@ export default function LeaveCalendar({ t, tk }) {
       sLd(false)
     })()
   }, [range, tk])
+
+  const regions = useMemo(() => Array.from(new Set((emps || []).map((e) => e.region).filter(Boolean))), [emps])
+  const depts = useMemo(() => Array.from(new Set((emps || []).map((e) => e.department).filter(Boolean))), [emps])
+  const filteredEmps = useMemo(() => (emps || []).filter((e) => {
+    if (regionFilter !== "all" && e.region !== regionFilter) return false
+    if (deptFilter !== "all" && e.department !== deptFilter) return false
+    return true
+  }), [emps, regionFilter, deptFilter])
 
   const rm = useMemo(() => {
     const mp = {}
@@ -138,7 +148,7 @@ export default function LeaveCalendar({ t, tk }) {
     const HOURS = Array.from({ length: 17 }, (_, i) => i + 7) // 7-23
     const HOUR_W = mobile ? 32 : 48
     const NAME_W = mobile ? 90 : 160
-    const rows = emps.map((emp) => ({ emp, s: getStatus(emp, d) }))
+    const rows = filteredEmps.map((emp) => ({ emp, s: getStatus(emp, d) }))
     const working = rows.filter((r) => r.s.kind === "work" || r.s.kind === "swap-work")
     const onLeave = rows.filter((r) => r.s.kind === "leave")
     const resting = rows.length - working.length - onLeave.length
@@ -268,7 +278,7 @@ export default function LeaveCalendar({ t, tk }) {
             </tr>
           </thead>
           <tbody>
-            {emps.map((emp) => (
+            {filteredEmps.map((emp) => (
               <tr key={emp.id} style={{ borderBottom: `1px solid ${t.bl}` }}>
                 <td style={{ padding: mobile ? "8px 8px" : "10px 14px", fontSize: mobile ? 11 : 12, color: t.tx, fontWeight: 500, position: "sticky", left: 0, background: t.bgC, zIndex: 1, borderRight: `1px solid ${t.bl}` }}>
                   {emp.name || emp.email}
@@ -327,7 +337,7 @@ export default function LeaveCalendar({ t, tk }) {
             const hList = holidays[ds] || []
             const isH = hList.length > 0
             const isToday = ds === todayDs
-            const rows = emps.map((emp) => ({ emp, s: getStatus(emp, d) }))
+            const rows = filteredEmps.map((emp) => ({ emp, s: getStatus(emp, d) }))
             const working = rows.filter((r) => r.s.kind === "work")
             const swapping = rows.filter((r) => r.s.kind === "swap-work")
             const leaves = rows.filter((r) => r.s.kind === "leave")
@@ -418,6 +428,27 @@ export default function LeaveCalendar({ t, tk }) {
         )}
       </div>
 
+      {(regions.length > 0 || depts.length > 0) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+          {regions.length > 0 && (
+            <FilterRow label="国家" t={t}>
+              {["all", ...regions].map((r) => {
+                const on = regionFilter === r
+                return <FilterChip key={r} on={on} t={t} onClick={() => setRegionFilter(r)}>{r === "all" ? "全部" : r}</FilterChip>
+              })}
+            </FilterRow>
+          )}
+          {depts.length > 0 && (
+            <FilterRow label="部门" t={t}>
+              {["all", ...depts].map((d) => {
+                const on = deptFilter === d
+                return <FilterChip key={d} on={on} t={t} onClick={() => setDeptFilter(d)}>{d === "all" ? "全部" : d}</FilterChip>
+              })}
+            </FilterRow>
+          )}
+        </div>
+      )}
+
       {ld ? (
         <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
       ) : mode === "day" ? <DayView /> : mode === "week" ? <WeekView /> : <MonthView />}
@@ -433,6 +464,21 @@ function StatCard({ t, label, value, total, color }) {
         {value}{total !== undefined && <span style={{ fontSize: 11, color: t.tm, fontWeight: 400 }}> / {total}</span>}
       </div>
     </div>
+  )
+}
+
+function FilterRow({ t, label, children }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 10, color: t.tm, fontWeight: 600, width: 32, flexShrink: 0 }}>{label}</span>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{children}</div>
+    </div>
+  )
+}
+
+function FilterChip({ on, t, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{ padding: "4px 12px", borderRadius: 14, border: `1px solid ${on ? t.ac : t.bd}`, background: on ? `${t.ac}15` : "transparent", color: on ? t.ac : t.ts, fontSize: 11, fontWeight: on ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" }}>{children}</button>
   )
 }
 
