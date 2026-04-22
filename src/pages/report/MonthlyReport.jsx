@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { sbGet } from "../../api/supabase"
-import { LEAVE_TYPES, daysInMonth, pad, workingDays, COMPANIES } from "../../config/constants"
+import { LEAVE_TYPES, daysInMonth, pad, workingDays, COMPANIES, isFullTime } from "../../config/constants"
 
 export default function MonthlyReport({ t, tk }) {
   const now = new Date(); const [y, sY] = useState(now.getFullYear()); const [m, sM] = useState(now.getMonth() + 1)
@@ -16,7 +16,7 @@ export default function MonthlyReport({ t, tk }) {
         sbGet(`attendance_records?work_date=gte.${from}&work_date=lte.${to}&select=*`, tk),
         sbGet(`commissions?year_month=eq.${ym}&select=*`, tk),
       ])
-      const rows = (emps || []).map((emp) => {
+      const rows = (emps || []).filter((emp) => isFullTime(emp.employment_type)).map((emp) => {
         const ma = (atts || []).filter((a) => a.employee_id === emp.id)
         const wd = ma.filter((a) => a.clock_in).length
         const tw = ma.reduce((s, a) => s + Number(a.work_minutes || 0), 0) / 60
