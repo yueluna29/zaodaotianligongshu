@@ -2,4 +2,5 @@
 - [全站 UI 玻璃质感风格](feedback_design_style.md) — glass-card / ambient glow / 细字重细线图标，新设计默认沿用
 - [假期相关 DB 枚举](project_leave_enums.md) — 赤日休 / 使用代休 / 赤日補休 的合法值与 balance 计算规则
 - [Edge Function 用 anon key 鉴权](project_edge_fn_auth.md) — user access_token 过期踩坑，前端统一走 anon key
-- [打卡照片 Drive 上传系统](reference_clock_photo_drive.md) — Edge Function / SA email / folder id / secrets 配置
+- [打卡照片 Drive 上传系统](reference_clock_photo_drive.md) — OAuth refresh_token 方案（换掉了 SA），2 个 edge function，secrets 清单
+- [Drive 上传通用攻略](../../docs/google-drive-上传攻略.md) — 复用到新项目的完整步骤（GCP / OAuth / Edge Function / RLS / 前端）
