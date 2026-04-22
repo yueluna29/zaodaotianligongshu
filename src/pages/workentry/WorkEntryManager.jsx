@@ -86,9 +86,12 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [sv, setSv] = useState(false)
   const [rates, setRates] = useState([])
   const [saveMsg, setSaveMsg] = useState("")
-  const [submission, setSubmission] = useState(null) // { id, status, submitted_at, unlocked_at, unlocked_by }
+  const [submission, setSubmission] = useState(null) // { id, status, submitted_at, unlocked_at, unlocked_by, note }
   const [submitModal, setSubmitModal] = useState(false)
   const [submittingReport, setSubmittingReport] = useState(false)
+  const [noteDraft, setNoteDraft] = useState("")
+  const [noteSaving, setNoteSaving] = useState(false)
+  const [noteSavedAt, setNoteSavedAt] = useState(null)
   const [sectionPreview, setSectionPreview] = useState({ work: false, expenses: false, commissions: false }) // 客户端视图切换，非锁定
   const [errorModal, setErrorModal] = useState(null) // { title, message }
 
@@ -119,7 +122,10 @@ export default function WorkEntryManager({ user, t, tk }) {
       sbGet(`commission_entries?${empQ}entry_date=gte.${sd}&entry_date=lt.${ed}&order=entry_date,seq_number&select=*`, tk),
       sbGet(`monthly_report_submissions?${empQ}year=eq.${year}&month=eq.${month}&select=*`, tk),
     ])
-    setSubmission((sub && sub[0]) || null)
+    const subRow = (sub && sub[0]) || null
+    setSubmission(subRow)
+    setNoteDraft(subRow?.note || "")
+    setNoteSavedAt(null)
     const loaded = (r || []).map(e => {
       const isExp = !e.business_type && (Number(e.other_expense) > 0 || e.other_expense_note)
       return {
@@ -356,6 +362,36 @@ export default function WorkEntryManager({ user, t, tk }) {
   }
 
   const togglePreview = (section, on) => setSectionPreview(p => ({ ...p, [section]: on }))
+
+  const saveNote = async () => {
+    setNoteSaving(true)
+    const val = noteDraft.trim() ? noteDraft : null
+    let res
+    if (submission) {
+      res = await sbPatch(`monthly_report_submissions?id=eq.${submission.id}`, { note: val }, tk)
+    } else {
+      res = await sbPost("monthly_report_submissions", { employee_id: targetEmpId, year, month, status: "draft", note: val }, tk)
+    }
+    setNoteSaving(false)
+    if (res && !Array.isArray(res) && (res.code || res.message)) {
+      setSaveMsg(`备注保存失败：${res.message || res.code}`)
+      setTimeout(() => setSaveMsg(""), 6000)
+      return
+    }
+    setNoteSavedAt(new Date())
+    await load()
+  }
+
+  const shiftSelectedDate = (delta) => {
+    const [yy, mm, dd] = selectedDate.split("-").map(Number)
+    const d = new Date(yy, mm - 1, dd); d.setDate(d.getDate() + delta)
+    const ns = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    setSelectedDate(ns)
+    // 如果跨月，同步切换 year/month
+    if (d.getFullYear() !== year || d.getMonth() + 1 !== month) {
+      setYear(d.getFullYear()); setMonth(d.getMonth() + 1)
+    }
+  }
 
   // hooks 必须在 early return 之前调用，所以写在这里
   const datesWithEntries = useMemo(() => {
@@ -727,6 +763,36 @@ export default function WorkEntryManager({ user, t, tk }) {
                 </div>
               </div>
 
+              {/* 备注 */}
+              {(() => {
+                const noteDirty = (noteDraft || "") !== (submission?.note || "")
+                const noteReadOnly = isSubmitted && !isAdmin
+                return (
+                  <div style={{ ...glassCard, padding: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 }}>
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 4, height: 14, backgroundColor: t.wn, borderRadius: 2 }} />
+                        备注
+                        {noteSavedAt && !noteDirty && <span style={{ fontSize: 11, color: t.gn, fontWeight: 500 }}>已保存</span>}
+                      </h3>
+                      {!noteReadOnly && noteDirty && (
+                        <HoverBtn onClick={saveNote} title="确定保存" t={t} disabled={noteSaving} style={{ padding: 8, background: `${t.gn}18`, color: t.gn, border: `1px solid ${t.gn}40` }}>
+                          <Check size={14} />
+                        </HoverBtn>
+                      )}
+                    </div>
+                    {noteReadOnly ? (
+                      <div style={{ fontSize: 13, color: submission?.note ? t.ts : t.td, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                        {submission?.note || "（无备注）"}
+                      </div>
+                    ) : (
+                      <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="本月需要说明的情况，例如请假、特殊加班、报销说明等…" rows={4}
+                        style={{ ...inputStyle(t), width: "100%", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, boxSizing: "border-box" }} />
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* 其他报销 */}
               <div style={{ ...glassCard, padding: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
@@ -887,11 +953,15 @@ export default function WorkEntryManager({ user, t, tk }) {
 
               {/* 当日标题 */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: `2px solid ${t.bd}`, paddingBottom: 12, gap: 10 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: t.tm, fontWeight: 600, marginBottom: 2 }}>选中日期</div>
-                  <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.8, color: t.tx }}>
-                    {fmtDateW(selectedDate)}
-                  </h1>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: 0 }}>
+                  <button onClick={() => shiftSelectedDate(-1)} title="前一天" style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${t.bd}`, background: "rgba(255,255,255,0.7)", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", flexShrink: 0 }}><ChevronLeft size={15} /></button>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: t.tm, fontWeight: 600, marginBottom: 2 }}>选中日期</div>
+                    <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.8, color: t.tx }}>
+                      {fmtDateW(selectedDate)}
+                    </h1>
+                  </div>
+                  <button onClick={() => shiftSelectedDate(1)} title="后一天" style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${t.bd}`, background: "rgba(255,255,255,0.7)", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", flexShrink: 0 }}><ChevronRight size={15} /></button>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, paddingBottom: 2 }}>
                   {!isSubmitted && <HoverBtn onClick={() => { togglePreview("work", false); addWorkForDay() }} title="加一笔" t={t} style={{ padding: 8 }}><Plus size={14} /></HoverBtn>}
