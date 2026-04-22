@@ -493,7 +493,8 @@ export default function AttendanceList({ user, t, tk }) {
   const wds = Object.values(recs).filter((r) => r.clock_in).length
   const totalTrans = transRows.filter(r => !r._isNew).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
   const totalComm = commRows.filter(r => !r._isNew).reduce((s, r) => s + (r.commission_amount || 0), 0)
-  const totalExp = expRecs.reduce((s, r) => s + Number(r.amount || 0), 0)
+  const ymStart = `${y}-${pad(m)}-01`, ymEnd = `${y}-${pad(m)}-${pad(days)}`
+  const totalExp = expRecs.filter(r => r.claim_date >= ymStart && r.claim_date <= ymEnd).reduce((s, r) => s + Number(r.amount || 0), 0)
 
   const swapApproved = swapReqs.filter(r => r.status === "承認")
   const unusedComp = swapApproved.filter(r => r.swap_type === "休日出勤" && r.compensation_type === "換休" && !r.swap_date).length
@@ -1192,6 +1193,30 @@ export default function AttendanceList({ user, t, tk }) {
       <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8, marginTop: 8, borderTop: `1px dashed ${t.bl}`, fontSize: 12, fontWeight: 700, color: "#8B5CF6" }}>小计: ¥{totalTrans.toLocaleString()}</div>
     </div>
 
+    {/* 其他报销明细 */}
+    {(() => {
+      const monthExp = expRecs.filter(r => r.claim_date >= ymStart && r.claim_date <= ymEnd)
+      return (
+        <div style={{ padding: "12px 20px", borderBottom: `1px solid ${t.bl}` }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: t.wn, marginBottom: 8 }}>其他报销</div>
+          {monthExp.length === 0
+            ? <div style={{ fontSize: 11, color: t.td }}>本月无记录</div>
+            : monthExp.map(r => (
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11 }}>
+                <div style={{ display: "flex", gap: 8, color: t.ts }}>
+                  <span style={{ fontFamily: "monospace" }}>{fmtDateW(r.claim_date)}</span>
+                  <span>{r.category}</span>
+                  {r.note && <span style={{ color: t.td }}>{r.note}</span>}
+                </div>
+                <span style={{ fontWeight: 600, color: t.wn }}>¥{Number(r.amount || 0).toLocaleString()}</span>
+              </div>
+            ))
+          }
+          <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8, marginTop: 8, borderTop: `1px dashed ${t.bl}`, fontSize: 12, fontWeight: 700, color: t.wn }}>小计: ¥{totalExp.toLocaleString()}</div>
+        </div>
+      )
+    })()}
+
     {/* 签单提成明细 */}
     {myHasCommission && (
       <div style={{ padding: "12px 20px", borderBottom: `1px solid ${t.bl}` }}>
@@ -1216,7 +1241,7 @@ export default function AttendanceList({ user, t, tk }) {
     {/* 合计 */}
     <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <span style={{ fontSize: 14, fontWeight: 700, color: t.tx }}>本月报销合计</span>
-      <span style={{ fontSize: 20, fontWeight: 700, color: t.gn }}>¥{(totalTrans + totalComm).toLocaleString()}</span>
+      <span style={{ fontSize: 20, fontWeight: 700, color: t.gn }}>¥{(totalTrans + totalExp + totalComm).toLocaleString()}</span>
     </div>
   </div>
 )}
