@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays, Download, DollarSign, Briefcase, ArrowRight, Lock, Send, Sparkles, Unlock, X as XIcon, Check } from "lucide-react"
+import { sbGet, sbPost, sbPatch, sbDel, sbFn } from "../../api/supabase"
+import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays, Download, DollarSign, Briefcase, ArrowRight, Lock, Send, Sparkles, Unlock, X as XIcon, Check, Camera, Upload } from "lucide-react"
 import { fmtDateW, WEEKDAYS, pad, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN } from "../../config/constants"
+import { compressImage } from "../../utils/compressImage"
 
 const DEPTS = ["大学院", "学部", "文书", "语言类"]
 const EJU_TYPE = "EJU講師（班課）"
@@ -92,6 +93,8 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [noteDraft, setNoteDraft] = useState("")
   const [noteSaving, setNoteSaving] = useState(false)
   const [noteSavedAt, setNoteSavedAt] = useState(null)
+  const [photoUploading, setPhotoUploading] = useState({ 1: false, 2: false })
+  const [photoError, setPhotoError] = useState("")
   const [sectionPreview, setSectionPreview] = useState({ work: false, expenses: false, commissions: false }) // 客户端视图切换，非锁定
   const [errorModal, setErrorModal] = useState(null) // { title, message }
 
@@ -380,6 +383,38 @@ export default function WorkEntryManager({ user, t, tk }) {
     }
     setNoteSavedAt(new Date())
     await load()
+  }
+
+  const uploadClockPhoto = async (slot, file) => {
+    if (!file) return
+    setPhotoError("")
+    setPhotoUploading(p => ({ ...p, [slot]: true }))
+    try {
+      const blob = await compressImage(file, 500, 1600)
+      const ym = `${year}-${pad(month)}`
+      const ts = Date.now()
+      const safeName = (selectedEmp?.name || user.name || "emp").replace(/[\\/:*?"<>|]/g, "_")
+      const filename = `${safeName}_${ym}_${slot}_${ts}.jpg`
+      const fd = new FormData()
+      fd.append("file", blob, filename)
+      fd.append("filename", filename)
+      const res = await sbFn("upload-clock-photo", fd, tk)
+      if (!res?.id) {
+        setPhotoError(`照片 ${slot} 上传失败：${res?.error || "未知错误"}`)
+        return
+      }
+      const col = slot === 1 ? "photo_1_drive_id" : "photo_2_drive_id"
+      if (submission) {
+        await sbPatch(`monthly_report_submissions?id=eq.${submission.id}`, { [col]: res.id }, tk)
+      } else {
+        await sbPost("monthly_report_submissions", { employee_id: targetEmpId, year, month, status: "draft", [col]: res.id }, tk)
+      }
+      await load()
+    } catch (e) {
+      setPhotoError(`照片 ${slot} 上传失败：${e.message || String(e)}`)
+    } finally {
+      setPhotoUploading(p => ({ ...p, [slot]: false }))
+    }
   }
 
   const shiftSelectedDate = (delta) => {
@@ -1045,11 +1080,74 @@ export default function WorkEntryManager({ user, t, tk }) {
                 <span style={{ fontSize: 26, fontWeight: 800, color: t.ac }}>¥{totalAll.toLocaleString()}</span>
               </div>
             </div>
+
+            {/* 打卡照片上传（两张，必须都上传才可提交） */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <Camera size={14} color={t.ac} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: t.tx }}>打卡照片</span>
+                <span style={{ fontSize: 10, color: t.tm }}>两张，自动压缩到 500KB 以内</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[1, 2].map((slot) => {
+                  const driveId = submission?.[`photo_${slot}_drive_id`]
+                  const uploading = photoUploading[slot]
+                  return (
+                    <label key={slot} style={{
+                      position: "relative",
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                      minHeight: 140, borderRadius: 14,
+                      border: `1px dashed ${driveId ? `${t.gn}66` : t.bd}`,
+                      background: driveId ? `${t.gn}08` : "rgba(255,255,255,0.55)",
+                      cursor: uploading ? "wait" : "pointer", overflow: "hidden",
+                    }}>
+                      {driveId ? (
+                        <>
+                          <img src={`https://drive.google.com/thumbnail?id=${driveId}&sz=w400`}
+                               alt={`打卡 ${slot}`}
+                               style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
+                          <div style={{ position: "absolute", top: 6, left: 6, padding: "2px 8px", borderRadius: 6, background: "rgba(255,255,255,0.85)", fontSize: 10, fontWeight: 600, color: t.gn, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                            <Check size={11} /> 照片 {slot}
+                          </div>
+                          <div style={{ position: "absolute", bottom: 6, right: 6, padding: "3px 8px", borderRadius: 6, background: "rgba(15,23,42,0.65)", color: "#fff", fontSize: 10, fontWeight: 500 }}>重新上传</div>
+                        </>
+                      ) : (
+                        <>
+                          {uploading ? (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: t.ac }}>
+                              <div style={{ width: 20, height: 20, border: `2px solid ${t.ac}33`, borderTopColor: t.ac, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                              <span style={{ fontSize: 11, fontWeight: 600 }}>上传中...</span>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: t.tm }}>
+                              <Upload size={22} />
+                              <span style={{ fontSize: 12, fontWeight: 600, color: t.ts }}>点击上传照片 {slot}</span>
+                              <span style={{ fontSize: 10, color: t.td }}>JPG / PNG</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      <input type="file" accept="image/*" disabled={uploading || submittingReport}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClockPhoto(slot, f); e.target.value = "" }}
+                        style={{ position: "absolute", inset: 0, opacity: 0, cursor: uploading ? "wait" : "pointer" }} />
+                    </label>
+                  )
+                })}
+              </div>
+              {photoError && <div style={{ fontSize: 11, color: t.rd, marginTop: 8 }}>{photoError}</div>}
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <HoverBtn onClick={() => setSubmitModal(false)} disabled={submittingReport} t={t}>取消</HoverBtn>
-              <HoverBtn primary onClick={submitReport} disabled={submittingReport} t={t}>
-                <Send size={14} /> {submittingReport ? "提交中..." : "确认提交"}
-              </HoverBtn>
+              {(() => {
+                const bothUploaded = submission?.photo_1_drive_id && submission?.photo_2_drive_id
+                const disabled = submittingReport || !bothUploaded
+                return (
+                  <HoverBtn primary onClick={submitReport} disabled={disabled} t={t}>
+                    <Send size={14} /> {submittingReport ? "提交中..." : bothUploaded ? "确认提交" : "请先上传两张照片"}
+                  </HoverBtn>
+                )
+              })()}
             </div>
           </div>
         </div>

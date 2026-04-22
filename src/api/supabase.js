@@ -58,6 +58,16 @@ export async function sbDel(path, token) {
   })
 }
 
+// 调用 Edge Function，body 是 FormData（multipart）。
+export async function sbFn(name, formData, token) {
+  const r = await fetch(`${SB}/functions/v1/${name}`, {
+    method: "POST",
+    headers: { apikey: AK, Authorization: `Bearer ${token}` },
+    body: formData,
+  })
+  return r.json()
+}
+
 // 调用 Postgres RPC 函数。token 可省略（匿名调用，用 anon key 鉴权）
 export async function sbRpc(fn, body, token) {
   const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, {
