@@ -95,6 +95,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   const [noteSavedAt, setNoteSavedAt] = useState(null)
   const [photoUploading, setPhotoUploading] = useState({ 1: false, 2: false })
   const [photoError, setPhotoError] = useState("")
+  const [lightboxPhoto, setLightboxPhoto] = useState(null) // { slot, driveId } | null
   const [sectionPreview, setSectionPreview] = useState({ work: false, expenses: false, commissions: false }) // 客户端视图切换，非锁定
   const [errorModal, setErrorModal] = useState(null) // { title, message }
 
@@ -783,24 +784,28 @@ export default function WorkEntryManager({ user, t, tk }) {
                     {[1, 2].map((slot) => {
                       const driveId = submission?.[`photo_${slot}_drive_id`]
                       const uploading = photoUploading[slot]
+                      const tileBase = {
+                        position: "relative", flex: 1, minWidth: 0, aspectRatio: "1 / 1",
+                        borderRadius: 8,
+                        border: `1px dashed ${driveId ? `${t.gn}66` : t.bd}`,
+                        background: driveId ? `${t.gn}08` : "rgba(255,255,255,0.55)",
+                        overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                      }
+                      if (driveId) {
+                        return (
+                          <div key={slot} onClick={() => setLightboxPhoto({ slot, driveId })}
+                               style={{ ...tileBase, cursor: "zoom-in" }}>
+                            <img src={`https://cssnsgdawdhrkrmztuas.supabase.co/functions/v1/get-clock-photo?id=${driveId}`} alt={`打卡${slot}`}
+                                 style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <span style={{ position: "absolute", top: 3, left: 3, width: 16, height: 16, borderRadius: "50%", background: t.gn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                              <Check size={10} strokeWidth={3} />
+                            </span>
+                          </div>
+                        )
+                      }
                       return (
-                        <label key={slot} style={{
-                          position: "relative", flex: 1, minWidth: 0, aspectRatio: "1 / 1",
-                          borderRadius: 8,
-                          border: `1px dashed ${driveId ? `${t.gn}66` : t.bd}`,
-                          background: driveId ? `${t.gn}08` : "rgba(255,255,255,0.55)",
-                          cursor: uploading ? "wait" : (isSubmitted && !isAdmin ? "not-allowed" : "pointer"),
-                          overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                          {driveId ? (
-                            <>
-                              <img src={`https://cssnsgdawdhrkrmztuas.supabase.co/functions/v1/get-clock-photo?id=${driveId}`} alt={`打卡${slot}`}
-                                   style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              <span style={{ position: "absolute", top: 3, left: 3, width: 16, height: 16, borderRadius: "50%", background: t.gn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                                <Check size={10} strokeWidth={3} />
-                              </span>
-                            </>
-                          ) : uploading ? (
+                        <label key={slot} style={{ ...tileBase, cursor: uploading ? "wait" : (isSubmitted && !isAdmin ? "not-allowed" : "pointer") }}>
+                          {uploading ? (
                             <div style={{ width: 16, height: 16, border: `2px solid ${t.ac}33`, borderTopColor: t.ac, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: t.tm }}>
@@ -1094,6 +1099,35 @@ export default function WorkEntryManager({ user, t, tk }) {
           </div>
         )}
       </div>
+
+      {/* 打卡照片放大预览 Lightbox */}
+      {lightboxPhoto && (
+        <div onClick={() => setLightboxPhoto(null)} style={{
+          position: "fixed", inset: 0, zIndex: 1500, background: "rgba(0,0,0,0.88)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20, cursor: "zoom-out",
+        }}>
+          <img src={`https://cssnsgdawdhrkrmztuas.supabase.co/functions/v1/get-clock-photo?id=${lightboxPhoto.driveId}`}
+               alt={`打卡照片 ${lightboxPhoto.slot}`}
+               onClick={(e) => e.stopPropagation()}
+               style={{ maxWidth: "95vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8, boxShadow: "0 30px 80px rgba(0,0,0,0.5)", cursor: "auto" }} />
+          <button onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null) }}
+            style={{ position: "fixed", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", backdropFilter: "blur(8px)" }}>
+            <XIcon size={20} />
+          </button>
+          <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderRadius: 20, background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 12, fontWeight: 600, backdropFilter: "blur(8px)" }}>
+            <Camera size={14} /> 打卡照片 {lightboxPhoto.slot}
+            {!(isSubmitted && !isAdmin) && (
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 12, background: "rgba(255,255,255,0.22)", cursor: "pointer", marginLeft: 6 }}>
+                <Upload size={12} /> 重新上传
+                <input type="file" accept="image/*"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) { uploadClockPhoto(lightboxPhoto.slot, f); setLightboxPhoto(null) } e.target.value = "" }}
+                  style={{ display: "none" }} />
+              </label>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 错误提示 Modal */}
       {errorModal && (
