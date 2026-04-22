@@ -4,3 +4,4 @@
 - [Edge Function 用 anon key 鉴权](project_edge_fn_auth.md) — user access_token 过期踩坑，前端统一走 anon key
 - [打卡照片 Drive 上传系统](reference_clock_photo_drive.md) — OAuth refresh_token 方案（换掉了 SA），2 个 edge function，secrets 清单
 - [Drive 上传通用攻略](../../docs/google-drive-上传攻略.md) — 复用到新项目的完整步骤（GCP / OAuth / Edge Function / RLS / 前端）
+- [SQL 批量建 auth 用户的坑](project_bulk_create_auth_users.md) — 密码 cost≥10、8 个 token 字段不能 NULL，否则 "Database error querying schema"
