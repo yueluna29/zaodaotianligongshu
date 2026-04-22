@@ -12,12 +12,13 @@ const SUBJECTS = ["物理", "数学", "机械工学", "电气电子", "情报科
 const GENDERS = ["男", "女"]
 const ACCT_TYPES = ["普通", "当座"]
 
-// 邀请 token -> { 可选雇佣类型, 所属公司 id }。每家公司各两条链接。
+// 邀请 token -> { 可选雇佣类型, 所属公司 id, quick? }
+// quick=true：一页极简注册，仅收 ID/密码/基本信息，其他资料之后在「入职信息」补全
 const INVITE_TOKENS = {
   "full-wsdst2026": { types: ["正社員", "契約社員"], company_id: 1 }, // 世家学舍 正/契
-  "pt-wsdst2026":   { types: ["アルバイト", "外部講師"], company_id: 1 }, // 世家学舍 バイト/外部
+  "pt-wsdst2026":   { types: ["アルバイト", "外部講師"], company_id: 1, quick: true }, // 世家学舍 バイト/外部
   "full-zyh2026":   { types: ["正社員", "契約社員"], company_id: 2 }, // 紫陽花教育 正/契
-  "pt-zyh2026":     { types: ["アルバイト", "外部講師"], company_id: 2 }, // 紫陽花教育 バイト/外部
+  "pt-zyh2026":     { types: ["アルバイト", "外部講師"], company_id: 2, quick: true }, // 紫陽花教育 バイト/外部
 }
 
 const emptyForm = () => ({
@@ -36,6 +37,7 @@ const emptyForm = () => ({
 export default function Login({ onAuth, theme, t, toggleTheme }) {
   const [allowedTypes, setAllowedTypes] = useState(null) // 数组 or null
   const [lockedCompanyId, setLockedCompanyId] = useState(null) // 邀请链接锁定的公司 id
+  const [quickMode, setQuickMode] = useState(false) // 极简注册（baito）
   const [mode, setMode] = useState("login") // "login" | "register" | "forgot"
   const [forgotFm, setForgotFm] = useState({ name: "", phone4: "" })
   const [forgotResult, setForgotResult] = useState(null) // null | { status, login_id? }
@@ -50,9 +52,10 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
     const params = new URLSearchParams(window.location.search)
     const tok = params.get("invite")
     if (tok && INVITE_TOKENS[tok]) {
-      const { types, company_id } = INVITE_TOKENS[tok]
+      const { types, company_id, quick } = INVITE_TOKENS[tok]
       setAllowedTypes(types)
       setLockedCompanyId(company_id)
+      setQuickMode(!!quick)
       setFm((p) => ({ ...p, employment_type: types[0], company_id }))
       setMode("register")
     }
@@ -194,6 +197,63 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
     setLd(false)
   }
 
+  // ========== 极简注册（baito 快速入职） ==========
+  const validateQuick = () => {
+    const id = fm.loginId.trim().toLowerCase()
+    if (!ID_PATTERN.test(id)) return "登录ID 需 4-20 位英文字母或数字"
+    if (fm.password.length < 6) return "密码至少 6 位"
+    if (fm.password !== fm.passwordConfirm) return "两次密码输入不一致"
+    if (!fm.name.trim()) return "请填写汉字姓名"
+    if (!fm.furigana.trim()) return "请填写假名（用于工资发放）"
+    if (!fm.phone.trim()) return "请填写电话号码"
+    if (!fm.employment_type) return "雇佣类型缺失（可能是邀请链接问题）"
+    if (!fm.hire_date) return "请填写入职日期"
+    return null
+  }
+
+  const submitQuick = async () => {
+    const e = validateQuick(); if (e) { setErr(e); return }
+    setLd(true); setErr("")
+    const id = fm.loginId.trim().toLowerCase()
+    try {
+      const r = await sbAuth("signup", {
+        email: fakeEmail(id),
+        password: fm.password,
+        data: {
+          name: fm.name.trim(),
+          login_id: id,
+          real_email: fm.email.trim() || null,
+          hire_date: fm.hire_date,
+        },
+      })
+      if (r.error || r.error_description) {
+        const raw = r.error_description || r.error?.message || r.error || "注册失败"
+        const hint = /already registered|exists|duplicate/i.test(String(raw)) ? "该登录ID已被使用，请换一个" : String(raw)
+        setErr(hint); setLd(false); return
+      }
+      if (!r.access_token) { setMsg("注册完成！请登录"); setMode("login"); setLd(false); return }
+
+      await new Promise((res) => setTimeout(res, 1500))
+      const rows = await sbGet(`employees?auth_user_id=eq.${r.user?.id}&select=id`, r.access_token)
+      if (!rows?.length) { setMsg("注册完成！请登录"); setMode("login"); setLd(false); return }
+      const empId = rows[0].id
+
+      await sbPatch(`employees?id=eq.${empId}`, {
+        furigana: fm.furigana.trim(),
+        pinyin: fm.pinyin.trim() || null,
+        phone: fm.phone.trim(),
+        company_id: Number(fm.company_id),
+        employment_type: fm.employment_type,
+        hire_date: fm.hire_date,
+      }, r.access_token)
+
+      const fresh = await sbGet(`employees?id=eq.${empId}&select=*`, r.access_token)
+      if (fresh?.length) { onAuth({ ...fresh[0], token: r.access_token }); return }
+      setMsg("注册完成！请登录"); setMode("login")
+    } catch (e) { setErr(e.message) }
+    setLd(false)
+  }
+
   // ========== 样式 ==========
   const iS = { padding: "11px 14px", borderRadius: 10, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" }
   const labelS = { fontSize: 10, color: t.ts, display: "block", marginBottom: 4, fontWeight: 500 }
@@ -303,6 +363,32 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
     </div>
   )
 
+  const QuickForm = () => (
+    <div>
+      <div style={{ fontSize: 11, color: t.ac, marginBottom: 14, padding: "10px 12px", borderRadius: 10, background: `${t.ac}08`, border: `1px solid ${t.ac}20`, lineHeight: 1.6 }}>
+        欢迎加入！仅需填写登录信息 + 基本信息即可开始使用，<br />其他资料（银行账户、在留信息等）登录后可在「入职信息」中补全。
+      </div>
+      <div style={{ fontSize: 10, color: t.ts, fontWeight: 600, marginBottom: 6, letterSpacing: ".05em" }}>登录信息</div>
+      {field("登录ID", <input placeholder="4-20位英文/数字" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" style={iS} />, true)}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {field("密码", <input type="password" placeholder="至少 6 位" value={fm.password} onChange={(e) => up("password", e.target.value)} style={iS} />, true)}
+        {field("确认密码", <input type="password" value={fm.passwordConfirm} onChange={(e) => up("passwordConfirm", e.target.value)} style={iS} />, true)}
+      </div>
+      <div style={{ fontSize: 10, color: t.ts, fontWeight: 600, marginTop: 10, marginBottom: 6, letterSpacing: ".05em" }}>基本信息</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {field("汉字姓名", <input value={fm.name} onChange={(e) => up("name", e.target.value)} style={iS} />, true)}
+        {field("假名 (Furigana)", <input placeholder="セイ メイ" value={fm.furigana} onChange={(e) => up("furigana", e.target.value)} style={iS} />, true)}
+        {field("拼音 (Pinyin)", <input placeholder="Xing Ming" value={fm.pinyin} onChange={(e) => up("pinyin", e.target.value)} style={iS} />)}
+        {field("电话", <input value={fm.phone} onChange={(e) => up("phone", e.target.value)} style={iS} />, true)}
+      </div>
+      {field("邮箱（选填，用于找回密码）", <input type="email" value={fm.email} onChange={(e) => up("email", e.target.value)} style={iS} />)}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {field("入职日期", <input type="date" value={fm.hire_date} onChange={(e) => up("hire_date", e.target.value)} style={iS} />, true)}
+        {field("雇佣类型", <select value={fm.employment_type} onChange={(e) => up("employment_type", e.target.value)} style={iS} disabled={!allowedTypes || allowedTypes.length <= 1}>{(allowedTypes || []).map((tp) => <option key={tp} value={tp}>{tp}</option>)}</select>, true)}
+      </div>
+    </div>
+  )
+
   const StepProgress = () => (
     <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
       {[1, 2, 3, 4].map((s) => (
@@ -322,7 +408,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
           <div style={{ fontSize: 13, fontWeight: 700, color: t.ac, letterSpacing: ".08em", marginBottom: 6 }}>早稲田理工塾 OS</div>
           <h1 style={{ fontSize: 21, fontWeight: 700, color: t.tx, margin: 0 }}>勤怠管理系统</h1>
           <p style={{ fontSize: 12, color: t.tm, marginTop: 8 }}>
-            {mode === "login" ? "登录" : mode === "forgot" ? "找回登录ID" : `新员工入职登记 · ${stepTitle} (${step}/4)`}
+            {mode === "login" ? "登录" : mode === "forgot" ? "找回登录ID" : quickMode ? "快速入职登记" : `新员工入职登记 · ${stepTitle} (${step}/4)`}
           </p>
           {mode === "register" && allowedTypes && (
             <div style={{ fontSize: 10, color: t.ts, marginTop: 4 }}>
@@ -370,6 +456,19 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
             <div style={{ textAlign: "center", marginTop: 14 }}>
               <button onClick={() => { setMode("login"); setErr(""); setForgotResult(null) }} style={{ background: "none", border: "none", color: t.ac, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
                 返回登录
+              </button>
+            </div>
+          </>
+        ) : quickMode ? (
+          <>
+            {QuickForm()}
+            <div style={{ display: "flex", marginTop: 18 }}>
+              <div style={{ flex: 1 }} />
+              <button onClick={submitQuick} disabled={ld} style={{ padding: "11px 22px", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${t.gn},${t.gn})`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: ld ? "wait" : "pointer", opacity: ld ? 0.7 : 1 }}>{ld ? "提交中..." : "完成注册"}</button>
+            </div>
+            <div style={{ textAlign: "center", marginTop: 14 }}>
+              <button onClick={() => { setMode("login"); setErr(""); setMsg("") }} style={{ background: "none", border: "none", color: t.ac, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+                已有账号？返回登录
               </button>
             </div>
           </>
