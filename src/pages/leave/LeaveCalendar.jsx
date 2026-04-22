@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { sbGet } from "../../api/supabase"
-import { LEAVE_TYPES, WEEKDAYS, daysInMonth, pad } from "../../config/constants"
+import { LEAVE_TYPES, WEEKDAYS, daysInMonth, pad, isFullTime } from "../../config/constants"
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 
 const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -52,8 +52,9 @@ export default function LeaveCalendar({ t, tk }) {
         sbGet("work_schedules?select=*", tk),
         sbGet(`day_swap_requests?status=eq.承認&original_date=gte.${from}&original_date=lte.${to}&select=*`, tk),
       ])
+      // 只列正社員 / 契約社員（含中国正社员），baito/外部 不在日历视图
       // A→Z 排序：优先 furigana，其次 pinyin，最后 name，用 ja locale
-      const sortedE = (e || []).slice().sort((a, b) => {
+      const sortedE = (e || []).filter((x) => isFullTime(x.employment_type)).sort((a, b) => {
         const ka = (a.furigana || a.pinyin || a.name || "").toLowerCase()
         const kb = (b.furigana || b.pinyin || b.name || "").toLowerCase()
         return ka.localeCompare(kb, "ja")

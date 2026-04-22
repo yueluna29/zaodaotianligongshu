@@ -37,6 +37,7 @@ export default function AttendanceList({ user, t, tk }) {
   const [bal, sBal] = useState({ currentGrant: 0, carryOver: 0, used: 0, balance: 0, totalAvailable: 0 })
   const [compBal, setCompBal] = useState(0)
   const [akaOverlap, setAkaOverlap] = useState(0) // 定休日与日本祝日重叠次数
+  const [myHasCommission, setMyHasCommission] = useState(!!user.has_commission) // 从 DB 拉最新值，admin 刚开通也能看到 tab
   const [showTL, setShowTL] = useState(false)
   const [leaveHistMode, setLeaveHistMode] = useState(false)
 
@@ -97,13 +98,13 @@ export default function AttendanceList({ user, t, tk }) {
     const [attData, trData, cmData, lvData, swData, usedReqs, compReqs, expData, meData, myTChg] = await Promise.all([
       sbGet(`attendance_records?employee_id=eq.${user.id}&work_date=gte.${from}&work_date=lte.${to}&order=work_date`, tk),
       sbGet(`transportation_claims?employee_id=eq.${user.id}&claim_date=gte.${from}&claim_date=lte.${to}&order=claim_date&select=*`, tk),
-      user.has_commission ? sbGet(`commission_entries?employee_id=eq.${user.id}&entry_date=gte.${from}&entry_date=lte.${to}&order=entry_date,seq_number&select=*`, tk) : Promise.resolve([]),
+      sbGet(`commission_entries?employee_id=eq.${user.id}&entry_date=gte.${from}&entry_date=lte.${to}&order=entry_date,seq_number&select=*`, tk),
       sbGet(`leave_requests?employee_id=eq.${(isAdmin && leaveViewEmp) ? leaveViewEmp : user.id}&order=leave_date.desc&select=*`, tk),
       sbGet(`day_swap_requests?employee_id=eq.${(isAdmin && leaveViewEmp) ? leaveViewEmp : user.id}&order=created_at.desc&select=*`, tk),
       sbGet(`leave_requests?employee_id=eq.${user.id}&status=eq.承認&leave_type=eq.有休&select=leave_date,is_half_day`, tk),
       sbGet(`day_swap_requests?employee_id=eq.${user.id}&swap_type=eq.休日出勤&compensation_type=eq.換休&status=eq.承認&select=id,swap_date`, tk),
       sbGet(`expense_claims?employee_id=eq.${user.id}&order=claim_date.desc&select=*`, tk),
-      sbGet(`employees?id=eq.${user.id}&select=transport_amount,days_off`, tk),
+      sbGet(`employees?id=eq.${user.id}&select=transport_amount,days_off,has_commission`, tk),
       sbGet(`transport_change_requests?employee_id=eq.${user.id}&order=created_at.desc&select=*`, tk),
     ])
 
@@ -122,6 +123,7 @@ export default function AttendanceList({ user, t, tk }) {
     setSwapReqs(swData || [])
     setExpRecs(expData || [])
     setMyTransAmount(Number(meData?.[0]?.transport_amount || 0))
+    setMyHasCommission(!!meData?.[0]?.has_commission)
     setMyTransChangeReqs(myTChg || [])
 
     // 赤日补休：从 hire_date 到今天，数 日本祝日 落在员工 days_off 上的天数
@@ -146,7 +148,7 @@ export default function AttendanceList({ user, t, tk }) {
 
     setEditingKeys(new Set())
     sLd(false)
-  }, [y, m, days, user.id, tk, user.has_commission, isAdmin, leaveViewEmp])
+  }, [y, m, days, user.id, tk, isAdmin, leaveViewEmp])
 
   useEffect(() => { load() }, [load])
 
@@ -557,7 +559,7 @@ export default function AttendanceList({ user, t, tk }) {
     { key: "summary", label: "报销一览", icon: ListChecks },
     { key: "transport", label: "交通費", icon: Train },
     { key: "expense", label: "报销登记", icon: Banknote },
-    ...(user.has_commission ? [{ key: "commission", label: "签单提成", icon: Receipt }] : []),
+    ...(myHasCommission ? [{ key: "commission", label: "签单提成", icon: Receipt }] : []),
   ]
   const subTabs = mainTab === "leave" ? leaveSubTabs : mainTab === "expense" ? expenseSubTabs : []
   const switchMain = (mt) => {
@@ -628,7 +630,7 @@ export default function AttendanceList({ user, t, tk }) {
             cards.push(
               { l: "交通费", v: `¥${totalTrans.toLocaleString()}`, c: "#8B5CF6" },
               { l: "报销", v: `¥${totalExp.toLocaleString()}`, c: t.wn },
-              ...(user.has_commission ? [{ l: "签单提成", v: `¥${totalComm.toLocaleString()}`, c: "#EC4899" }] : []),
+              ...(myHasCommission ? [{ l: "签单提成", v: `¥${totalComm.toLocaleString()}`, c: "#EC4899" }] : []),
             )
           }
           return cards
@@ -1191,7 +1193,7 @@ export default function AttendanceList({ user, t, tk }) {
     </div>
 
     {/* 签单提成明细 */}
-    {user.has_commission && (
+    {myHasCommission && (
       <div style={{ padding: "12px 20px", borderBottom: `1px solid ${t.bl}` }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "#EC4899", marginBottom: 8 }}>签单提成</div>
         {commRows.filter(r => !r._isNew).length === 0
@@ -1375,7 +1377,7 @@ export default function AttendanceList({ user, t, tk }) {
       )}
       
       {/* ====== 签单提成 Tab ====== */}
-      {mainTab === "expense" && tab === "commission" && user.has_commission && (
+      {mainTab === "expense" && tab === "commission" && myHasCommission && (
         <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 550 }}>
             <thead><tr style={{ background: t.bgH }}>{["日期", "第N个", "学生名字", "学费", "提成率(%)", "提成金额", ""].map((h, i) => <th key={i} style={{ padding: "8px 8px", color: t.tm, fontWeight: 500, fontSize: 10, textAlign: "center", borderBottom: `1px solid ${t.bd}` }}>{h}</th>)}</tr></thead>
