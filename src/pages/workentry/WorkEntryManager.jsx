@@ -775,10 +775,19 @@ export default function WorkEntryManager({ user, t, tk }) {
                         备注
                         {noteSavedAt && !noteDirty && <span style={{ fontSize: 11, color: t.gn, fontWeight: 500 }}>已保存</span>}
                       </h3>
-                      {!noteReadOnly && noteDirty && (
-                        <HoverBtn onClick={saveNote} title="确定保存" t={t} disabled={noteSaving} style={{ padding: 8, background: `${t.gn}18`, color: t.gn, border: `1px solid ${t.gn}40` }}>
-                          <Check size={14} />
-                        </HoverBtn>
+                      {!noteReadOnly && (
+                        <button onClick={saveNote} disabled={noteSaving || !noteDirty} title={noteDirty ? "保存备注" : "无改动"}
+                          style={{
+                            width: 32, height: 32, borderRadius: "50%",
+                            border: `1px solid ${noteDirty ? `${t.gn}50` : t.bd}`,
+                            background: noteDirty ? `${t.gn}18` : "rgba(255,255,255,0.6)",
+                            color: noteDirty ? t.gn : t.td,
+                            cursor: noteDirty && !noteSaving ? "pointer" : "not-allowed",
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            fontFamily: "inherit", opacity: noteSaving ? 0.5 : 1, transition: "all .15s",
+                          }}>
+                          <Check size={15} strokeWidth={2.5} />
+                        </button>
                       )}
                     </div>
                     {noteReadOnly ? (
