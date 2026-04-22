@@ -404,7 +404,7 @@ export default function WorkEntryManager({ user, t, tk }) {
       const fd = new FormData()
       fd.append("file", blob, filename)
       fd.append("filename", filename)
-      const res = await sbFn("upload-clock-photo", fd, tk)
+      const res = await sbFn("upload-clock-photo", fd)
       if (!res?.id) {
         setPhotoError(`照片 ${slot} 上传失败：${res?.error || "未知错误"}`)
         return
