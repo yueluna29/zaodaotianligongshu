@@ -58,14 +58,19 @@ export async function sbDel(path, token) {
   })
 }
 
-// 调用 Edge Function，body 是 FormData（multipart）。
-// token 可省略；省略则走 anon key（edge function 的 verify_jwt 也认 anon key）。
-// 用户 access_token 有 1h 寿命，localStorage 不会自动续期，固定用 anon key 更稳。
-export async function sbFn(name, formData, token) {
+// 调用 Edge Function。body 支持 FormData 或 plain object（JSON）。
+// token：省略则走 anon key（大多数场景推荐）。需要 edge function 内部验证用户身份时传 user.token。
+// 用户 access_token 1h 过期，localStorage 不自动续期；对不需要身份的函数用 anon key 更稳。
+export async function sbFn(name, body, token) {
+  const isForm = body instanceof FormData
   const r = await fetch(`${SB}/functions/v1/${name}`, {
     method: "POST",
-    headers: { apikey: AK, Authorization: `Bearer ${token || AK}` },
-    body: formData,
+    headers: {
+      apikey: AK,
+      Authorization: `Bearer ${token || AK}`,
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
+    },
+    body: isForm ? body : JSON.stringify(body),
   })
   return r.json()
 }

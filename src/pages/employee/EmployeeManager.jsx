@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
+import { sbGet, sbPost, sbPatch, sbDel, sbFn } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW } from "../../config/constants"
 import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, AlertTriangle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight, CheckSquare, Square } from "lucide-react"
@@ -257,6 +257,10 @@ export default function EmployeeManager({ user, t, tk }) {
   const [editSched, setEditSched] = useState(false)
   const [schedFm, setSchedFm] = useState({})
   const [activeTab, setActiveTab] = useState("basic")
+  const [bulkShow, setBulkShow] = useState(false)
+  const [bulkRows, setBulkRows] = useState([])
+  const [bulkRunning, setBulkRunning] = useState(false)
+  const [bulkResults, setBulkResults] = useState(null)
 
   const isAdmin = user && user.role === "admin"
 
@@ -333,6 +337,39 @@ export default function EmployeeManager({ user, t, tk }) {
   }
 
   const startCreate = () => { sSelected({ id: "__new__" }); sCreating(true); sFm(emptyForm()); sEditing(true); setActiveTab("basic") }
+
+  // 批量快速注册 baito 老师（仅 login_id / 姓名 / 公司，统一密码 123456）
+  const emptyBulkRow = () => ({ _key: Math.random().toString(36).slice(2), login_id: "", name: "", company_id: 1 })
+  const openBulkModal = () => {
+    setBulkRows(Array.from({ length: 5 }, emptyBulkRow))
+    setBulkResults(null)
+    setBulkShow(true)
+  }
+  const addBulkRow = () => setBulkRows(p => [...p, emptyBulkRow()])
+  const removeBulkRow = (key) => setBulkRows(p => p.filter(r => r._key !== key))
+  const updateBulkRow = (key, field, val) => setBulkRows(p => p.map(r => r._key === key ? { ...r, [field]: val } : r))
+  const submitBulk = async () => {
+    const valid = bulkRows.filter(r => r.login_id.trim() && r.name.trim() && r.company_id)
+    if (valid.length === 0) { alert("没有可提交的行（login_id + 姓名 + 公司 都必填）"); return }
+    setBulkRunning(true); setBulkResults(null)
+    const payload = {
+      teachers: valid.map(r => ({
+        login_id: r.login_id.trim().toLowerCase(),
+        name: r.name.trim(),
+        company_id: Number(r.company_id),
+        employment_type: "アルバイト",
+      })),
+    }
+    const res = await sbFn("admin-create-teacher", payload, tk)
+    setBulkRunning(false)
+    if (res?.error) {
+      alert(`批量注册失败：${res.error}`)
+      return
+    }
+    setBulkResults(res.results || [])
+    await load()
+  }
+  const closeBulk = () => { setBulkShow(false); setBulkResults(null); setBulkRows([]) }
 
   const startSchedEdit = () => {
     const nf = {}
@@ -1022,9 +1059,14 @@ export default function EmployeeManager({ user, t, tk }) {
             </h1>
             <p style={{ color: t.ts, margin: 0, fontSize: 12 }}>管理世家学舍 / 紫陽花教育 / 早稻大连 / 早理金华 员工档案</p>
           </div>
-          <HoverButton primary onClick={startCreate} t={t}>
-            <Plus size={16} /> 新增社员
-          </HoverButton>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <HoverButton onClick={openBulkModal} t={t}>
+              <Plus size={16} /> 批量注册 baito
+            </HoverButton>
+            <HoverButton primary onClick={startCreate} t={t}>
+              <Plus size={16} /> 新增社员
+            </HoverButton>
+          </div>
         </div>
 
         {/* 筛选区 */}
@@ -1146,6 +1188,85 @@ export default function EmployeeManager({ user, t, tk }) {
             </div>
           )}
         </div>
+
+        {/* 批量注册 baito 老师模态 */}
+        {bulkShow && (
+          <div onClick={() => !bulkRunning && closeBulk()} style={{
+            position: "fixed", inset: 0, zIndex: 1200, background: "rgba(15,23,42,0.55)",
+            display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 20, overflowY: "auto",
+          }}>
+            <div onClick={(e) => e.stopPropagation()} style={{
+              background: "rgba(255,255,255,0.98)", borderRadius: 20, maxWidth: 820, width: "100%",
+              padding: 28, boxShadow: "0 30px 80px -20px rgba(15,23,42,0.3)", marginTop: 40,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: t.tx }}>
+                  批量注册 baito 老师
+                </h3>
+                <button onClick={closeBulk} disabled={bulkRunning} style={{ background: "transparent", border: "none", color: t.tm, cursor: bulkRunning ? "wait" : "pointer", fontFamily: "inherit", fontSize: 20 }}>×</button>
+              </div>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: t.tm, lineHeight: 1.6 }}>
+                统一密码 <strong style={{ color: t.tx }}>123456</strong>，雇佣类型固定 <strong style={{ color: t.tx }}>アルバイト</strong>。
+                其他档案信息老师登录后自己补，或你进档案单独填。注册成功后回来填时薪。
+              </p>
+
+              {!bulkResults && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1.5fr 36px", gap: 8, fontSize: 10, color: t.tm, fontWeight: 600, padding: "0 4px 6px", borderBottom: `1px solid ${t.bd}` }}>
+                    <div>登录 ID <span style={{ color: t.rd }}>*</span></div>
+                    <div>姓名 <span style={{ color: t.rd }}>*</span></div>
+                    <div>公司 <span style={{ color: t.rd }}>*</span></div>
+                    <div />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0", maxHeight: 420, overflowY: "auto" }}>
+                    {bulkRows.map(r => (
+                      <div key={r._key} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1.5fr 36px", gap: 8, alignItems: "center" }}>
+                        <input placeholder="例：sunyuxuan" value={r.login_id} onChange={(e) => updateBulkRow(r._key, "login_id", e.target.value)} style={{ padding: "7px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, fontFamily: "monospace" }} />
+                        <input placeholder="孙裕軒" value={r.name} onChange={(e) => updateBulkRow(r._key, "name", e.target.value)} style={{ padding: "7px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12 }} />
+                        <select value={r.company_id} onChange={(e) => updateBulkRow(r._key, "company_id", Number(e.target.value))} style={{ padding: "7px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, fontFamily: "inherit" }}>
+                          {COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <button onClick={() => removeBulkRow(r._key)} disabled={bulkRunning} style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.rd, cursor: "pointer", fontFamily: "inherit" }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, paddingTop: 14, borderTop: `1px solid ${t.bd}` }}>
+                    <button onClick={addBulkRow} disabled={bulkRunning} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ 添加一行</button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <HoverButton onClick={closeBulk} t={t} disabled={bulkRunning}>取消</HoverButton>
+                      <HoverButton primary onClick={submitBulk} t={t} disabled={bulkRunning}>
+                        {bulkRunning ? "注册中..." : `提交注册（${bulkRows.filter(r => r.login_id.trim() && r.name.trim() && r.company_id).length} 条）`}
+                      </HoverButton>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {bulkResults && (
+                <>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 440, overflowY: "auto" }}>
+                    {bulkResults.map((r, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, background: r.ok ? `${t.gn}10` : `${t.rd}10`, border: `1px solid ${r.ok ? `${t.gn}40` : `${t.rd}40`}`, fontSize: 12 }}>
+                        <span style={{ color: r.ok ? t.gn : t.rd, fontWeight: 700, minWidth: 16, textAlign: "center" }}>{r.ok ? "✓" : "×"}</span>
+                        <span style={{ fontFamily: "monospace", color: t.tx, minWidth: 100 }}>{r.login_id}</span>
+                        {r.ok
+                          ? <span style={{ color: t.ts }}>{r.name} · 注册成功</span>
+                          : <span style={{ color: t.rd }}>{r.error}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: `${t.ac}10`, fontSize: 11, color: t.ac, lineHeight: 1.6 }}>
+                    成功 <strong>{bulkResults.filter(r => r.ok).length}</strong> / {bulkResults.length} 条。
+                    把 login_id 和密码 <strong>123456</strong> 告诉对应老师即可登录。现在可以从档案库点进每位老师设置时薪。
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+                    <HoverButton primary onClick={closeBulk} t={t}>完成</HoverButton>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
