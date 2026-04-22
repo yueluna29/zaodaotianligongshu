@@ -351,12 +351,18 @@ export default function AttendanceList({ user, t, tk }) {
         return
       }
     }
+    if (swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "赤日補休") {
+      if (akaBalance < swapFm.original_dates.length) {
+        alert(`赤日補休余额不足：申请 ${swapFm.original_dates.length} 天，可用 ${akaBalance} 天`)
+        return
+      }
+    }
     setSwapSub(true)
     const targetId = swapHistMode && selEmp ? selEmp : user.id
-    // compensation_type：休日出勤 -> 換休/加班；出勤日休息 -> NULL（補班）或 使用代休
+    // compensation_type：休日出勤 -> 換休/加班；出勤日休息 -> NULL（補班）/ 使用代休 / 赤日補休
     const compTypeOf = () => {
       if (swapFm.swap_type === "休日出勤") return swapFm.compensation_type
-      if (swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "使用代休") return "使用代休"
+      if (swapFm.swap_type === "出勤日休息" && (swapFm.compensation_type === "使用代休" || swapFm.compensation_type === "赤日補休")) return swapFm.compensation_type
       return null
     }
     if (swapEditId) {
@@ -490,6 +496,8 @@ export default function AttendanceList({ user, t, tk }) {
   const swapApproved = swapReqs.filter(r => r.status === "承認")
   const unusedComp = swapApproved.filter(r => r.swap_type === "休日出勤" && r.compensation_type === "換休" && !r.swap_date).length
   const usedViaSwap = swapApproved.filter(r => r.swap_type === "出勤日休息" && r.compensation_type === "使用代休").length
+  const usedAka = swapApproved.filter(r => r.swap_type === "出勤日休息" && r.compensation_type === "赤日補休").length
+  const akaBalance = Math.max(0, akaOverlap - usedAka)
   const leavePending = leaveReqs.filter(r => r.status === "申請中" && r.leave_type !== "赤日休").length
   const akaPending = leaveReqs.filter(r => r.status === "申請中" && r.leave_type === "赤日休").length
   const swapPending = swapReqs.filter(r => r.status === "申請中").length
@@ -614,7 +622,7 @@ export default function AttendanceList({ user, t, tk }) {
               { l: "有休余额", v: `${bal.balance}天`, c: t.ac, sub: `本年${bal.currentGrant}+繰越${bal.carryOver}-已用${bal.used}`, click: () => setShowTL(p => !p) },
               { l: "義務残", v: bal.mandatoryRequired > 0 ? `${bal.mandatoryRemaining}天` : "—", c: bal.mandatoryRemaining > 0 ? t.wn : t.gn, sub: bal.mandatoryRequired > 0 ? `本年度必须取 ${bal.mandatoryRequired} 日 · 已取 ${bal.thisYearUsed}` : "付与未满 10 日免" },
               { l: "代休余额", v: `${Math.max(0, compBal + unusedComp - usedViaSwap)}天`, c: "#8B5CF6" },
-              { l: "赤日補休", v: `${akaOverlap}天`, c: "#F97316", sub: akaOverlap > 0 ? `定休与日本祝日重叠 ${akaOverlap} 次` : "定休未与祝日重叠" },
+              { l: "赤日補休", v: `${akaBalance}天`, c: "#F97316", sub: akaOverlap > 0 ? `入社以来获得${akaOverlap}-已用${usedAka}` : "定休未与祝日重叠" },
             )
           } else { // expense
             cards.push(
@@ -1075,9 +1083,10 @@ export default function AttendanceList({ user, t, tk }) {
                       <option value="加班">加班（算加班费）</option>
                     </select>
                   ) : (
-                    <select value={swapFm.compensation_type} onChange={(e) => setSwapFm(p => ({ ...p, compensation_type: e.target.value, swap_date: e.target.value === "使用代休" ? "" : p.swap_date }))} style={fmS}>
+                    <select value={swapFm.compensation_type} onChange={(e) => setSwapFm(p => ({ ...p, compensation_type: e.target.value, swap_date: (e.target.value === "使用代休" || e.target.value === "赤日補休") ? "" : p.swap_date }))} style={fmS}>
                       <option value="">補班（工作日另补一天）</option>
                       <option value="使用代休">使用代休余额（消化 1 天代休）</option>
+                      <option value="赤日補休">使用赤日補休（消化 1 天赤日補休）</option>
                     </select>
                   )}
                 </div>
@@ -1092,7 +1101,7 @@ export default function AttendanceList({ user, t, tk }) {
                   <DateMultiPicker selected={swapFm.original_dates} onChange={(dates) => setSwapFm(p => ({ ...p, original_dates: dates }))} t={t} tk={tk} />
                 )}
               </div>
-              {(swapEditId || swapFm.original_dates.length === 1) && !(swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "使用代休") && (
+              {(swapEditId || swapFm.original_dates.length === 1) && !(swapFm.swap_type === "出勤日休息" && (swapFm.compensation_type === "使用代休" || swapFm.compensation_type === "赤日補休")) && (
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 10, color: t.ts, display: "block", marginBottom: 4 }}>{swapFm.swap_type === "休日出勤" ? "换休日期（可留空=待定）" : "补班日期（可留空=待定）"}</label>
                   <input type="date" value={swapFm.swap_date} onChange={(e) => setSwapFm(p => ({ ...p, swap_date: e.target.value }))} style={fmS} />
@@ -1101,6 +1110,11 @@ export default function AttendanceList({ user, t, tk }) {
               {swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "使用代休" && (
                 <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: `${t.ac}10`, fontSize: 10, color: t.ac, lineHeight: 1.5 }}>
                   该申请批准后将消化 1 天代休余额，不需要额外补班。当前可用代休：<strong>{Math.max(0, compBal + unusedComp - usedViaSwap)}</strong> 天
+                </div>
+              )}
+              {swapFm.swap_type === "出勤日休息" && swapFm.compensation_type === "赤日補休" && (
+                <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "#F9731610", fontSize: 10, color: "#F97316", lineHeight: 1.5 }}>
+                  该申请批准后将消化 1 天赤日補休，不需要额外补班。当前可用赤日補休：<strong>{akaBalance}</strong> 天
                 </div>
               )}
               {!swapEditId && swapFm.original_dates.length > 1 && (
@@ -1122,8 +1136,8 @@ export default function AttendanceList({ user, t, tk }) {
           <div style={{ background: t.bgC, borderRadius: 10, border: `1px solid ${t.bd}`, overflow: "hidden" }}>
             {!swapReqs.length ? <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12 }}>暂无换休记录</div> : swapReqs.map((r) => {
               const isPending = r.status === "申請中"
-              const compColor = r.compensation_type === "換休" ? "#8B5CF6" : r.compensation_type === "使用代休" ? "#0EA5E9" : t.rd
-              const usingDaikyu = r.compensation_type === "使用代休"
+              const compColor = r.compensation_type === "換休" ? "#8B5CF6" : r.compensation_type === "使用代休" ? "#0EA5E9" : r.compensation_type === "赤日補休" ? "#F97316" : t.rd
+              const usingDaikyu = r.compensation_type === "使用代休" || r.compensation_type === "赤日補休"
               return (
                 <div key={r.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${t.bl}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

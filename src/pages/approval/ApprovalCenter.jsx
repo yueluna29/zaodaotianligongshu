@@ -175,6 +175,7 @@ export default function ApprovalCenter({ user, t, tk }) {
     const swapColor = r.swap_type === "休日出勤" ? "#8B5CF6" : "#F59E0B"
     const compColor = r.compensation_type === "換休" ? "#8B5CF6"
       : r.compensation_type === "使用代休" ? "#0EA5E9"
+      : r.compensation_type === "赤日補休" ? "#F97316"
       : t.rd
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
