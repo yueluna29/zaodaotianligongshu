@@ -409,8 +409,8 @@ export default function WorkEntryManager({ user, t, tk }) {
     const filteredEmps = allEmps.filter(e => {
       if (companyFilter !== "all" && e.company_id !== companyFilter) return false
       if (typeFilter !== "all" && e.employment_type !== typeFilter) return false
-      // baito / 外部：只显示已提交本月报表的
-      if (isHourly(e.employment_type) && !adminSubmitted.has(e.id)) return false
+      // 所有雇佣类型：只显示已提交本月工资报表的
+      if (!adminSubmitted.has(e.id)) return false
       return true
     })
 
@@ -418,7 +418,11 @@ export default function WorkEntryManager({ user, t, tk }) {
     const hourlySum = rowsWithTotals.filter(r => r.isH).reduce((s, r) => s + r.total, 0)
     const fulltimeSum = rowsWithTotals.filter(r => !r.isH).reduce((s, r) => s + r.total, 0)
     const grandTotal = hourlySum + fulltimeSum
-    const unsubmittedBaitoCount = allEmps.filter(e => isHourly(e.employment_type) && !adminSubmitted.has(e.id)).length
+    const unsubmittedCount = allEmps.filter(e => {
+      if (companyFilter !== "all" && e.company_id !== companyFilter) return false
+      if (typeFilter !== "all" && e.employment_type !== typeFilter) return false
+      return !adminSubmitted.has(e.id)
+    }).length
 
     const exportCSV = () => {
       const rows = [["姓名", "公司", "雇佣类型", "部门", "工时(h)", "课时费", "交通费", "其他报销", "签单提成", "合计"]]
@@ -517,11 +521,11 @@ export default function WorkEntryManager({ user, t, tk }) {
             </div>
           </div>
 
-          {/* 尚未提交的 baito 提示 */}
-          {unsubmittedBaitoCount > 0 && (
+          {/* 尚未提交的员工提示 */}
+          {unsubmittedCount > 0 && (
             <div style={{ padding: 12, borderRadius: 12, background: `${t.wn}12`, border: `1px solid ${t.wn}40`, marginBottom: 16, fontSize: 12, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
               <AlertCircle size={14} color={t.wn} />
-              <span>本月尚有 <strong style={{ color: t.wn }}>{unsubmittedBaitoCount}</strong> 位时薪员工未提交工时报表，未提交的不在下方列表中显示。</span>
+              <span>当前筛选下尚有 <strong style={{ color: t.wn }}>{unsubmittedCount}</strong> 位员工未提交本月工资报表，未提交的不在下方列表中显示。</span>
             </div>
           )}
 
