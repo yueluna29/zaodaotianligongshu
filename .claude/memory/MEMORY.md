@@ -1,3 +1,5 @@
 - [每次改完都 push 到 main](feedback_auto_deploy.md) — 项目靠线上部署查看，做完默认 commit+push
 - [全站 UI 玻璃质感风格](feedback_design_style.md) — glass-card / ambient glow / 细字重细线图标，新设计默认沿用
-- [假期 DB 枚举扩展](project_leave_enums.md) — 2026-04-21 加了 赤日休 / 使用代休 两个新值，代休的正确表达方式
+- [假期相关 DB 枚举](project_leave_enums.md) — 赤日休 / 使用代休 / 赤日補休 的合法值与 balance 计算规则
+- [Edge Function 用 anon key 鉴权](project_edge_fn_auth.md) — user access_token 过期踩坑，前端统一走 anon key
+- [打卡照片 Drive 上传系统](reference_clock_photo_drive.md) — Edge Function / SA email / folder id / secrets 配置

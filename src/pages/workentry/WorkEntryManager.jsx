@@ -406,7 +406,10 @@ export default function WorkEntryManager({ user, t, tk }) {
       fd.append("filename", filename)
       const res = await sbFn("upload-clock-photo", fd)
       if (!res?.id) {
-        setPhotoError(`照片 ${slot} 上传失败：${res?.error || "未知错误"}`)
+        const parts = [res?.error || "未知错误"]
+        if (res?.status) parts.push(`HTTP ${res.status}`)
+        if (res?.detail) parts.push(String(res.detail).slice(0, 200))
+        setPhotoError(`照片 ${slot} 上传失败：${parts.join(" | ")}`)
         return
       }
       const col = slot === 1 ? "photo_1_drive_id" : "photo_2_drive_id"
