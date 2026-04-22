@@ -1,10 +1,13 @@
-import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
+import { useState } from "react"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, KeyRound } from "lucide-react"
 import { isHourly as empIsHourly } from "../config/constants"
+import ChangePasswordModal from "./ChangePasswordModal"
 
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge, workBadge }) {
   const isA = user.role === "admin"
   const et = user.employment_type || "正社員"
   const isHourly = empIsHourly(et)
+  const [pwdShow, setPwdShow] = useState(false)
 
   const items = [
     { id: "home", l: "首页", ic: Home, show: true },
@@ -17,6 +20,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
   ]
 
   return (
+    <>
     <div style={{ width: 210, background: t.bgS, borderRight: `1px solid ${t.bd}`, display: "flex", flexDirection: "column", height: "100vh", flexShrink: 0 }}>
       <div style={{ padding: "18px 16px 14px", borderBottom: `1px solid ${t.bd}` }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: t.ac, letterSpacing: ".06em" }}>早稲田理工塾 OS</div>
@@ -51,8 +55,13 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
             <div style={{ fontSize: 9, color: t.tm }}>{isA ? "管理者" : et}</div>
           </div>
         </div>
+        <button onClick={() => setPwdShow(true)} style={{ width: "100%", padding: 8, borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 6, fontFamily: "inherit" }}>
+          <KeyRound size={12} /> 修改密码
+        </button>
         <button onClick={onLogout} style={{ width: "100%", padding: 8, borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 11, cursor: "pointer" }}>退出登录</button>
       </div>
     </div>
+    {pwdShow && <ChangePasswordModal t={t} token={user.token} onClose={() => setPwdShow(false)} />}
+    </>
   )
 }

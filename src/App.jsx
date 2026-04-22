@@ -6,6 +6,7 @@ import { useAuth } from "./hooks/useAuth"
 import Login from "./pages/auth/Login"
 import Sidebar from "./components/Sidebar"
 import MobileNav from "./components/MobileNav"
+import ChangePasswordModal from "./components/ChangePasswordModal"
 
 import Dashboard from "./pages/home/Dashboard"
 import AttendanceList from "./pages/attendance/AttendanceList"
@@ -27,6 +28,7 @@ export default function App() {
   const [mobile, setMobile] = useState(false)
   const [badge, setBadge] = useState(0)
   const [workBadge, setWorkBadge] = useState(0)
+  const [pwdShow, setPwdShow] = useState(false)
   const t = themes[theme]
 
   useEffect(() => {
@@ -92,13 +94,17 @@ export default function App() {
                 <div style={{ fontSize: 10, fontWeight: 700, color: t.ac, letterSpacing: ".05em" }}>早稲田理工塾 OS</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: t.tx }}>{user.name}</div>
               </div>
-              <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => setPwdShow(true)} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>密码</button>
+                <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
+              </div>
             </div>
           )}
           {pages[view] || <Dashboard user={user} t={t} tk={user.token} />}
         </div>
       </div>
       {mobile && <MobileNav user={user} view={view} onNav={setView} t={t} badge={badge} workBadge={workBadge} />}
+      {pwdShow && <ChangePasswordModal t={t} token={user.token} onClose={() => setPwdShow(false)} />}
     </div>
   )
 }

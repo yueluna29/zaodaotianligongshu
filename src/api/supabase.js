@@ -10,6 +10,16 @@ export async function sbAuth(path, body) {
   return r.json()
 }
 
+// 已登录用户更新自己的密码（或其它 user_metadata）。需要有效 access_token。
+export async function sbUpdateUser(body, token) {
+  const r = await fetch(`${SB}/auth/v1/user`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", apikey: AK, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  })
+  return r.json()
+}
+
 export async function sbGet(path, token) {
   const r = await fetch(`${SB}/rest/v1/${path}`, {
     headers: { apikey: AK, Authorization: `Bearer ${token}` },
