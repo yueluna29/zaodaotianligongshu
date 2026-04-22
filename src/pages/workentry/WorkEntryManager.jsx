@@ -795,7 +795,7 @@ export default function WorkEntryManager({ user, t, tk }) {
                         {submission?.note || "（无备注）"}
                       </div>
                     ) : (
-                      <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="本月需要说明的情况，例如请假、特殊加班、报销说明等…" rows={4}
+                      <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="本月需要说明的情况…" rows={4}
                         style={{ ...inputStyle(t), width: "100%", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, boxSizing: "border-box" }} />
                     )}
                   </div>
