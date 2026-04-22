@@ -136,14 +136,28 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
           const totalW = atts.reduce((s, a) => s + Number(a.work_minutes || 0), 0)
           const bal = lb.reduce((s, b) => s + Number(b.granted_days || 0) + Number(b.carried_over_days || 0), 0)
           // 打卡异常：过去日期 clock_in 有但 clock_out 没；或 break_start 有但 break_end 没
-          const issues = []
+          const dateIssues = []
           for (const a of atts) {
             if (a.work_date >= td) continue
-            if (a.clock_in && !a.clock_out) issues.push({ date: a.work_date, kind: "no_out" })
-            else if (a.break_start && !a.break_end) issues.push({ date: a.work_date, kind: "no_break_end" })
+            if (a.clock_in && !a.clock_out) dateIssues.push({ date: a.work_date, kind: "no_out" })
+            else if (a.break_start && !a.break_end) dateIssues.push({ date: a.work_date, kind: "no_break_end" })
           }
-          issues.sort((x, y) => y.date.localeCompare(x.date))
-          setStats({ totalW, wd: atts.filter((a) => a.clock_in).length, targetH: workingDays(y, m) * 8 * 60, leaveBalance: bal - lr.length, leaveUsed: lr.length, issues })
+          dateIssues.sort((x, y) => y.date.localeCompare(x.date))
+          // 工时偏低：截至今日的非周末工作日 × 8h × 0.7 为阈值
+          const lastD = Math.min(now.getDate(), new Date(y, m, 0).getDate())
+          let workdaysSoFar = 0
+          for (let d = 1; d <= lastD; d++) {
+            const w = new Date(y, m - 1, d).getDay()
+            if (w !== 0 && w !== 6) workdaysSoFar++
+          }
+          const expectedMinSoFar = workdaysSoFar * 8 * 60
+          const hoursLow = expectedMinSoFar > 0 && totalW < expectedMinSoFar * 0.7
+          setStats({
+            totalW, wd: atts.filter((a) => a.clock_in).length,
+            targetH: workingDays(y, m) * 8 * 60,
+            leaveBalance: bal - lr.length, leaveUsed: lr.length,
+            dateIssues, hoursLow, expectedMinSoFar,
+          })
         }
         await loadToday()
       } catch (e) {
@@ -602,9 +616,11 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
 
           {/* 本月打卡记录（仅正/契）— 放在本月出勤前，提示异常 */}
           {!isHourly && (() => {
-            const issues = stats.issues || []
-            const ok = issues.length === 0
+            const dateIssues = stats.dateIssues || []
+            const hoursLow = !!stats.hoursLow
+            const ok = dateIssues.length === 0 && !hoursLow
             const CardTag = ok ? "div" : "button"
+            const shortfallH = hoursLow ? Math.round((stats.expectedMinSoFar - stats.totalW) / 60) : 0
             return (
               <CardTag
                 {...(ok ? {} : { onClick: () => onNav("att"), type: "button" })}
@@ -623,19 +639,26 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
                     <span className="stat-sub">无异常</span>
                   </div>
                 ) : (
-                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                      <span className="stat-value amber">{issues.length}</span>
-                      <span className="stat-sub">处待补</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                        <span className="stat-value amber">{hoursLow ? `-${shortfallH}h` : dateIssues.length}</span>
+                        <span className="stat-sub">{hoursLow ? "工时偏低" : "处待补"}</span>
+                      </div>
+                      {dateIssues.length > 0 && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          {dateIssues.slice(0, 3).map((i) => (
+                            <span key={i.date} className="home-chip" title={i.kind === "no_out" ? "未退勤" : "休息未结束"}>
+                              {Number(i.date.slice(5, 7))}/{Number(i.date.slice(8, 10))}
+                            </span>
+                          ))}
+                          {dateIssues.length > 3 && <span className="home-chip">+{dateIssues.length - 3}</span>}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                      {issues.slice(0, 3).map((i) => (
-                        <span key={i.date} className="home-chip" title={i.kind === "no_out" ? "未退勤" : "休息未结束"}>
-                          {Number(i.date.slice(5, 7))}/{Number(i.date.slice(8, 10))}
-                        </span>
-                      ))}
-                      {issues.length > 3 && <span className="home-chip">+{issues.length - 3}</span>}
-                    </div>
+                    {hoursLow && dateIssues.length > 0 && (
+                      <div className="stat-sub" style={{ fontSize: 10 }}>另有 {dateIssues.length} 处打卡待补</div>
+                    )}
                   </div>
                 )}
               </CardTag>
