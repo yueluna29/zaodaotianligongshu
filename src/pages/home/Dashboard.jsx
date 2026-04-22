@@ -129,13 +129,21 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
           setPendingProfiles(pending || [])
         } else {
           const [atts, lb, lr] = await Promise.all([
-            sbGet(`attendance_records?employee_id=eq.${user.id}&work_date=gte.${from}&work_date=lte.${to}&select=work_minutes,clock_in,note`, tk),
+            sbGet(`attendance_records?employee_id=eq.${user.id}&work_date=gte.${from}&work_date=lte.${to}&select=work_date,clock_in,clock_out,break_start,break_end,work_minutes,note`, tk),
             sbGet(`leave_balances?employee_id=eq.${user.id}&select=*`, tk),
             sbGet(`leave_requests?employee_id=eq.${user.id}&status=eq.承認&leave_type=eq.有休&select=id`, tk),
           ])
           const totalW = atts.reduce((s, a) => s + Number(a.work_minutes || 0), 0)
           const bal = lb.reduce((s, b) => s + Number(b.granted_days || 0) + Number(b.carried_over_days || 0), 0)
-          setStats({ totalW, wd: atts.filter((a) => a.clock_in).length, targetH: workingDays(y, m) * 8 * 60, leaveBalance: bal - lr.length, leaveUsed: lr.length })
+          // 打卡异常：过去日期 clock_in 有但 clock_out 没；或 break_start 有但 break_end 没
+          const issues = []
+          for (const a of atts) {
+            if (a.work_date >= td) continue
+            if (a.clock_in && !a.clock_out) issues.push({ date: a.work_date, kind: "no_out" })
+            else if (a.break_start && !a.break_end) issues.push({ date: a.work_date, kind: "no_break_end" })
+          }
+          issues.sort((x, y) => y.date.localeCompare(x.date))
+          setStats({ totalW, wd: atts.filter((a) => a.clock_in).length, targetH: workingDays(y, m) * 8 * 60, leaveBalance: bal - lr.length, leaveUsed: lr.length, issues })
         }
         await loadToday()
       } catch (e) {
@@ -591,6 +599,48 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
               </div>
             )}
           </div>
+
+          {/* 本月打卡记录（仅正/契）— 放在本月出勤前，提示异常 */}
+          {!isHourly && (() => {
+            const issues = stats.issues || []
+            const ok = issues.length === 0
+            const CardTag = ok ? "div" : "button"
+            return (
+              <CardTag
+                {...(ok ? {} : { onClick: () => onNav("att"), type: "button" })}
+                className={`glass-card stat-card span-2 ${ok ? "hv-emerald" : "hv-amber"}`}
+                style={ok ? undefined : { border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: "inherit" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="stat-label">本月打卡记录</span>
+                  {ok
+                    ? <Check size={16} color="rgba(16,185,129,.85)" strokeWidth={2} />
+                    : <AlertCircle size={16} color="rgba(245,158,11,.85)" strokeWidth={1.8} />}
+                </div>
+                {ok ? (
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <span className="stat-value em" style={{ fontSize: 22 }}>正常</span>
+                    <span className="stat-sub">无异常</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                      <span className="stat-value amber">{issues.length}</span>
+                      <span className="stat-sub">处待补</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {issues.slice(0, 3).map((i) => (
+                        <span key={i.date} className="home-chip" title={i.kind === "no_out" ? "未退勤" : "休息未结束"}>
+                          {Number(i.date.slice(5, 7))}/{Number(i.date.slice(8, 10))}
+                        </span>
+                      ))}
+                      {issues.length > 3 && <span className="home-chip">+{issues.length - 3}</span>}
+                    </div>
+                  </div>
+                )}
+              </CardTag>
+            )
+          })()}
 
           {/* 本月出勤 / 上班天数 */}
           <div className={`glass-card stat-card hv-emerald span-2${isHourly ? " m-half" : ""}`}>
