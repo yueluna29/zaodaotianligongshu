@@ -754,17 +754,67 @@ export default function WorkEntryManager({ user, t, tk }) {
                 <Calendar year={year} month={month} selectedDate={selectedDate} onPick={setSelectedDate} datesWithEntries={datesWithEntries} viewMode={viewMode} t={t} />
               </div>
 
-              {/* 28h 工时预警 */}
-              <div style={{ ...glassCard, padding: 18, background: hoursStatus.bg, border: hoursStatus.level !== "ok" ? `2px solid ${hoursStatus.color}` : glassCard.border }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 12, fontWeight: 600, color: hoursStatus.color }}>
-                  {hoursIcon} 最近 7 天累计工时
+              {/* 28h 工时预警 + 打卡照片（并排） */}
+              <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
+                <div style={{ flex: 1, minWidth: 0, ...glassCard, padding: 14, background: hoursStatus.bg, border: hoursStatus.level !== "ok" ? `2px solid ${hoursStatus.color}` : glassCard.border }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11, fontWeight: 600, color: hoursStatus.color }}>
+                    {hoursIcon} 最近 7 天累计
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, color: hoursStatus.level === "ok" ? t.tx : hoursStatus.color }}>{last7DaysHours.toFixed(1)}</span>
+                    <span style={{ fontSize: 12, color: t.tm }}>/ 28h</span>
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 10, color: hoursStatus.level === "ok" ? t.tm : hoursStatus.color, fontWeight: 500, lineHeight: 1.35 }}>
+                    {hoursStatus.text}
+                  </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                  <span style={{ fontSize: 30, fontWeight: 800, color: hoursStatus.level === "ok" ? t.tx : hoursStatus.color }}>{last7DaysHours.toFixed(1)}</span>
-                  <span style={{ fontSize: 13, color: t.tm }}>/ 28 小时</span>
-                </div>
-                <div style={{ marginTop: 6, fontSize: 11, color: hoursStatus.level === "ok" ? t.tm : hoursStatus.color, fontWeight: 500 }}>
-                  {hoursStatus.text}
+
+                <div style={{ flex: 1, minWidth: 0, ...glassCard, padding: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontSize: 11, fontWeight: 600, color: t.ac }}>
+                    <Camera size={13} /> 打卡照片
+                    {submission?.photo_1_drive_id && submission?.photo_2_drive_id && (
+                      <span style={{ fontSize: 10, color: t.gn, fontWeight: 600, marginLeft: "auto" }}>已完成</span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[1, 2].map((slot) => {
+                      const driveId = submission?.[`photo_${slot}_drive_id`]
+                      const uploading = photoUploading[slot]
+                      return (
+                        <label key={slot} style={{
+                          position: "relative", flex: 1, minWidth: 0, aspectRatio: "1 / 1",
+                          borderRadius: 8,
+                          border: `1px dashed ${driveId ? `${t.gn}66` : t.bd}`,
+                          background: driveId ? `${t.gn}08` : "rgba(255,255,255,0.55)",
+                          cursor: uploading ? "wait" : (isSubmitted && !isAdmin ? "not-allowed" : "pointer"),
+                          overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {driveId ? (
+                            <>
+                              <img src={`https://drive.google.com/thumbnail?id=${driveId}&sz=w200`} alt={`打卡${slot}`}
+                                   style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              <span style={{ position: "absolute", top: 3, left: 3, width: 16, height: 16, borderRadius: "50%", background: t.gn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                                <Check size={10} strokeWidth={3} />
+                              </span>
+                            </>
+                          ) : uploading ? (
+                            <div style={{ width: 16, height: 16, border: `2px solid ${t.ac}33`, borderTopColor: t.ac, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: t.tm }}>
+                              <Upload size={14} />
+                              <span style={{ fontSize: 9, fontWeight: 600 }}>{slot}</span>
+                            </div>
+                          )}
+                          {!(isSubmitted && !isAdmin) && (
+                            <input type="file" accept="image/*" disabled={uploading}
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClockPhoto(slot, f); e.target.value = "" }}
+                              style={{ position: "absolute", inset: 0, opacity: 0, cursor: uploading ? "wait" : "pointer" }} />
+                          )}
+                        </label>
+                      )
+                    })}
+                  </div>
+                  {photoError && <div style={{ fontSize: 9, color: t.rd, marginTop: 4 }}>{photoError}</div>}
                 </div>
               </div>
 
@@ -1087,61 +1137,22 @@ export default function WorkEntryManager({ user, t, tk }) {
               </div>
             </div>
 
-            {/* 打卡照片上传（两张，必须都上传才可提交） */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                <Camera size={14} color={t.ac} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: t.tx }}>打卡照片</span>
-                <span style={{ fontSize: 10, color: t.tm }}>两张，自动压缩到 500KB 以内</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {[1, 2].map((slot) => {
-                  const driveId = submission?.[`photo_${slot}_drive_id`]
-                  const uploading = photoUploading[slot]
-                  return (
-                    <label key={slot} style={{
-                      position: "relative",
-                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      minHeight: 140, borderRadius: 14,
-                      border: `1px dashed ${driveId ? `${t.gn}66` : t.bd}`,
-                      background: driveId ? `${t.gn}08` : "rgba(255,255,255,0.55)",
-                      cursor: uploading ? "wait" : "pointer", overflow: "hidden",
-                    }}>
-                      {driveId ? (
-                        <>
-                          <img src={`https://drive.google.com/thumbnail?id=${driveId}&sz=w400`}
-                               alt={`打卡 ${slot}`}
-                               style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }} />
-                          <div style={{ position: "absolute", top: 6, left: 6, padding: "2px 8px", borderRadius: 6, background: "rgba(255,255,255,0.85)", fontSize: 10, fontWeight: 600, color: t.gn, display: "inline-flex", alignItems: "center", gap: 3 }}>
-                            <Check size={11} /> 照片 {slot}
-                          </div>
-                          <div style={{ position: "absolute", bottom: 6, right: 6, padding: "3px 8px", borderRadius: 6, background: "rgba(15,23,42,0.65)", color: "#fff", fontSize: 10, fontWeight: 500 }}>重新上传</div>
-                        </>
-                      ) : (
-                        <>
-                          {uploading ? (
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: t.ac }}>
-                              <div style={{ width: 20, height: 20, border: `2px solid ${t.ac}33`, borderTopColor: t.ac, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                              <span style={{ fontSize: 11, fontWeight: 600 }}>上传中...</span>
-                            </div>
-                          ) : (
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: t.tm }}>
-                              <Upload size={22} />
-                              <span style={{ fontSize: 12, fontWeight: 600, color: t.ts }}>点击上传照片 {slot}</span>
-                              <span style={{ fontSize: 10, color: t.td }}>JPG / PNG</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      <input type="file" accept="image/*" disabled={uploading || submittingReport}
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClockPhoto(slot, f); e.target.value = "" }}
-                        style={{ position: "absolute", inset: 0, opacity: 0, cursor: uploading ? "wait" : "pointer" }} />
-                    </label>
-                  )
-                })}
-              </div>
-              {photoError && <div style={{ fontSize: 11, color: t.rd, marginTop: 8 }}>{photoError}</div>}
-            </div>
+            {/* 打卡照片状态提示（上传入口已挪到 28h 旁边的卡里） */}
+            {(() => {
+              const bothUploaded = submission?.photo_1_drive_id && submission?.photo_2_drive_id
+              return (
+                <div style={{ marginBottom: 20, padding: "10px 14px", borderRadius: 12,
+                  background: bothUploaded ? `${t.gn}0D` : `${t.wn}12`,
+                  border: `1px solid ${bothUploaded ? `${t.gn}40` : `${t.wn}40`}`,
+                  display: "flex", alignItems: "center", gap: 8, fontSize: 12,
+                  color: bothUploaded ? t.gn : t.wn }}>
+                  <Camera size={14} />
+                  {bothUploaded
+                    ? <span>打卡照片已上传</span>
+                    : <span>打卡照片还没上传完，请先在「最近 7 天累计」旁边的打卡照片卡里传两张。</span>}
+                </div>
+              )
+            })()}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <HoverBtn onClick={() => setSubmitModal(false)} disabled={submittingReport} t={t}>取消</HoverBtn>
