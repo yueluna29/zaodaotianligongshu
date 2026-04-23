@@ -115,6 +115,8 @@ export async function parsePayrollExcel(file) {
     rate: col("時給"),
     bonus: header.findIndex(h => /班课绩效|班課績效|绩效/.test(h)),
     trans: col("交通費"),
+    // 老师手填的"回当り総額"，仅用于上传预览的对账警告
+    total: header.findIndex(h => /回当り総額|回当総額|総額/.test(h)),
     student: header.findIndex(h => /学生氏名|学生姓名/.test(h)),
     remark: header.findIndex(h => /備考|备注|工作内容/.test(h)),
   }
@@ -174,6 +176,9 @@ export async function parsePayrollExcel(file) {
     const mapped = autoMapBiz(rawBiz)
     if (!mapped) unmapped.add(rawBiz)
 
+    const totalCell = idx.total >= 0 ? r[idx.total] : null
+    const subtotal_excel = totalCell != null && totalCell !== "" ? Math.round(parseNum(totalCell)) : null
+
     rows.push({
       work_date,
       business_type_raw: rawBiz,
@@ -183,6 +188,7 @@ export async function parsePayrollExcel(file) {
       hourly_rate: Math.round(parseNum(r[idx.rate])),
       bonus_per_hour: hasBonus ? Math.round(parseNum(r[idx.bonus])) : 0,
       transport_fee: Math.round(parseNum(r[idx.trans])),
+      subtotal_excel,
       student_name: idx.student >= 0 ? String(r[idx.student] || "").trim() : "",
       course_name: idx.remark >= 0 ? String(r[idx.remark] || "").trim() : "",
     })

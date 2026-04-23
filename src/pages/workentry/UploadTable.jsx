@@ -663,6 +663,32 @@ export default function UploadTable({ user, t, tk }) {
               <span>{uploadData.hasBonus ? "含班课绩效（学部模板）" : "大学院模板"}</span>
             </div>
 
+            {/* 对账警告 */}
+            {(() => {
+              const mismatches = uploadData.rows
+                .map((r, i) => {
+                  const hours = (r.work_minutes || 0) / 60
+                  const computed = Math.round(hours * (r.hourly_rate + (r.bonus_per_hour || 0)) + (r.transport_fee || 0))
+                  if (r.subtotal_excel == null) return null
+                  const diff = r.subtotal_excel - computed
+                  if (Math.abs(diff) < 1) return null
+                  return { i, computed, diff }
+                })
+                .filter(Boolean)
+              if (!mismatches.length) return null
+              const totalDiff = mismatches.reduce((s, m) => s + m.diff, 0)
+              return (
+                <div style={{ padding: 12, borderRadius: 10, background: `${t.rd}10`, border: `1px solid ${t.rd}40`, marginBottom: 14, fontSize: 12, color: t.tx, lineHeight: 1.6 }}>
+                  <div style={{ fontWeight: 600, color: t.rd, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <AlertTriangle size={13} /> {mismatches.length} 行手填总额与系统计算不符，老师 Excel 总数比系统多 {totalDiff > 0 ? `¥${totalDiff.toLocaleString()}` : `¥${totalDiff.toLocaleString()}（少了）`}
+                  </div>
+                  <div style={{ color: t.tm, fontSize: 11 }}>
+                    导入按"小时数 × (時給 + 绩效) + 交通費"为准。下方表格里红色行就是对不上的。如有正当 bonus 漏算，请跟老师确认后手动调整。
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* 冲突模式 */}
             <div style={{ padding: 12, borderRadius: 10, background: `${t.wn}10`, border: `1px solid ${t.wn}30`, marginBottom: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: t.tx, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
@@ -688,29 +714,42 @@ export default function UploadTable({ user, t, tk }) {
 
             {/* 数据预览 */}
             <div style={{ border: `1px solid ${t.bd}`, borderRadius: 8, overflow: "auto", maxHeight: 300, marginBottom: 14 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 700 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 760 }}>
                 <thead>
                   <tr style={{ background: t.bgH }}>
-                    {["日付", "業務内容", "起止", "時給", ...(uploadData.hasBonus ? ["绩效"] : []), "交通費", "学生", "備考"].map((h, i) => (
+                    {["日付", "業務内容", "起止", "時給", ...(uploadData.hasBonus ? ["绩效"] : []), "交通費", "対帐", "学生", "備考"].map((h, i) => (
                       <th key={i} style={{ padding: "6px 8px", color: t.tm, fontWeight: 600, textAlign: "left", borderBottom: `1px solid ${t.bd}`, whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {uploadData.rows.map((r, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${t.bl}` }}>
-                      <td style={{ padding: "5px 8px", color: t.ts, fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.work_date}</td>
-                      <td style={{ padding: "5px 8px" }}>
-                        <span style={{ padding: "1px 6px", borderRadius: 4, fontSize: 10, background: `${t.ac}15`, color: t.ac }}>{r.business_type || "⚠ 未映射"}</span>
-                      </td>
-                      <td style={{ padding: "5px 8px", color: t.ts, fontFamily: "monospace" }}>{r.start_time || "—"} ~ {r.end_time || "—"}</td>
-                      <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>¥{r.hourly_rate.toLocaleString()}</td>
-                      {uploadData.hasBonus && <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>{r.bonus_per_hour ? `¥${r.bonus_per_hour}/h` : "—"}</td>}
-                      <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>{r.transport_fee ? `¥${r.transport_fee}` : "—"}</td>
-                      <td style={{ padding: "5px 8px", color: t.ts }}>{r.student_name || "—"}</td>
-                      <td style={{ padding: "5px 8px", color: t.tm }}>{r.course_name || ""}</td>
-                    </tr>
-                  ))}
+                  {uploadData.rows.map((r, i) => {
+                    const hours = (r.work_minutes || 0) / 60
+                    const computed = Math.round(hours * (r.hourly_rate + (r.bonus_per_hour || 0)) + (r.transport_fee || 0))
+                    const diff = r.subtotal_excel != null ? r.subtotal_excel - computed : 0
+                    const mismatch = r.subtotal_excel != null && Math.abs(diff) >= 1
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${t.bl}`, background: mismatch ? `${t.rd}08` : "transparent" }}>
+                        <td style={{ padding: "5px 8px", color: t.ts, fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.work_date}</td>
+                        <td style={{ padding: "5px 8px" }}>
+                          <span style={{ padding: "1px 6px", borderRadius: 4, fontSize: 10, background: `${t.ac}15`, color: t.ac }}>{r.business_type || "⚠ 未映射"}</span>
+                        </td>
+                        <td style={{ padding: "5px 8px", color: t.ts, fontFamily: "monospace" }}>{r.start_time || "—"} ~ {r.end_time || "—"}</td>
+                        <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>¥{r.hourly_rate.toLocaleString()}</td>
+                        {uploadData.hasBonus && <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>{r.bonus_per_hour ? `¥${r.bonus_per_hour}/h` : "—"}</td>}
+                        <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>{r.transport_fee ? `¥${r.transport_fee}` : "—"}</td>
+                        <td style={{ padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          {r.subtotal_excel == null
+                            ? <span style={{ color: t.td }}>—</span>
+                            : mismatch
+                              ? <span style={{ color: t.rd, fontWeight: 600 }} title={`系统算 ¥${computed.toLocaleString()} / Excel 填 ¥${r.subtotal_excel.toLocaleString()}`}>{diff > 0 ? "+" : ""}¥{diff.toLocaleString()}</span>
+                              : <span style={{ color: t.gn }}>✓</span>}
+                        </td>
+                        <td style={{ padding: "5px 8px", color: t.ts }}>{r.student_name || "—"}</td>
+                        <td style={{ padding: "5px 8px", color: t.tm }}>{r.course_name || ""}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
