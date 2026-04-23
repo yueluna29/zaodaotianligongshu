@@ -22,8 +22,9 @@ const timeToMin = (s) => {
 }
 const calcMin = (st, et) => {
   if (!st || !et) return 0
-  const d = timeToMin(et) - timeToMin(st)
-  return d > 0 ? d : 0
+  let d = timeToMin(et) - timeToMin(st)
+  if (d < 0) d += 24 * 60 // 跨夜
+  return d
 }
 const fmtHours = (min) => (min / 60).toFixed(2)
 const yen = (n) => `¥${Math.round(n).toLocaleString()}`

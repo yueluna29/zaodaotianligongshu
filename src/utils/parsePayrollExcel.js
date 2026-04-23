@@ -169,9 +169,15 @@ export async function parsePayrollExcel(file) {
     const start_time = idx.start >= 0 ? excelTimeToStr(r[idx.start]) : ""
     const end_time = idx.end >= 0 ? excelTimeToStr(r[idx.end]) : ""
     const hoursVal = idx.hours >= 0 ? parseNum(r[idx.hours]) : 0
-    const minutes = start_time && end_time
-      ? (parseInt(end_time.slice(0, 2)) * 60 + parseInt(end_time.slice(3)) - parseInt(start_time.slice(0, 2)) * 60 - parseInt(start_time.slice(3)))
-      : Math.round(hoursVal * 60)
+    let minutes
+    if (start_time && end_time) {
+      const sMin = parseInt(start_time.slice(0, 2)) * 60 + parseInt(start_time.slice(3))
+      const eMin = parseInt(end_time.slice(0, 2)) * 60 + parseInt(end_time.slice(3))
+      minutes = eMin - sMin
+      if (minutes < 0) minutes += 24 * 60 // 跨夜（Excel 的 24:30 被压成 00:30，靠 end < start 还原）
+    } else {
+      minutes = Math.round(hoursVal * 60)
+    }
 
     const mapped = autoMapBiz(rawBiz)
     if (!mapped) unmapped.add(rawBiz)

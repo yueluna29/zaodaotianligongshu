@@ -247,7 +247,7 @@ export default function WorkEntryManager({ user, t, tk }) {
   }, [ld, draftKey])
 
   const getRateForType = (bt) => { const r = rates.find(r => r.business_type === bt); return r ? Number(r.hourly_rate) : 0 }
-  const calcMin = (s, e) => { if (!s || !e) return 0; const [sh, sm] = s.split(":").map(Number), [eh, em] = e.split(":").map(Number); const m = (eh * 60 + em) - (sh * 60 + sm); return m > 0 ? m : 0 }
+  const calcMin = (s, e) => { if (!s || !e) return 0; const [sh, sm] = s.split(":").map(Number), [eh, em] = e.split(":").map(Number); let m = (eh * 60 + em) - (sh * 60 + sm); if (m < 0) m += 24 * 60; return m }
 
   const updateRow = (key, field, value) => {
     setRows(prev => prev.map(r => {
@@ -1399,25 +1399,31 @@ function WorkTimelineCard({ r, isLast, onUpdate, onRemove, onDelExisting, rates,
       <div style={{ ...glassCard, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         {/* 第一行：时间 + 业务类型 + 删除 */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-          {locked ? (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: t.bgI, padding: "8px 14px", borderRadius: 10, border: `1px solid ${t.bd}` }}>
-              <Clock size={14} color={t.tm} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{r.start_time || "—"}</span>
-              <span style={{ color: t.td }}>-</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{r.end_time || "—"}</span>
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: t.bgI, padding: 4, borderRadius: 10, border: `1px solid ${t.bd}` }}>
-              <Clock size={15} color={t.tm} style={{ marginLeft: 6 }} />
-              <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.start_time}
-                onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "start_time", v) }}
-                style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
-              <span style={{ color: t.td }}>-</span>
-              <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.end_time}
-                onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "end_time", v) }}
-                style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
-            </div>
-          )}
+          {(() => {
+            const isOvernight = r.start_time && r.end_time && r.start_time > r.end_time
+            const OvernightTag = isOvernight ? <span style={{ fontSize: 10, fontWeight: 700, color: "#D97706", background: "#FEF3C7", padding: "1px 6px", borderRadius: 4, marginLeft: 4 }} title="跨夜：结束时间属于第二天">次日</span> : null
+            return locked ? (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: t.bgI, padding: "8px 14px", borderRadius: 10, border: `1px solid ${t.bd}` }}>
+                <Clock size={14} color={t.tm} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{r.start_time || "—"}</span>
+                <span style={{ color: t.td }}>-</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{r.end_time || "—"}</span>
+                {OvernightTag}
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: t.bgI, padding: 4, borderRadius: 10, border: `1px solid ${t.bd}` }}>
+                <Clock size={15} color={t.tm} style={{ marginLeft: 6 }} />
+                <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.start_time}
+                  onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "start_time", v) }}
+                  style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center" }} />
+                <span style={{ color: t.td }}>-</span>
+                <input type="text" inputMode="numeric" placeholder="00:00" maxLength={5} value={r.end_time}
+                  onChange={e => { let v = e.target.value.replace(/[^\d:]/g, ""); if (v.length === 2 && !v.includes(":")) v += ":"; onUpdate(r._key, "end_time", v) }}
+                  style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, fontWeight: 600, width: 62, color: t.tx, fontFamily: "inherit", textAlign: "center", marginRight: OvernightTag ? 0 : 6 }} />
+                {OvernightTag}
+              </div>
+            )
+          })()}
           {locked ? (
             <div style={{ flex: 1, minWidth: 140, background: `${color}10`, color, border: `1px solid ${color}40`, fontWeight: 600, padding: "8px 14px", borderRadius: 10, fontSize: 13 }}>
               {r.business_type || "—"}
