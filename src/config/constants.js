@@ -44,11 +44,14 @@ export const fmtDateW = (s) => {
   if (isNaN(d.getTime())) return s
   return `${ymd}(${WEEKDAYS[d.getDay()]})`
 }
-// 老师列表统一按 假名 > 拼音 > 姓名 A→Z 排序（ja locale 处理日文）
+// 老师列表统一 A→Z 排序。优先 furigana（日文）→ pinyin（中文拼音）→ name。
+// 如果 fallback 到 name（汉字），用 zh locale 走拼音排序；两边都是假名/拼音时用 ja。
+const isLatin = (s) => /^[\x00-\x7f]*$/.test(s)
 export const sortByName = (list) => [...(list || [])].sort((a, b) => {
   const ka = (a.furigana || a.pinyin || a.name || "").toLowerCase()
   const kb = (b.furigana || b.pinyin || b.name || "").toLowerCase()
-  return ka.localeCompare(kb, "ja")
+  const locale = (isLatin(ka) && isLatin(kb)) ? "en" : "zh"
+  return ka.localeCompare(kb, locale)
 })
 
 export const workingDays = (y, m) => {

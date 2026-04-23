@@ -48,6 +48,11 @@ export default function UploadTable({ user, t, tk }) {
   const [bizMapping, setBizMapping] = useState({}) // { "事务/TA": "事務性工作" }
   const [uploadMode, setUploadMode] = useState("append") // 'append' | 'replace'
 
+  // admin 汇总表：按员工 × 工种聚合当月数据
+  const [adminAgg, setAdminAgg] = useState(null) // { [emp_id]: { [biz]: { minutes, amount }, transport, bonus_amount, total_amount, submitted } }
+  const [adminLd, setAdminLd] = useState(false)
+  const [companyFilter, setCompanyFilter] = useState("all")
+
   // 学部老师才显示班课绩效列
   const showBonus = (selectedEmp?.department || "") === "学部"
 
@@ -59,6 +64,39 @@ export default function UploadTable({ user, t, tk }) {
       setAllEmps(sortByName(d))
     })()
   }, [isAdmin, tk])
+
+  // admin 汇总：进到 admin 入口（没选老师时）加载全员当月 work_entries 聚合
+  const loadAdminAgg = useCallback(async () => {
+    if (!isAdmin || selectedEmp) return
+    setAdminLd(true)
+    const sd = `${year}-${pad(month)}-01`
+    const ed = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`
+    const [entries, subs] = await Promise.all([
+      sbGet(`work_entries?work_date=gte.${sd}&work_date=lt.${ed}&business_type=not.is.null&select=employee_id,business_type,work_minutes,hourly_rate,bonus_per_hour,transport_fee`, tk),
+      sbGet(`monthly_report_submissions?status=eq.submitted&year=eq.${year}&month=eq.${month}&select=employee_id`, tk),
+    ])
+    const submittedIds = new Set((subs || []).map(s => s.employee_id))
+    const agg = {}
+    for (const r of entries || []) {
+      const eid = r.employee_id
+      if (!agg[eid]) agg[eid] = { byType: {}, transport: 0, bonus_amount: 0, submitted: submittedIds.has(eid) }
+      const bt = r.business_type
+      if (!agg[eid].byType[bt]) agg[eid].byType[bt] = { minutes: 0, amount: 0 }
+      const hrs = (r.work_minutes || 0) / 60
+      agg[eid].byType[bt].minutes += r.work_minutes || 0
+      agg[eid].byType[bt].amount += Math.round(hrs * Number(r.hourly_rate || 0))
+      agg[eid].bonus_amount += Math.round(hrs * Number(r.bonus_per_hour || 0))
+      agg[eid].transport += Number(r.transport_fee || 0)
+    }
+    // 没数据的员工也标记一下 submitted 状态
+    for (const id of submittedIds) {
+      if (!agg[id]) agg[id] = { byType: {}, transport: 0, bonus_amount: 0, submitted: true }
+    }
+    setAdminAgg(agg)
+    setAdminLd(false)
+  }, [isAdmin, selectedEmp, year, month, tk])
+
+  useEffect(() => { loadAdminAgg() }, [loadAdminAgg])
 
   const load = useCallback(async () => {
     if (!selectedEmp) return
@@ -256,37 +294,172 @@ export default function UploadTable({ user, t, tk }) {
     setYear(y); setMonth(m)
   }
 
-  // ========== Admin 员工选择视图 ==========
+  // ========== Admin 汇总大表视图 ==========
   if (isAdmin && !selectedEmp) {
     const filtered = allEmps.filter(e => {
+      if (companyFilter !== "all" && e.company_id !== companyFilter) return false
       if (!empSearch) return true
       const q = empSearch.toLowerCase()
       return (e.name || "").toLowerCase().includes(q) || (e.furigana || "").toLowerCase().includes(q) || (e.pinyin || "").toLowerCase().includes(q)
     })
+
+    // 行数据
+    const rowsData = filtered.map(emp => {
+      const a = adminAgg?.[emp.id]
+      const byType = a?.byType || {}
+      const transport = a?.transport || 0
+      const bonus = a?.bonus_amount || 0
+      const wageSum = BIZ_TYPES.reduce((s, bt) => s + (byType[bt]?.amount || 0), 0)
+      const total = wageSum + bonus + transport
+      const totalMin = BIZ_TYPES.reduce((s, bt) => s + (byType[bt]?.minutes || 0), 0)
+      return { emp, byType, transport, bonus, wageSum, total, totalMin, submitted: a?.submitted || false }
+    })
+
+    // 导出 CSV（給料王风格扁平表）
+    const exportCSV = () => {
+      const cols = ["姓名", "公司", "部门", "状态"]
+      for (const bt of BIZ_TYPES) { cols.push(`${bt}_时数`); cols.push(`${bt}_金额`) }
+      cols.push("班课绩效", "交通费", "合计")
+      const rows = [cols]
+      for (const r of rowsData) {
+        const row = [
+          r.emp.name,
+          COMPANIES.find(c => c.id === r.emp.company_id)?.name || "",
+          r.emp.department || "",
+          r.submitted ? "已提交" : "未提交",
+        ]
+        for (const bt of BIZ_TYPES) {
+          const bd = r.byType[bt]
+          row.push(bd ? (bd.minutes / 60).toFixed(2) : "0")
+          row.push(bd ? bd.amount : 0)
+        }
+        row.push(r.bonus, r.transport, r.total)
+        rows.push(row)
+      }
+      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `工资汇总_${year}年${month}月.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    const thStyle = { padding: "10px 8px", fontSize: 11, color: t.tm, fontWeight: 600, textAlign: "left", borderBottom: `2px solid ${t.bd}`, background: t.bgH, position: "sticky", top: 0, zIndex: 2, whiteSpace: "nowrap" }
+    const tdStyle = { padding: "8px 8px", fontSize: 12, color: t.tx, borderBottom: `1px solid ${t.bl}`, whiteSpace: "nowrap" }
+    const numStyle = { ...tdStyle, textAlign: "right", fontVariantNumeric: "tabular-nums" }
+
     return (
       <div>
-        <div style={{ marginBottom: 16 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 4px" }}>一键上传 · 选择老师</h2>
-          <p style={{ fontSize: 11, color: t.tm, margin: 0 }}>点击老师查看其月度工时表</p>
-        </div>
-        <div style={{ marginBottom: 16, position: "relative" }}>
-          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: t.tm }} />
-          <input placeholder="搜索姓名 / 假名 / 拼音" value={empSearch} onChange={(e) => setEmpSearch(e.target.value)}
-            style={{ width: "100%", padding: "10px 12px 10px 36px", borderRadius: 10, border: `1px solid ${t.bd}`, background: t.bgC, color: t.tx, fontSize: 13, boxSizing: "border-box" }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
-          {filtered.map(e => (
-            <button key={e.id} onClick={() => setSelectedEmp(e)} style={{
-              padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.bd}`, background: t.bgC, color: t.tx,
-              cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-            }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{e.name}</div>
-              <div style={{ fontSize: 10, color: t.tm, marginTop: 2 }}>{e.department || "—"}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: t.tx, margin: "0 0 4px" }}>一键上传 · 月度汇总表</h2>
+            <p style={{ fontSize: 11, color: t.tm, margin: 0 }}>行 = 老师，列 = 各工种时数/金额。点姓名进入该老师的详细工时表</p>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button onClick={() => chgMonth(-1)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronLeft size={14} /></button>
+            <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, minWidth: 90, textAlign: "center" }}>{year}年{month}月</span>
+            <button onClick={() => chgMonth(1)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronRight size={14} /></button>
+            <button onClick={exportCSV} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: t.gn, color: "#fff", cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600 }}>
+              <Download size={13} /> 下载 CSV
             </button>
-          ))}
-          {filtered.length === 0 && (
-            <div style={{ padding: 24, textAlign: "center", color: t.tm, fontSize: 12, gridColumn: "1/-1" }}>无匹配老师</div>
-          )}
+          </div>
+        </div>
+
+        {/* 筛选 */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: "1 1 240px" }}>
+            <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: t.tm }} />
+            <input placeholder="搜索姓名 / 假名 / 拼音" value={empSearch} onChange={(e) => setEmpSearch(e.target.value)}
+              style={{ width: "100%", padding: "8px 12px 8px 34px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgC, color: t.tx, fontSize: 12, boxSizing: "border-box" }} />
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[{ id: "all", name: "全部" }, ...COMPANIES].map(c => {
+              const on = companyFilter === c.id
+              return (
+                <button key={c.id} onClick={() => setCompanyFilter(c.id)} style={{
+                  padding: "6px 12px", borderRadius: 18, border: `1px solid ${on ? t.ac : t.bd}`,
+                  background: on ? `${t.ac}15` : "transparent", color: on ? t.ac : t.ts,
+                  fontSize: 11, fontWeight: on ? 600 : 400, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                }}>{c.name}</button>
+              )
+            })}
+          </div>
+        </div>
+
+        {adminLd ? (
+          <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
+        ) : (
+        <div style={{ background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 10, overflow: "auto", maxHeight: "calc(100vh - 220px)" }}>
+          <table style={{ borderCollapse: "collapse", minWidth: 1400, fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ ...thStyle, position: "sticky", left: 0, zIndex: 3, minWidth: 110 }}>姓名</th>
+                <th style={{ ...thStyle, minWidth: 70 }}>部门</th>
+                <th style={{ ...thStyle, minWidth: 70 }}>状态</th>
+                {BIZ_TYPES.map(bt => (
+                  <th key={bt} style={{ ...thStyle, textAlign: "center", minWidth: 120, borderLeft: `1px dashed ${t.bd}` }} colSpan={2}>{bt}</th>
+                ))}
+                <th style={{ ...thStyle, textAlign: "right", minWidth: 90, borderLeft: `1px dashed ${t.bd}` }}>班课绩效</th>
+                <th style={{ ...thStyle, textAlign: "right", minWidth: 80 }}>交通费</th>
+                <th style={{ ...thStyle, textAlign: "right", minWidth: 96, background: `${t.ac}10`, color: t.ac }}>合计</th>
+              </tr>
+              <tr>
+                <th style={{ ...thStyle, position: "sticky", left: 0, zIndex: 3, top: 38 }} />
+                <th style={{ ...thStyle, top: 38 }} />
+                <th style={{ ...thStyle, top: 38 }} />
+                {BIZ_TYPES.map(bt => (
+                  <>
+                    <th key={bt + "_h"} style={{ ...thStyle, top: 38, textAlign: "right", fontSize: 10, fontWeight: 500, borderLeft: `1px dashed ${t.bd}` }}>时数</th>
+                    <th key={bt + "_a"} style={{ ...thStyle, top: 38, textAlign: "right", fontSize: 10, fontWeight: 500 }}>金额</th>
+                  </>
+                ))}
+                <th style={{ ...thStyle, top: 38, borderLeft: `1px dashed ${t.bd}` }} />
+                <th style={{ ...thStyle, top: 38 }} />
+                <th style={{ ...thStyle, top: 38, background: `${t.ac}10` }} />
+              </tr>
+            </thead>
+            <tbody>
+              {rowsData.length === 0 && (
+                <tr><td colSpan={4 + BIZ_TYPES.length * 2 + 3} style={{ padding: 40, textAlign: "center", color: t.tm, fontSize: 12 }}>无匹配老师</td></tr>
+              )}
+              {rowsData.map(r => {
+                const fade = !r.submitted
+                return (
+                  <tr key={r.emp.id} style={{ opacity: fade ? 0.72 : 1 }}
+                    onMouseEnter={e => e.currentTarget.style.background = `${t.ac}08`}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <td style={{ ...tdStyle, position: "sticky", left: 0, background: "inherit", fontWeight: 600 }}>
+                      <button onClick={() => setSelectedEmp(r.emp)} style={{ background: "transparent", border: "none", padding: 0, color: t.ac, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{r.emp.name}</button>
+                    </td>
+                    <td style={{ ...tdStyle, color: t.ts, fontSize: 11 }}>{r.emp.department || "—"}</td>
+                    <td style={tdStyle}>
+                      {r.submitted
+                        ? <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: `${t.gn}18`, color: t.gn }}>已提交</span>
+                        : <span style={{ padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: `${t.wn}18`, color: t.wn }}>未提交</span>}
+                    </td>
+                    {BIZ_TYPES.map(bt => {
+                      const bd = r.byType[bt]
+                      return (
+                        <>
+                          <td key={bt + "_h"} style={{ ...numStyle, color: bd ? t.tx : t.td, borderLeft: `1px dashed ${t.bl}` }}>{bd ? (bd.minutes / 60).toFixed(1) : "—"}</td>
+                          <td key={bt + "_a"} style={{ ...numStyle, color: bd ? t.tx : t.td }}>{bd ? `¥${bd.amount.toLocaleString()}` : "—"}</td>
+                        </>
+                      )
+                    })}
+                    <td style={{ ...numStyle, color: r.bonus > 0 ? t.wn : t.td, borderLeft: `1px dashed ${t.bl}` }}>{r.bonus > 0 ? `¥${r.bonus.toLocaleString()}` : "—"}</td>
+                    <td style={{ ...numStyle, color: r.transport > 0 ? t.tx : t.td }}>{r.transport > 0 ? `¥${r.transport.toLocaleString()}` : "—"}</td>
+                    <td style={{ ...numStyle, fontWeight: 700, color: t.ac, background: `${t.ac}05` }}>{r.total > 0 ? `¥${r.total.toLocaleString()}` : "—"}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        )}
+        <div style={{ marginTop: 10, fontSize: 10, color: t.tm }}>
+          共 {rowsData.length} 位老师 · 已提交 {rowsData.filter(r => r.submitted).length} · 合计 ¥{rowsData.reduce((s, r) => s + (r.submitted ? r.total : 0), 0).toLocaleString()}（仅已提交）
         </div>
       </div>
     )
