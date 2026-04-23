@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3 } from "lucide-react"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, Table as TableIcon } from "lucide-react"
 import { isHourly as empIsHourly } from "../config/constants"
 
 export default function MobileNav({ user, view, onNav, t, badge, workBadge }) {
@@ -10,6 +10,7 @@ export default function MobileNav({ user, view, onNav, t, badge, workBadge }) {
     { id: "home", ic: Home, l: "首页", show: true },
     { id: "att", ic: ClipboardList, l: "勤怠", show: !isHourly || isA },
     { id: "work", ic: Clock, l: "报表", show: isHourly || isA },
+    { id: "upload", ic: TableIcon, l: "传表", show: isHourly || isA },
     { id: "empmgr", ic: Users, l: "档案", show: true },
     { id: "cal", ic: CalendarDays, l: "日历", show: !isHourly || isA },
     { id: "approve", ic: CheckCircle, l: "审批", show: isA },

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, KeyRound } from "lucide-react"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, KeyRound, Table as TableIcon } from "lucide-react"
 import { isHourly as empIsHourly } from "../config/constants"
 import ChangePasswordModal from "./ChangePasswordModal"
 
@@ -13,6 +13,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
     { id: "home", l: "首页", ic: Home, show: true },
     { id: "att", l: "勤怠一览", ic: ClipboardList, show: !isHourly || isA },
     { id: "work", l: "工资报表", ic: Clock, show: isHourly || isA },
+    { id: "upload", l: "一键上传", ic: TableIcon, show: isHourly || isA },
     { id: "empmgr", l: isA ? "人事档案" : "入职信息", ic: Users, show: true },
     { id: "approve", l: "承认中心", ic: CheckCircle, show: isA },
     { id: "cal", l: "休假日历", ic: CalendarDays, show: !isHourly || isA },

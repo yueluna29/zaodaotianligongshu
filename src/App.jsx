@@ -16,6 +16,7 @@ import TransportLog from "./pages/transport/TransportLog"
 import ExpenseClaim from "./pages/expense/ExpenseClaim"
 import EmployeeManager from "./pages/employee/EmployeeManager"
 import WorkEntryManager from "./pages/workentry/WorkEntryManager"
+import UploadTable from "./pages/workentry/UploadTable"
 import ApprovalCenter from "./pages/approval/ApprovalCenter"
 import LeaveCalendar from "./pages/leave/LeaveCalendar"
 import DaySwapRequest from "./pages/leave/DaySwapRequest"
@@ -75,6 +76,7 @@ export default function App() {
     trans:   <TransportLog user={user} t={t} tk={user.token} />,
     expense: <ExpenseClaim user={user} t={t} tk={user.token} />,
     work:    <WorkEntryManager user={user} t={t} tk={user.token} />,
+    upload:  <UploadTable user={user} t={t} tk={user.token} />,
     empmgr:  <EmployeeManager user={user} t={t} tk={user.token} />,
     approve: <ApprovalCenter user={user} t={t} tk={user.token} />,
     cal:     <LeaveCalendar t={t} tk={user.token} />,
