@@ -89,7 +89,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
       if (r.error || !r.access_token) { setErr("登录ID或密码错误"); setLd(false); return }
       const e = await sbGet(`employees?auth_user_id=eq.${r.user?.id}&select=*`, r.access_token)
       if (!e?.length) { setErr("未找到社员信息"); setLd(false); return }
-      onAuth({ ...e[0], token: r.access_token })
+      onAuth({ ...e[0], token: r.access_token, refreshToken: r.refresh_token })
     } catch (e) { setErr(e.message) }
     setLd(false)
   }
@@ -191,7 +191,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
       }, r.access_token)
 
       const fresh = await sbGet(`employees?id=eq.${empId}&select=*`, r.access_token)
-      if (fresh?.length) { onAuth({ ...fresh[0], token: r.access_token }); return }
+      if (fresh?.length) { onAuth({ ...fresh[0], token: r.access_token, refreshToken: r.refresh_token }); return }
       setMsg("注册完成！请登录"); setMode("login")
     } catch (e) { setErr(e.message) }
     setLd(false)
@@ -248,7 +248,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
       }, r.access_token)
 
       const fresh = await sbGet(`employees?id=eq.${empId}&select=*`, r.access_token)
-      if (fresh?.length) { onAuth({ ...fresh[0], token: r.access_token }); return }
+      if (fresh?.length) { onAuth({ ...fresh[0], token: r.access_token, refreshToken: r.refresh_token }); return }
       setMsg("注册完成！请登录"); setMode("login")
     } catch (e) { setErr(e.message) }
     setLd(false)

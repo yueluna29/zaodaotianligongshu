@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check } from "lucide-react"
 import { pad, WEEKDAYS, sortByName, COMPANIES } from "../../config/constants"
@@ -122,6 +122,42 @@ export default function UploadTable({ user, t, tk }) {
   }, [selectedEmp, year, month, tk])
 
   useEffect(() => { load() }, [load])
+
+  // ======= 本地草稿：未保存的行自动 dump 到 localStorage =======
+  const draftKey = selectedEmp ? `kintai_draft_upload_${selectedEmp.id}_${year}_${month}` : null
+  const draftAskedRef = useRef(new Set())
+
+  useEffect(() => {
+    if (!draftKey) return
+    const dirtyCount = rows.filter(r => r._isNew || r._dirty).length
+    if (dirtyCount > 0) {
+      try { localStorage.setItem(draftKey, JSON.stringify({ rows, savedAt: Date.now() })) } catch {/* ignore */}
+    } else {
+      localStorage.removeItem(draftKey)
+    }
+  }, [rows, draftKey])
+
+  useEffect(() => {
+    if (ld || !draftKey || draftAskedRef.current.has(draftKey)) return
+    draftAskedRef.current.add(draftKey)
+    const raw = localStorage.getItem(draftKey)
+    if (!raw) return
+    try {
+      const d = JSON.parse(raw)
+      const dirty = (d.rows || []).filter(r => r._isNew || r._dirty).length
+      if (!dirty) { localStorage.removeItem(draftKey); return }
+      const ageMin = Math.max(1, Math.round((Date.now() - (d.savedAt || 0)) / 60000))
+      if (confirm(`检测到 ${ageMin} 分钟前的未保存草稿（${dirty} 行修改），是否恢复？\n\n确定 = 恢复并继续编辑\n取消 = 丢弃草稿`)) {
+        setRows(d.rows || [])
+        setMsg(`已恢复未保存的 ${dirty} 行修改`)
+        setTimeout(() => setMsg(""), 6000)
+      } else {
+        localStorage.removeItem(draftKey)
+      }
+    } catch {
+      localStorage.removeItem(draftKey)
+    }
+  }, [ld, draftKey])
 
   const getRateFor = (bizType) => rates.find(r => r.business_type === bizType)?.hourly_rate || 0
 

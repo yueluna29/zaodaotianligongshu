@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { sbGet, sbPost, sbPatch, sbDel, sbFn } from "../../api/supabase"
 import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays, Download, DollarSign, Briefcase, ArrowRight, Lock, Send, Sparkles, Unlock, X as XIcon, Check, Camera, Upload } from "lucide-react"
 import { fmtDateW, WEEKDAYS, pad, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, sortByName } from "../../config/constants"
@@ -206,6 +206,45 @@ export default function WorkEntryManager({ user, t, tk }) {
 
   // 切月时重置分段预览视图
   useEffect(() => { setSectionPreview({ work: false, expenses: false, commissions: false }) }, [year, month, targetEmpId])
+
+  // ======= 本地草稿：未保存的行自动 dump 到 localStorage，关页/刷新/断网都能恢复 =======
+  const draftKey = targetEmpId ? `kintai_draft_work_${targetEmpId}_${year}_${month}` : null
+  const draftAskedRef = useRef(new Set())
+
+  // 行变动 → 存草稿（仅当有 _isNew / _dirty）
+  useEffect(() => {
+    if (!draftKey) return
+    const dirtyCount = rows.filter(r => r._isNew || r._dirty).length + commRows.filter(r => r._isNew || r._dirty).length
+    if (dirtyCount > 0) {
+      try { localStorage.setItem(draftKey, JSON.stringify({ rows, commRows, savedAt: Date.now() })) } catch {/* storage full, ignore */}
+    } else {
+      localStorage.removeItem(draftKey)
+    }
+  }, [rows, commRows, draftKey])
+
+  // load 完成后检查草稿，提示是否恢复（每个 key 只问一次）
+  useEffect(() => {
+    if (ld || !draftKey || draftAskedRef.current.has(draftKey)) return
+    draftAskedRef.current.add(draftKey)
+    const raw = localStorage.getItem(draftKey)
+    if (!raw) return
+    try {
+      const d = JSON.parse(raw)
+      const dirty = (d.rows || []).filter(r => r._isNew || r._dirty).length + (d.commRows || []).filter(r => r._isNew || r._dirty).length
+      if (!dirty) { localStorage.removeItem(draftKey); return }
+      const ageMin = Math.max(1, Math.round((Date.now() - (d.savedAt || 0)) / 60000))
+      if (confirm(`检测到 ${ageMin} 分钟前的未保存草稿（${dirty} 行修改），是否恢复？\n\n确定 = 恢复并继续编辑\n取消 = 丢弃草稿`)) {
+        setRows(d.rows || [])
+        setCommRows(d.commRows || [])
+        setSaveMsg(`已恢复未保存的 ${dirty} 行修改`)
+        setTimeout(() => setSaveMsg(""), 6000)
+      } else {
+        localStorage.removeItem(draftKey)
+      }
+    } catch {
+      localStorage.removeItem(draftKey)
+    }
+  }, [ld, draftKey])
 
   const getRateForType = (bt) => { const r = rates.find(r => r.business_type === bt); return r ? Number(r.hourly_rate) : 0 }
   const calcMin = (s, e) => { if (!s || !e) return 0; const [sh, sm] = s.split(":").map(Number), [eh, em] = e.split(":").map(Number); const m = (eh * 60 + em) - (sh * 60 + sm); return m > 0 ? m : 0 }

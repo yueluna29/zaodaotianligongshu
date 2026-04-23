@@ -10,6 +10,17 @@ export async function sbAuth(path, body) {
   return r.json()
 }
 
+// 用 refresh_token 换一对新的 access_token + refresh_token。Supabase 默认 access_token 1h 过期。
+// 返回 { access_token, refresh_token, ... } 或 { error }
+export async function sbRefresh(refreshToken) {
+  const r = await fetch(`${SB}/auth/v1/token?grant_type=refresh_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: AK },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  })
+  return r.json()
+}
+
 // 已登录用户更新自己的密码（或其它 user_metadata）。需要有效 access_token。
 export async function sbUpdateUser(body, token) {
   const r = await fetch(`${SB}/auth/v1/user`, {

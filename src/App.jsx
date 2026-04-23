@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { themes } from "./config/theme"
-import { sbGet } from "./api/supabase"
+import { sbGet, sbRefresh } from "./api/supabase"
 import { useAuth } from "./hooks/useAuth"
 import { isSuperAdmin } from "./config/constants"
 
@@ -75,6 +75,24 @@ export default function App() {
     const iv = setInterval(checkMaint, 30000)
     return () => clearInterval(iv)
   }, [user])
+
+  // 自动续期：挂载时立刻刷一次（防止 localStorage 里的 token 已过期），
+  // 之后每 50 分钟刷一次（access_token 1h 过期），tab 从后台切回也刷一次。
+  useEffect(() => {
+    if (!user?.refreshToken) return
+    const doRefresh = async () => {
+      const r = await sbRefresh(user.refreshToken)
+      if (r?.access_token) {
+        login({ ...user, token: r.access_token, refreshToken: r.refresh_token || user.refreshToken })
+      }
+    }
+    doRefresh()
+    const iv = setInterval(doRefresh, 50 * 60 * 1000)
+    const onVis = () => { if (document.visibilityState === "visible") doRefresh() }
+    document.addEventListener("visibilitychange", onVis)
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis) }
+    // 仅在 refreshToken 变化时重置（每次刷新都会变），避免依赖 user 整个对象
+  }, [user?.refreshToken])
 
   const toggleTheme = () =>
     setTheme((p) => {
