@@ -21,7 +21,7 @@ export default function CommissionEntry({ user, t, tk }) {
   const startEdit = (r) => { sFm({ student_name: r.student_name, student_affiliation: r.student_affiliation || "", contract_amount: String(r.contract_amount), commission_percentage: String(r.commission_percentage || "") }); sEditId(r.id); sShow(true) }
   const del = async (id) => { if (confirm("确认删除？")) { await sbDel(`commissions?id=eq.${id}`, tk); await load() } }
   const total = recs.filter((r) => r.year_month === ym).reduce((s, r) => s + Number(r.commission_amount || 0), 0)
-  const iS = { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box" }
+  const iS = { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box", minHeight: 40 }
 
   return (
     <div>

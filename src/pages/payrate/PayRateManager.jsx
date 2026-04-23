@@ -90,7 +90,7 @@ export default function PayRateSection({ empId, isAdmin, t, tk, userId, allEmps 
     await loadRates()
   }
 
-  const iS = { width: "100%", padding: "8px 10px", borderRadius: 7, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box" }
+  const iS = { width: "100%", padding: "8px 10px", borderRadius: 7, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, boxSizing: "border-box", minHeight: 34 }
 
   return (
     <div>

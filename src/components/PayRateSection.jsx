@@ -85,6 +85,7 @@ export default function PayRateSection({ empId, isAdmin, t, tk }) {
     width: "100%", padding: "11px 14px", borderRadius: 12,
     border: `1px solid ${t.bd}`, background: "rgba(255,255,255,0.85)", color: t.tx,
     fontSize: 14, boxSizing: "border-box", fontFamily: "inherit", outline: "none",
+    minHeight: 45,
   }
   const lblS = { fontSize: 13, color: t.ts, fontWeight: 500, display: "block", marginBottom: 8 }
   const cardS = {

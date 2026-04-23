@@ -19,7 +19,7 @@ export default function TransportLog({ user, t, tk }) {
   const startEdit = (r) => { sFm({ claim_date: r.claim_date, route: r.route, amount: String(r.amount), round_trip: r.round_trip !== false }); sEditId(r.id); sShow(true) }
   const del = async (id) => { if (confirm("确认删除？")) { await sbDel(`transportation_claims?id=eq.${id}`, tk); await load() } }
   const total = recs.reduce((s, r) => s + Number(r.amount || 0), 0)
-  const iS = { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box" }
+  const iS = { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box", minHeight: 40 }
 
   return (
     <div>

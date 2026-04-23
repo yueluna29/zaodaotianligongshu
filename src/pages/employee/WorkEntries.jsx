@@ -70,7 +70,7 @@ export default function WorkEntries({ user, t, tk }) {
   const totalAmount = Object.values(summary).reduce((s, v) => s + v.amount, 0)
   const totalMinutes = Object.values(summary).reduce((s, v) => s + v.minutes, 0)
 
-  const iS = { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box" }
+  const iS = { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box", minHeight: 40 }
 
   return (
     <div>

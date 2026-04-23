@@ -101,6 +101,7 @@ function Field({ label, value, onChange, isEditing, isLocked, required, type, op
     width: "100%", padding: "11px 14px", borderRadius: 12,
     border: `1px solid ${t.bd}`, backgroundColor: "rgba(255,255,255,0.85)", color: t.tx,
     outline: "none", boxSizing: "border-box", fontSize: 14, fontFamily: "inherit",
+    minHeight: 45,
   }
   const lS = { ...iS, paddingLeft: 38, border: `1px dashed ${t.td}`, backgroundColor: t.bl, color: t.tm, cursor: "not-allowed" }
   return (
