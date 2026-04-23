@@ -42,12 +42,14 @@ export default function ChangePasswordModal({ t, token, onClose }) {
           <div>
             <label style={{ fontSize: 11, color: t.ts, display: "block", marginBottom: 4 }}>新密码（至少 6 位）</label>
             <input type="password" value={pwd1} onChange={(e) => setPwd1(e.target.value)} autoFocus
+              autoComplete="new-password"
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box" }} />
           </div>
           <div>
             <label style={{ fontSize: 11, color: t.ts, display: "block", marginBottom: 4 }}>确认新密码</label>
             <input type="password" value={pwd2} onChange={(e) => setPwd2(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submit()}
+              autoComplete="new-password"
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, boxSizing: "border-box" }} />
           </div>
         </div>

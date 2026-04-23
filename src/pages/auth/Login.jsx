@@ -268,9 +268,9 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
   const Step1 = () => (
     <div>
       <div style={{ fontSize: 11, color: t.tm, marginBottom: 12 }}>设置登录用的 ID 和密码。</div>
-      {field("登录ID", <input placeholder="4-20位英文/数字" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" style={iS} />, true)}
-      {field("密码", <input type="password" placeholder="至少 6 位" value={fm.password} onChange={(e) => up("password", e.target.value)} style={iS} />, true)}
-      {field("确认密码", <input type="password" value={fm.passwordConfirm} onChange={(e) => up("passwordConfirm", e.target.value)} style={iS} />, true)}
+      {field("登录ID", <input placeholder="4-20位英文/数字" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" name="username" autoComplete="username" style={iS} />, true)}
+      {field("密码", <input type="password" placeholder="至少 6 位" value={fm.password} onChange={(e) => up("password", e.target.value)} name="new-password" autoComplete="new-password" style={iS} />, true)}
+      {field("确认密码", <input type="password" value={fm.passwordConfirm} onChange={(e) => up("passwordConfirm", e.target.value)} autoComplete="new-password" style={iS} />, true)}
     </div>
   )
 
@@ -369,10 +369,10 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
         欢迎加入！本页先创建账号，下一页填写在留信息、银行账户、上传材料等完整入职手续。
       </div>
       <div style={{ fontSize: 10, color: t.ts, fontWeight: 600, marginBottom: 6, letterSpacing: ".05em" }}>登录信息</div>
-      {field("登录ID", <input placeholder="4-20位英文/数字" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" style={iS} />, true)}
+      {field("登录ID", <input placeholder="4-20位英文/数字" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" name="username" autoComplete="username" style={iS} />, true)}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {field("密码", <input type="password" placeholder="至少 6 位" value={fm.password} onChange={(e) => up("password", e.target.value)} style={iS} />, true)}
-        {field("确认密码", <input type="password" value={fm.passwordConfirm} onChange={(e) => up("passwordConfirm", e.target.value)} style={iS} />, true)}
+        {field("密码", <input type="password" placeholder="至少 6 位" value={fm.password} onChange={(e) => up("password", e.target.value)} name="new-password" autoComplete="new-password" style={iS} />, true)}
+        {field("确认密码", <input type="password" value={fm.passwordConfirm} onChange={(e) => up("passwordConfirm", e.target.value)} autoComplete="new-password" style={iS} />, true)}
       </div>
       <div style={{ fontSize: 10, color: t.ts, fontWeight: 600, marginTop: 10, marginBottom: 6, letterSpacing: ".05em" }}>基本信息</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -424,8 +424,8 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
         {mode === "login" ? (
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <input placeholder="登录ID" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" style={iS} />
-              <input placeholder="密码" type="password" value={fm.password} onChange={(e) => up("password", e.target.value)} style={iS} onKeyDown={(e) => e.key === "Enter" && login()} />
+              <input placeholder="登录ID" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" name="username" autoComplete="username" style={iS} />
+              <input placeholder="密码" type="password" value={fm.password} onChange={(e) => up("password", e.target.value)} name="password" autoComplete="current-password" style={iS} onKeyDown={(e) => e.key === "Enter" && login()} />
               <button onClick={login} disabled={ld} style={{ padding: 13, borderRadius: 10, border: "none", background: `linear-gradient(135deg,${t.ac},${t.ah})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: ld ? "wait" : "pointer", opacity: ld ? 0.7 : 1 }}>{ld ? "..." : "登录"}</button>
             </div>
             <div style={{ textAlign: "center", marginTop: 12 }}>
