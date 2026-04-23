@@ -366,7 +366,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
   const QuickForm = () => (
     <div>
       <div style={{ fontSize: 11, color: t.ac, marginBottom: 14, padding: "10px 12px", borderRadius: 10, background: `${t.ac}08`, border: `1px solid ${t.ac}20`, lineHeight: 1.6 }}>
-        欢迎加入！仅需填写登录信息 + 基本信息即可开始使用，<br />其他资料（银行账户、在留信息等）登录后可在「入职信息」中补全。
+        欢迎加入！本页先创建账号，下一页填写在留信息、银行账户、上传材料等完整入职手续。
       </div>
       <div style={{ fontSize: 10, color: t.ts, fontWeight: 600, marginBottom: 6, letterSpacing: ".05em" }}>登录信息</div>
       {field("登录ID", <input placeholder="4-20位英文/数字" value={fm.loginId} onChange={(e) => up("loginId", e.target.value)} autoCapitalize="none" autoCorrect="off" style={iS} />, true)}
@@ -464,7 +464,7 @@ export default function Login({ onAuth, theme, t, toggleTheme }) {
             {QuickForm()}
             <div style={{ display: "flex", marginTop: 18 }}>
               <div style={{ flex: 1 }} />
-              <button onClick={submitQuick} disabled={ld} style={{ padding: "11px 22px", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${t.gn},${t.gn})`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: ld ? "wait" : "pointer", opacity: ld ? 0.7 : 1 }}>{ld ? "提交中..." : "完成注册"}</button>
+              <button onClick={submitQuick} disabled={ld} style={{ padding: "11px 22px", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${t.ac},${t.ah})`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: ld ? "wait" : "pointer", opacity: ld ? 0.7 : 1 }}>{ld ? "提交中..." : "下一页 →"}</button>
             </div>
             <div style={{ textAlign: "center", marginTop: 14 }}>
               <button onClick={() => { setMode("login"); setErr(""); setMsg("") }} style={{ background: "none", border: "none", color: t.ac, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
