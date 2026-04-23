@@ -817,58 +817,7 @@ export default function EmployeeManager({ user, t, tk }) {
                 )}
                 {isHourly && <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />}
 
-                {/* 薪资与税务 */}
-                <div>
-                  <SectionTitle t={t}>{isHourly ? "税务与合同信息" : "常规薪资配置"}</SectionTitle>
-                  <div style={{ padding: !isAdmin ? 20 : 0, backgroundColor: !isAdmin ? t.bl : "transparent", borderRadius: 16, border: !isAdmin ? `1px dashed ${t.bd}` : "none" }}>
-                    {!isAdmin && (
-                      <div style={{ color: t.ts, fontSize: 13, display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
-                        <Lock size={14} /> 以下部分字段仅管理员可修改
-                      </div>
-                    )}
-                    <div style={flexRow}>
-                      {!isHourly && (
-                        <Field
-                          label="固定加班 (h)"
-                          value={editing ? fm.fixed_overtime_hours : `${e.fixed_overtime_hours || 20}h`}
-                          onChange={(v) => sFm(p => ({ ...p, fixed_overtime_hours: v }))}
-                          isEditing={editing} isLocked={!isAdmin} type="number"
-                          t={t}
-                        />
-                      )}
-                      {fld("payment_method", "支付方式", { locked: isHourly ? false : !isAdmin, type: "select", options: PAY_METHODS })}
-                      {!isHourly && fld("transport_method", "交通费方式", { locked: !isAdmin, type: "select", options: TRANSPORT_METHODS })}
-                      {fld("dependents_count", "扶养人数", { locked: isHourly ? false : !isAdmin, type: "number" })}
-                      {fld("my_number", "My Number", { locked: isHourly ? false : !isAdmin })}
-                      {fld("contract_start_date", "合同开始日", { locked: isHourly ? false : !isAdmin, type: "date" })}
-                      {fld("contract_end_date", "合同结束日", { locked: isHourly ? false : !isAdmin, type: "date" })}
-                    </div>
-                    <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
-                      {!isHourly && (
-                        <CheckBox
-                          label="启用扶养控除"
-                          checked={editing ? fm.has_dependent_deduction : e.has_dependent_deduction}
-                          onChange={(v) => sFm(p => ({ ...p, has_dependent_deduction: v }))}
-                          disabled={!isAdmin}
-                          isEditing={editing}
-                          t={t}
-                        />
-                      )}
-                      <CheckBox
-                        label="计算签单提成"
-                        checked={editing ? fm.has_commission : e.has_commission}
-                        onChange={(v) => sFm(p => ({ ...p, has_commission: v }))}
-                        disabled={!isAdmin}
-                        isEditing={editing}
-                        t={t}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
-
-                {/* 银行账户 */}
+                {/* 银行账户（时薪之后） */}
                 <div>
                   <SectionTitle t={t}>银行账户</SectionTitle>
                   <div style={flexRow}>
@@ -890,6 +839,10 @@ export default function EmployeeManager({ user, t, tk }) {
                     )}
                   </div>
                 </div>
+
+                {/* 税务与合同信息 —— 暂时对所有人隐藏，待重新设计
+                  包含字段：固定加班、支付方式、交通费方式、扶养人数、My Number、合同起止日、扶养控除、签单提成 checkbox
+                  现阶段 admin 可在 DB / 其他入口管理。重做后恢复 */}
               </div>
             )}
 
