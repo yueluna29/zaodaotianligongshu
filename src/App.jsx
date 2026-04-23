@@ -124,7 +124,7 @@ export default function App() {
   )
 
   const pages = {
-    home:    <Dashboard user={user} t={t} tk={user.token} onNav={setView} onLogout={logout} mobile={mobile} />,
+    home:    <Dashboard user={user} t={t} tk={user.token} onNav={setView} onLogout={logout} onUpdateUser={login} mobile={mobile} />,
     att:     <AttendanceList user={user} t={t} tk={user.token} />,
     leave:   <LeaveRequest user={user} t={t} tk={user.token} />,
     swap:    <DaySwapRequest user={user} t={t} tk={user.token} />,

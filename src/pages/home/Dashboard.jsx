@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays, isHourly as empIsHourly, isFullTime as empIsFullTime, COMPANIES, fmtDateW } from "../../config/constants"
-import { Bell, Plus, Users, AlertCircle, FileText, ChevronRight, Fingerprint, Coffee, Zap, Moon, Check, Activity, ClipboardList, Table as TableIcon, UserCircle2 } from "lucide-react"
+import { Bell, Plus, Users, AlertCircle, FileText, ChevronRight, Fingerprint, Coffee, Zap, Moon, Check, Activity, ClipboardList, Table as TableIcon, UserCircle2, IdCard } from "lucide-react"
+import UpdateResidenceCardModal from "../../components/UpdateResidenceCardModal"
 
 const LAST_SEEN_KEY = "kintai_last_seen_anno_at"
 
-export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
+export default function Dashboard({ user, t, tk, onNav, onLogout, onUpdateUser, mobile }) {
   const isA = user.role === "admin"
   const isHourly = empIsHourly(user.employment_type)
   const now = new Date()
@@ -17,6 +18,7 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
   const [pendingProfiles, setPendingProfiles] = useState([])
   const [unsubmittedMonths, setUnsubmittedMonths] = useState([])
   const [last7dHours, setLast7dHours] = useState(0)
+  const [residenceModalOpen, setResidenceModalOpen] = useState(false)
   const [annos, setAnnos] = useState([])
   const [annoShow, setAnnoShow] = useState(false)
   const [annoFm, setAnnoFm] = useState({ title: "", body: "", kind: "info", expires_at: "" })
@@ -181,6 +183,21 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
       setLast7dHours(mins / 60)
     })()
   }, [tk, user.id, isA, isHourly])
+
+  // 在留卡期限状态（仅有 residence_expiry 的老师）
+  const residenceStatus = useMemo(() => {
+    if (!user.residence_expiry) return null
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const exp = new Date(user.residence_expiry + "T00:00:00")
+    const daysLeft = Math.ceil((exp.getTime() - today.getTime()) / 86400000)
+    let color, level, text
+    if (daysLeft < 0) { color = "#f43f5e"; level = "over"; text = `已过期 ${-daysLeft} 天` }
+    else if (daysLeft <= 30) { color = "#f43f5e"; level = "red"; text = "尽快更新" }
+    else if (daysLeft <= 60) { color = "#f59e0b"; level = "amber"; text = "即将到期" }
+    else if (daysLeft <= 90) { color = "#f59e0b"; level = "amber-low"; text = "请留意" }
+    else { color = "#10b981"; level = "ok"; text = "有效期内" }
+    return { daysLeft, color, level, text }
+  }, [user.residence_expiry])
 
   // 档案完善度（仅老师自己）
   const profileCompletion = useMemo(() => {
@@ -779,6 +796,34 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
             )
           })()}
 
+          {/* 在留卡期限（baito 有 residence_expiry 的才显示）*/}
+          {isHourly && residenceStatus && (() => {
+            const { daysLeft, color, level, text } = residenceStatus
+            const hv = level === "ok" ? "hv-emerald" : level.startsWith("amber") ? "hv-amber" : "hv-rose"
+            const needsUpdate = level !== "ok"
+            return (
+              <div className={`glass-card stat-card ${hv} span-2 m-half`} style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="stat-label">在留卡期限</span>
+                  <IdCard size={16} color={`${color}B3`} strokeWidth={1.5} />
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                    <span className="stat-value" style={{ color }}>{daysLeft < 0 ? -daysLeft : daysLeft}</span>
+                    <span className="stat-sub">{daysLeft < 0 ? "天前过期" : "天后到期"}</span>
+                  </div>
+                  {needsUpdate ? (
+                    <button onClick={() => setResidenceModalOpen(true)} style={{ padding: "4px 10px", borderRadius: 999, border: `1px solid ${color}66`, background: `${color}10`, color, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", letterSpacing: ".05em" }}>
+                      更新 →
+                    </button>
+                  ) : (
+                    <div className="stat-sub" style={{ color }}>{text}</div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* 提交月报入口双按钮（仅 baito） */}
           {isHourly && (
             <div className="glass-card span-4" style={{ padding: "18px 22px" }}>
@@ -878,6 +923,16 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
           )}
         </div>
       </div>
+
+      {residenceModalOpen && (
+        <UpdateResidenceCardModal
+          t={t}
+          user={user}
+          token={tk}
+          onDone={(fresh) => onUpdateUser?.(fresh)}
+          onClose={() => setResidenceModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
