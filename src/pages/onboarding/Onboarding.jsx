@@ -50,7 +50,9 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
     setBusy(true)
     try {
       const safeName = (fm.name || user.name || "unknown").replace(/[\\/:*?"<>|]/g, "_")
-      const filename = `${safeName}_${suffix}.pdf`
+      const n = new Date(), pad = (x) => String(x).padStart(2, "0")
+      const ts = `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}_${pad(n.getHours())}-${pad(n.getMinutes())}-${pad(n.getSeconds())}`
+      const filename = `${safeName}_${suffix}_${ts}.pdf`
       const fd = new FormData()
       fd.append("file", file, filename)
       fd.append("filename", filename)
@@ -151,8 +153,8 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
     <div style={{ padding: 14, borderRadius: 10, border: `1px dashed ${currentId ? t.gn : t.bd}`, background: currentId ? `${t.gn}08` : t.bgI, marginBottom: 10 }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: t.tx, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 10, color: t.tm, lineHeight: 1.6, marginBottom: 10 }}>
-        文件名会自动改为：<span style={{ fontFamily: "monospace" }}>{fm.name || "老师名字"}_{suffix}.pdf</span><br />
-        请上传 PDF 文件（不要上传图片）
+        文件名会自动改为：<span style={{ fontFamily: "monospace" }}>{fm.name || "老师名字"}_{suffix}_上传时间.pdf</span><br />
+        请上传 PDF 文件（不要上传图片）。重新上传不会覆盖旧版本，时间戳保证每次都是新文件。
       </div>
       {currentId ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: t.gn }}>
