@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check } from "lucide-react"
 import { pad, WEEKDAYS } from "../../config/constants"
+import { parsePayrollExcel, applyBizMapping, SUPPORTED_BIZ } from "../../utils/parsePayrollExcel"
 
 // 业务内容 master（从 Excel 模板提炼）— 映射到 DB business_type
 const BIZ_TYPES = ["事務性工作", "専業課老師", "答疑做題", "研究計画書修改", "過去問", "EJU講師（班課）"]
@@ -40,6 +41,12 @@ export default function UploadTable({ user, t, tk }) {
   const [ld, setLd] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState("")
+
+  // 上传状态
+  const [uploadState, setUploadState] = useState(null) // null | 'mapping' | 'preview' | 'submitting'
+  const [uploadData, setUploadData] = useState(null) // { rows, unmappedBizTypes, hasBonus, fileName }
+  const [bizMapping, setBizMapping] = useState({}) // { "事务/TA": "事務性工作" }
+  const [uploadMode, setUploadMode] = useState("append") // 'append' | 'replace'
 
   // 学部老师才显示班课绩效列
   const showBonus = (selectedEmp?.department || "") === "学部"
@@ -164,6 +171,85 @@ export default function UploadTable({ user, t, tk }) {
     await load()
   }
 
+  // ========== Excel 上传 ==========
+  const handleFilePick = async (file) => {
+    if (!file) return
+    setMsg("")
+    try {
+      const result = await parsePayrollExcel(file)
+      if (!result.rows.length) {
+        alert("文件里没有解析到有效的工时记录行")
+        return
+      }
+      setUploadData({ ...result, fileName: file.name })
+      // 如果有未识别的业务名，先进映射步骤；否则直接进预览
+      const initMapping = {}
+      result.unmappedBizTypes.forEach(raw => { initMapping[raw] = "" })
+      setBizMapping(initMapping)
+      setUploadState(result.unmappedBizTypes.length ? "mapping" : "preview")
+    } catch (e) {
+      alert(`解析失败：${e.message}`)
+    }
+  }
+
+  const confirmMapping = () => {
+    const unresolved = uploadData.unmappedBizTypes.filter(raw => !bizMapping[raw])
+    if (unresolved.length) {
+      alert(`还有 ${unresolved.length} 个业务名没选：${unresolved.join("、")}`)
+      return
+    }
+    setUploadData(d => ({ ...d, rows: applyBizMapping(d.rows, bizMapping) }))
+    setUploadState("preview")
+  }
+
+  const submitUpload = async () => {
+    if (!uploadData?.rows.length) return
+    const monthRows = uploadData.rows.filter(r => r.work_date.startsWith(`${year}-${pad(month)}`))
+    if (monthRows.length === 0) {
+      if (!confirm(`文件里没有 ${year}年${month}月 的记录，确定继续吗？（会按记录原日期插入）`)) return
+    }
+    setUploadState("submitting")
+    try {
+      if (uploadMode === "replace") {
+        const sd = `${year}-${pad(month)}-01`
+        const ed = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`
+        await sbDel(`work_entries?employee_id=eq.${selectedEmp.id}&work_date=gte.${sd}&work_date=lt.${ed}&business_type=not.is.null`, tk)
+      }
+      let ok = 0, err = 0
+      for (const r of uploadData.rows) {
+        const hours = (r.work_minutes || 0) / 60
+        const subtotal = Math.round(hours * (r.hourly_rate + r.bonus_per_hour) + r.transport_fee)
+        const body = {
+          employee_id: selectedEmp.id,
+          work_date: r.work_date,
+          business_type: r.business_type,
+          start_time: r.start_time ? r.start_time + ":00" : null,
+          end_time: r.end_time ? r.end_time + ":00" : null,
+          work_minutes: r.work_minutes,
+          hourly_rate: r.hourly_rate,
+          bonus_per_hour: r.bonus_per_hour || 0,
+          transport_fee: r.transport_fee,
+          subtotal,
+          student_name: r.student_name || null,
+          course_name: r.course_name || null,
+        }
+        const res = await sbPost("work_entries", body, tk)
+        if (res && !Array.isArray(res) && (res.code || res.message)) err++
+        else ok++
+      }
+      setUploadState(null)
+      setUploadData(null)
+      setBizMapping({})
+      setUploadMode("append")
+      setMsg(err ? `上传完成：成功 ${ok} 行，失败 ${err} 行` : `上传成功：${ok} 行`)
+      setTimeout(() => setMsg(""), 6000)
+      await load()
+    } catch (e) {
+      setUploadState("preview")
+      alert(`上传出错：${e.message || e}`)
+    }
+  }
+
   const chgMonth = (d) => {
     let m = month + d, y = year
     if (m > 12) { m = 1; y++ } else if (m < 1) { m = 12; y-- }
@@ -234,9 +320,11 @@ export default function UploadTable({ user, t, tk }) {
           <button onClick={() => chgMonth(-1)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronLeft size={14} /></button>
           <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, minWidth: 90, textAlign: "center" }}>{year}年{month}月</span>
           <button onClick={() => chgMonth(1)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronRight size={14} /></button>
-          <button disabled title="稍后实现" style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.td, cursor: "not-allowed", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+          <label style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.ac}`, background: `${t.ac}10`, color: t.ac, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600 }}>
             <Upload size={13} /> 上传 Excel
-          </button>
+            <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFilePick(f); e.target.value = "" }} />
+          </label>
           <button disabled title="稍后实现" style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.td, cursor: "not-allowed", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }}>
             <Download size={13} /> 导出 Excel
           </button>
@@ -351,6 +439,131 @@ export default function UploadTable({ user, t, tk }) {
         </div>
       </div>
       </>)}
+
+      {/* 业务名映射对话框 */}
+      {uploadState === "mapping" && uploadData && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setUploadState(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(255,255,255,0.98)", borderRadius: 18, maxWidth: 600, width: "100%", padding: 24, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 30px 80px -20px rgba(15,23,42,0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: t.tx, display: "flex", alignItems: "center", gap: 6 }}>
+                <AlertTriangle size={16} color={t.wn} /> 业务名需要确认
+              </h3>
+              <button onClick={() => setUploadState(null)} style={{ background: "transparent", border: "none", color: t.tm, cursor: "pointer", fontFamily: "inherit", display: "inline-flex" }}><XIcon size={18} /></button>
+            </div>
+            <p style={{ margin: "0 0 14px", fontSize: 12, color: t.tm, lineHeight: 1.6 }}>
+              文件「{uploadData.fileName}」里的以下业务名系统认不出，请选对应的工种。选完点"确认"继续。
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+              {uploadData.unmappedBizTypes.map(raw => (
+                <div key={raw} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
+                  <code style={{ padding: "6px 10px", borderRadius: 6, background: t.bgI, color: t.tx, fontSize: 12, fontFamily: "monospace" }}>{raw}</code>
+                  <span style={{ color: t.tm, fontSize: 11 }}>→</span>
+                  <select value={bizMapping[raw] || ""} onChange={(e) => setBizMapping(p => ({ ...p, [raw]: e.target.value }))}
+                    style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 12, fontFamily: "inherit" }}>
+                    <option value="">— 请选 —</option>
+                    {SUPPORTED_BIZ.map(bt => <option key={bt} value={bt}>{bt}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => setUploadState(null)} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>取消</button>
+              <button onClick={confirmMapping} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>确认映射</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 上传预览 + 确认 */}
+      {uploadState === "preview" && uploadData && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setUploadState(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(255,255,255,0.98)", borderRadius: 18, maxWidth: 900, width: "100%", padding: 24, maxHeight: "88vh", overflowY: "auto", boxShadow: "0 30px 80px -20px rgba(15,23,42,0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: t.tx }}>预览并确认上传</h3>
+              <button onClick={() => setUploadState(null)} style={{ background: "transparent", border: "none", color: t.tm, cursor: "pointer", fontFamily: "inherit", display: "inline-flex" }}><XIcon size={18} /></button>
+            </div>
+            <div style={{ fontSize: 12, color: t.tm, marginBottom: 14, display: "flex", gap: 14, flexWrap: "wrap" }}>
+              <span>文件：<strong style={{ color: t.tx }}>{uploadData.fileName}</strong></span>
+              <span>共 <strong style={{ color: t.tx }}>{uploadData.rows.length}</strong> 行</span>
+              <span>{uploadData.hasBonus ? "含班课绩效（学部模板）" : "大学院模板"}</span>
+            </div>
+
+            {/* 冲突模式 */}
+            <div style={{ padding: 12, borderRadius: 10, background: `${t.wn}10`, border: `1px solid ${t.wn}30`, marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: t.tx, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <AlertTriangle size={13} color={t.wn} /> 和当月已有记录怎么处理？
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+                  <input type="radio" checked={uploadMode === "append"} onChange={() => setUploadMode("append")} style={{ marginTop: 3 }} />
+                  <div>
+                    <div style={{ color: t.tx, fontWeight: 600 }}>追加（推荐）</div>
+                    <div style={{ color: t.tm, fontSize: 11 }}>不动已有记录，新文件的行加进去。可能产生重复，但不会丢数据。</div>
+                  </div>
+                </label>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+                  <input type="radio" checked={uploadMode === "replace"} onChange={() => setUploadMode("replace")} style={{ marginTop: 3 }} />
+                  <div>
+                    <div style={{ color: t.rd, fontWeight: 600 }}>替换当月全部</div>
+                    <div style={{ color: t.tm, fontSize: 11 }}>先删除 {year}年{month}月 该老师的所有工时记录（不影响其他月份），再插入新行。<strong style={{ color: t.rd }}>不可撤销</strong>。</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* 数据预览 */}
+            <div style={{ border: `1px solid ${t.bd}`, borderRadius: 8, overflow: "auto", maxHeight: 300, marginBottom: 14 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 700 }}>
+                <thead>
+                  <tr style={{ background: t.bgH }}>
+                    {["日付", "業務内容", "起止", "時給", ...(uploadData.hasBonus ? ["绩效"] : []), "交通費", "学生", "備考"].map((h, i) => (
+                      <th key={i} style={{ padding: "6px 8px", color: t.tm, fontWeight: 600, textAlign: "left", borderBottom: `1px solid ${t.bd}`, whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {uploadData.rows.map((r, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${t.bl}` }}>
+                      <td style={{ padding: "5px 8px", color: t.ts, fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.work_date}</td>
+                      <td style={{ padding: "5px 8px" }}>
+                        <span style={{ padding: "1px 6px", borderRadius: 4, fontSize: 10, background: `${t.ac}15`, color: t.ac }}>{r.business_type || "⚠ 未映射"}</span>
+                      </td>
+                      <td style={{ padding: "5px 8px", color: t.ts, fontFamily: "monospace" }}>{r.start_time || "—"} ~ {r.end_time || "—"}</td>
+                      <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>¥{r.hourly_rate.toLocaleString()}</td>
+                      {uploadData.hasBonus && <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>{r.bonus_per_hour ? `¥${r.bonus_per_hour}/h` : "—"}</td>}
+                      <td style={{ padding: "5px 8px", color: t.ts, textAlign: "right" }}>{r.transport_fee ? `¥${r.transport_fee}` : "—"}</td>
+                      <td style={{ padding: "5px 8px", color: t.ts }}>{r.student_name || "—"}</td>
+                      <td style={{ padding: "5px 8px", color: t.tm }}>{r.course_name || ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => setUploadState(null)} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>取消</button>
+              <button onClick={() => {
+                if (uploadMode === "replace" && !confirm(`确认删除 ${year}年${month}月 的所有工时记录，然后插入 ${uploadData.rows.length} 行新数据？此操作不可撤销。`)) return
+                submitUpload()
+              }} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: uploadMode === "replace" ? t.rd : t.ac, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <Check size={13} /> {uploadMode === "replace" ? `清空并插入 ${uploadData.rows.length} 行` : `追加 ${uploadData.rows.length} 行`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 上传中遮罩 */}
+      {uploadState === "submitting" && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1250, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "rgba(255,255,255,0.98)", borderRadius: 14, padding: "22px 28px", fontSize: 14, color: t.tx, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 18, height: 18, border: `2px solid ${t.ac}33`, borderTopColor: t.ac, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            上传中...
+          </div>
+        </div>
+      )}
     </div>
   )
 }
