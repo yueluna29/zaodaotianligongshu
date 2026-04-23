@@ -700,15 +700,16 @@ export default function UploadTable({ user, t, tk }) {
               <span>{uploadData.hasBonus ? "含班课绩效（学部模板）" : "大学院模板"}</span>
             </div>
 
-            {/* 对账警告 */}
+            {/* 对账警告 —— 只提示真正的不符，±2 円内的 Excel 浮点精度噪音（短课程很常见）不计 */}
             {(() => {
+              const TOLERANCE = 2 // Excel 的 (D-C)*24 有 FP 误差，15/30/45 分钟课常差 ±1 円
               const mismatches = uploadData.rows
                 .map((r, i) => {
                   const hours = (r.work_minutes || 0) / 60
                   const computed = Math.round(hours * (r.hourly_rate + (r.bonus_per_hour || 0)) + (r.transport_fee || 0))
                   if (r.subtotal_excel == null) return null
                   const diff = r.subtotal_excel - computed
-                  if (Math.abs(diff) < 1) return null
+                  if (Math.abs(diff) <= TOLERANCE) return null
                   return { i, computed, diff }
                 })
                 .filter(Boolean)
@@ -717,7 +718,7 @@ export default function UploadTable({ user, t, tk }) {
               return (
                 <div style={{ padding: 12, borderRadius: 10, background: `${t.rd}10`, border: `1px solid ${t.rd}40`, marginBottom: 14, fontSize: 12, color: t.tx, lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 600, color: t.rd, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <AlertTriangle size={13} /> {mismatches.length} 行手填总额与系统计算不符，老师 Excel 总数比系统多 {totalDiff > 0 ? `¥${totalDiff.toLocaleString()}` : `¥${totalDiff.toLocaleString()}（少了）`}
+                    <AlertTriangle size={13} /> {mismatches.length} 行手填总额与系统计算不符，老师 Excel 总数比系统{totalDiff > 0 ? `多 ¥${totalDiff.toLocaleString()}` : `少 ¥${Math.abs(totalDiff).toLocaleString()}`}
                   </div>
                   <div style={{ color: t.tm, fontSize: 11 }}>
                     导入按"小时数 × (時給 + 绩效) + 交通費"为准。下方表格里红色行就是对不上的。如有正当 bonus 漏算，请跟老师确认后手动调整。
@@ -764,7 +765,7 @@ export default function UploadTable({ user, t, tk }) {
                     const hours = (r.work_minutes || 0) / 60
                     const computed = Math.round(hours * (r.hourly_rate + (r.bonus_per_hour || 0)) + (r.transport_fee || 0))
                     const diff = r.subtotal_excel != null ? r.subtotal_excel - computed : 0
-                    const mismatch = r.subtotal_excel != null && Math.abs(diff) >= 1
+                    const mismatch = r.subtotal_excel != null && Math.abs(diff) > 2  // ±2 円容差，屏蔽 Excel 浮点噪音
                     return (
                       <tr key={i} style={{ borderBottom: `1px solid ${t.bl}`, background: mismatch ? `${t.rd}08` : "transparent" }}>
                         <td style={{ padding: "5px 8px", color: t.ts, fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.work_date}</td>
