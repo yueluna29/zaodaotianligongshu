@@ -4,6 +4,7 @@ import { sbGet } from "./api/supabase"
 import { useAuth } from "./hooks/useAuth"
 
 import Login from "./pages/auth/Login"
+import Onboarding from "./pages/onboarding/Onboarding"
 import Sidebar from "./components/Sidebar"
 import MobileNav from "./components/MobileNav"
 import ChangePasswordModal from "./components/ChangePasswordModal"
@@ -66,6 +67,12 @@ export default function App() {
     })
 
   if (!user) return <Login onAuth={login} theme={theme} t={t} toggleTheme={toggleTheme} />
+
+  const needsOnboarding =
+    user.role !== "admin" &&
+    (user.employment_type === "アルバイト" || user.employment_type === "外部講師") &&
+    !user.onboarding_completed_at
+  if (needsOnboarding) return <Onboarding user={user} t={t} onDone={login} onLogout={logout} />
 
   const pages = {
     home:    <Dashboard user={user} t={t} tk={user.token} onNav={setView} onLogout={logout} mobile={mobile} />,
