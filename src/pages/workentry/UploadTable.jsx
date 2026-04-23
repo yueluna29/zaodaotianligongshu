@@ -689,7 +689,7 @@ export default function UploadTable({ user, t, tk }) {
             <p style={{ fontSize: 11, color: t.tm, margin: "2px 0 0" }}>{selectedEmp?.department || "—"} · 与工资报表共享同一数据</p>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
           <button onClick={() => chgMonth(-1)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronLeft size={14} /></button>
           <span style={{ fontSize: 14, fontWeight: 700, color: t.tx, minWidth: 90, textAlign: "center" }}>{year}年{month}月</span>
           <button onClick={() => chgMonth(1)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, cursor: "pointer", display: "inline-flex", alignItems: "center", fontFamily: "inherit" }}><ChevronRight size={14} /></button>
@@ -911,18 +911,23 @@ export default function UploadTable({ user, t, tk }) {
       </div>
 
       {/* 底部汇总 —— 玻璃卡 + 合計徽章 */}
-      <div style={{ ...glassCard, padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, position: "sticky", bottom: 0 }}>
-        <div style={{ display: "flex", gap: 28, flexWrap: "wrap", fontSize: 12, color: t.ts }}>
-          <Stat label="総時間数" value={`${totals.totalHours.toFixed(2)} h`} t={t} />
-          <Stat label="給与総額" value={yen(totals.wageSum)} t={t} />
-          {showBonus && <Stat label="班课绩效" value={yen(totals.bonusSum)} t={t} />}
-          <Stat label="交通費総額" value={yen(totals.transSum)} t={t} />
-        </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, background: "rgba(255,255,255,0.5)", padding: "10px 20px", borderRadius: 16 }}>
-          <span style={{ fontSize: 13, color: t.tm, fontWeight: 600 }}>合計</span>
-          <span style={{ fontSize: 26, fontWeight: 800, color: t.ac, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{yen(totals.grand)}</span>
-        </div>
-      </div>
+      {(() => {
+        const hasEjuRow = rows.some(r => r.business_type === EJU_TYPE)
+        return (
+          <div style={{ ...glassCard, padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, position: "sticky", bottom: 0 }}>
+            <div style={{ display: "flex", gap: 28, flexWrap: "wrap", fontSize: 12, color: t.ts }}>
+              <Stat label="総時間数" value={`${totals.totalHours.toFixed(2)} h`} t={t} />
+              <Stat label="基本给" value={yen(totals.wageSum)} t={t} />
+              {hasEjuRow && <Stat label="班课绩效" value={yen(totals.bonusSum)} t={t} />}
+              <Stat label="交通費総額" value={yen(totals.transSum)} t={t} />
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, background: "rgba(255,255,255,0.5)", padding: "10px 20px", borderRadius: 16, marginLeft: "auto" }}>
+              <span style={{ fontSize: 13, color: t.tm, fontWeight: 600 }}>合計</span>
+              <span style={{ fontSize: 26, fontWeight: 800, color: t.ac, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{yen(totals.grand)}</span>
+            </div>
+          </div>
+        )
+      })()}
       </>)}
 
       {/* 业务名映射对话框 */}
