@@ -31,6 +31,8 @@ React + Vite 前端 + Supabase 后端的内部勤怠/工资管理系统。两家
 - `transport_change_requests` — 固定交通费变更申请，审批通过后自动更新 `employees.transport_amount`
 - `announcements` — 首页通知板（admin 发布，所有登录用户可见，支持 expires_at）
 - `pay_rates` / `transportation_claims` / `expense_claims` / `work_entries` / `commissions`
+- `work_entries.bonus_per_hour` — 班课绩效（円/h），学部老师专用。小计 = 時間数 × (時給 + bonus_per_hour) + 交通費
+- `monthly_report_submissions.note` / `.photo_1_drive_id` / `.photo_2_drive_id` — 月度备注 + 两张打卡照片（存 Google Drive，前端走 get-clock-photo edge fn 代理显示）
 - `japanese_holidays` — **实际存多国节日**，有 `country` 列（`JP` / `CN`），复合唯一 `(holiday_date, country)`
 - `notifications` — 历史遗留的 per-user inbox 表，目前未使用（新通知用 `announcements`）
 - RLS：登录用户管自己的行，admin 走 `role='admin'` 检查拿全权限，每张新表都遵循这个模式
@@ -40,7 +42,8 @@ React + Vite 前端 + Supabase 后端的内部勤怠/工资管理系统。两家
 |---|---|
 | 首页（时钟 + 打卡 + 统计） | `src/pages/home/Dashboard.jsx` |
 | 勤怠一览 | `src/pages/attendance/AttendanceList.jsx` |
-| 工时录入 / 报销 / 签单提成 tab | `src/pages/workentry/WorkEntryManager.jsx` |
+| 工资报表（baito 日历+时间轴 / admin 按公司分组汇总） | `src/pages/workentry/WorkEntryManager.jsx` |
+| 一键上传（admin 汇总大表 + CSV 导出 / baito 月度表格） | `src/pages/workentry/UploadTable.jsx` |
 | 请假申请 | `src/pages/leave/LeaveRequest.jsx` |
 | 换休申请 | `src/pages/leave/DaySwapRequest.jsx` |
 | 出勤/休假日历（今日/周/月） | `src/pages/leave/LeaveCalendar.jsx` |
