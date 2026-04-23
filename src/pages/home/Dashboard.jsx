@@ -807,8 +807,8 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
             </div>
           )}
 
-          {/* 档案完善提醒 —— 未 100% 才显示 */}
-          {profileCompletion && profileCompletion.pct < 100 && (
+          {/* 档案完善提醒 —— baito 未 100% 才显示 */}
+          {isHourly && profileCompletion && profileCompletion.pct < 100 && (
             <button onClick={() => onNav && onNav("empmgr")} className="home-banner span-4" style={{ marginTop: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0 }}>
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(254,215,170,.5)", border: "1px solid rgba(254,215,170,.8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fb923c", flexShrink: 0 }}>
