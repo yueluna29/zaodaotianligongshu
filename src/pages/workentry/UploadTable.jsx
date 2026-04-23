@@ -708,59 +708,60 @@ export default function UploadTable({ user, t, tk }) {
 
       {/* 顶部并排三卡：最近7天累计 + 月末提交提醒 + 打卡照片（仅 baito 视角） */}
       {!isAdmin && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: 14, background: hoursStatus.bg, border: hoursStatus.level !== "ok" ? `2px solid ${hoursStatus.color}` : glassCard.border }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11, fontWeight: 600, color: hoursStatus.color }}>
+        <div style={{ display: "flex", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: "18px 20px", background: hoursStatus.bg, border: hoursStatus.level !== "ok" ? `2px solid ${hoursStatus.color}40` : glassCard.border, boxShadow: hoursStatus.level !== "ok" ? `0 10px 30px -10px ${hoursStatus.color}30` : glassCard.boxShadow }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontSize: 12, fontWeight: 700, color: hoursStatus.color }}>
               {hoursIcon} 最近 7 天累计
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 26, fontWeight: 800, color: hoursStatus.level === "ok" ? t.tx : hoursStatus.color, fontVariantNumeric: "tabular-nums" }}>{worst7d.hours.toFixed(1)}</span>
-              <span style={{ fontSize: 12, color: t.tm }}>/ 28h</span>
+              <span style={{ fontSize: 34, fontWeight: 800, color: hoursStatus.level === "ok" ? t.tx : hoursStatus.color, fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{worst7d.hours.toFixed(1)}</span>
+              <span style={{ fontSize: 13, color: t.tm, fontWeight: 600 }}>/ 28h</span>
             </div>
-            <div style={{ marginTop: 4, fontSize: 10, color: hoursStatus.level === "ok" ? t.tm : hoursStatus.color, fontWeight: 500, lineHeight: 1.35 }}>
+            <div style={{ marginTop: 8, fontSize: 11, color: hoursStatus.level === "ok" ? t.tm : hoursStatus.color, fontWeight: 600, lineHeight: 1.4, opacity: hoursStatus.level === "ok" ? 1 : 0.85 }}>
               {hoursStatus.text}
-              {worst7d.windowEnd && worst7d.hours >= 20 && <> · 最坏窗口截至 {worst7d.windowEnd}</>}
+              {worst7d.windowEnd && worst7d.hours >= 20 && <> · 截至 {worst7d.windowEnd}</>}
             </div>
           </div>
 
-          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: 14, background: submitStatus.bg, border: submitStatus.level !== "ok" ? `2px solid ${submitStatus.color}` : glassCard.border }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11, fontWeight: 600, color: submitStatus.color }}>
+          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: "18px 20px", background: submitStatus.bg, border: submitStatus.level !== "ok" ? `2px solid ${submitStatus.color}40` : glassCard.border, boxShadow: submitStatus.level !== "ok" ? `0 10px 30px -10px ${submitStatus.color}25` : glassCard.boxShadow }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontSize: 12, fontWeight: 700, color: submitStatus.color }}>
               {submitStatus.icon} {year}年{month}月 月报
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 26, fontWeight: 800, color: submitStatus.level === "ok" ? t.tx : submitStatus.color, fontVariantNumeric: "tabular-nums" }}>{submitStatus.big}</span>
-              {submitStatus.unit && <span style={{ fontSize: 12, color: t.tm }}>{submitStatus.unit}</span>}
+              <span style={{ fontSize: 34, fontWeight: 800, color: submitStatus.level === "ok" ? t.tx : submitStatus.color, fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{submitStatus.big}</span>
+              {submitStatus.unit && <span style={{ fontSize: 13, color: t.tm, fontWeight: 600 }}>{submitStatus.unit}</span>}
             </div>
-            <div style={{ marginTop: 4, fontSize: 10, color: submitStatus.level === "ok" ? t.tm : submitStatus.color, fontWeight: 500, lineHeight: 1.35 }}>
+            <div style={{ marginTop: 8, fontSize: 11, color: submitStatus.level === "ok" ? t.tm : submitStatus.color, fontWeight: 600, lineHeight: 1.4, opacity: submitStatus.level === "ok" ? 1 : 0.85 }}>
               {submitStatus.text}
             </div>
           </div>
 
-          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontSize: 11, fontWeight: 600, color: t.ac }}>
-              <Camera size={13} /> 打卡照片
-              {submission?.photo_1_drive_id && submission?.photo_2_drive_id && (
-                <span style={{ fontSize: 10, color: t.gn, fontWeight: 600, marginLeft: "auto" }}>已完成</span>
-              )}
+          <div style={{ flex: 1, minWidth: 220, ...glassCard, padding: "18px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 700, color: t.ac }}>
+              <Camera size={15} strokeWidth={2.5} /> 打卡照片
+              <span style={{ fontSize: 10, color: submission?.photo_1_drive_id && submission?.photo_2_drive_id ? t.gn : t.tm, fontWeight: 600, marginLeft: "auto", background: "rgba(255,255,255,0.6)", padding: "2px 8px", borderRadius: 10 }}>
+                {submission?.photo_1_drive_id && submission?.photo_2_drive_id ? "已完成" : "未完成"}
+              </span>
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ display: "flex", gap: 12 }}>
               {[1, 2].map((slot) => {
                 const driveId = submission?.[`photo_${slot}_drive_id`]
                 const uploading = photoUploading[slot]
                 const editLocked = isSubmitted && !isAdmin
                 const tileBase = {
-                  position: "relative", flex: 1, minWidth: 0, aspectRatio: "1 / 1",
-                  borderRadius: 8,
-                  border: `1px dashed ${driveId ? `${t.gn}66` : t.bd}`,
-                  background: driveId ? `${t.gn}08` : "rgba(255,255,255,0.55)",
+                  position: "relative", flex: 1, minWidth: 0, height: 60,
+                  borderRadius: 12,
+                  border: `1.5px dashed ${driveId ? `${t.gn}80` : "rgba(148,163,184,.4)"}`,
+                  background: driveId ? `${t.gn}10` : "rgba(255,255,255,0.3)",
                   overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all .2s cubic-bezier(0.4, 0, 0.2, 1)",
                 }
                 if (driveId) {
                   return (
-                    <div key={slot} onClick={() => setLightboxPhoto({ slot, driveId })} style={{ ...tileBase, cursor: "zoom-in" }}>
+                    <div key={slot} onClick={() => setLightboxPhoto({ slot, driveId })} style={{ ...tileBase, borderStyle: "solid", borderColor: t.gn, cursor: "zoom-in" }}>
                       <img src={`https://cssnsgdawdhrkrmztuas.supabase.co/functions/v1/get-clock-photo?id=${driveId}`} alt={`打卡${slot}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      <span style={{ position: "absolute", top: 3, left: 3, width: 16, height: 16, borderRadius: "50%", background: t.gn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                        <Check size={10} strokeWidth={3} />
+                      <span style={{ position: "absolute", top: -4, right: -4, width: 22, height: 22, borderRadius: "50%", background: t.gn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
+                        <Check size={12} strokeWidth={3} />
                       </span>
                     </div>
                   )
@@ -770,9 +771,9 @@ export default function UploadTable({ user, t, tk }) {
                     {uploading ? (
                       <div style={{ width: 16, height: 16, border: `2px solid ${t.ac}33`, borderTopColor: t.ac, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
                     ) : (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: t.tm }}>
-                        <Upload size={14} />
-                        <span style={{ fontSize: 9, fontWeight: 600 }}>{slot}</span>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: t.tm }}>
+                        <Upload size={16} strokeWidth={2} />
+                        <span style={{ fontSize: 10, fontWeight: 600 }}>照片 {slot}</span>
                       </div>
                     )}
                     {!editLocked && (
@@ -784,7 +785,7 @@ export default function UploadTable({ user, t, tk }) {
                 )
               })}
             </div>
-            {photoError && <div style={{ fontSize: 9, color: t.rd, marginTop: 4 }}>{photoError}</div>}
+            {photoError && <div style={{ fontSize: 9, color: t.rd, marginTop: 6 }}>{photoError}</div>}
           </div>
         </div>
       )}

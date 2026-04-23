@@ -184,10 +184,9 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, onUpdateUser, 
     })()
   }, [tk, user.id, isA, isHourly])
 
-  // 在留卡期限状态。日本籍老师不显示；外国籍没填也要提醒填
+  // 在留卡期限状态。仅日本籍不显示；外国籍 + 没填国籍的都要提醒
   const residenceStatus = useMemo(() => {
-    const isForeign = user.nationality && user.nationality !== "日本"
-    if (!isForeign) return null
+    if (user.nationality === "日本") return null
     if (!user.residence_expiry) {
       return { daysLeft: null, color: "#f43f5e", level: "missing", text: "请先填写在留期限" }
     }
