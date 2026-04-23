@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { WEEKDAYS, pad, todayStr, fmtMinutes, workingDays, isHourly as empIsHourly, isFullTime as empIsFullTime, COMPANIES, fmtDateW } from "../../config/constants"
-import { Bell, Plus, Users, AlertCircle, FileText, ChevronRight, Fingerprint, Coffee, Zap, Moon, Check } from "lucide-react"
+import { Bell, Plus, Users, AlertCircle, FileText, ChevronRight, Fingerprint, Coffee, Zap, Moon, Check, Activity, ClipboardList, Table as TableIcon, UserCircle2 } from "lucide-react"
 
 const LAST_SEEN_KEY = "kintai_last_seen_anno_at"
 
@@ -16,6 +16,7 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
   const [time, setTime] = useState(new Date())
   const [pendingProfiles, setPendingProfiles] = useState([])
   const [unsubmittedMonths, setUnsubmittedMonths] = useState([])
+  const [last7dHours, setLast7dHours] = useState(0)
   const [annos, setAnnos] = useState([])
   const [annoShow, setAnnoShow] = useState(false)
   const [annoFm, setAnnoFm] = useState({ title: "", body: "", kind: "info", expires_at: "" })
@@ -167,6 +168,52 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
     })()
   }, [tk, user.id, isA])
 
+  // baito：最近 7 天工时（用于 28h 合规提醒）
+  useEffect(() => {
+    if (isA || !isHourly) return
+    (async () => {
+      const end = new Date()
+      const start = new Date(end); start.setDate(end.getDate() - 6)
+      const sd = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`
+      const ed = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`
+      const entries = await sbGet(`work_entries?employee_id=eq.${user.id}&work_date=gte.${sd}&work_date=lte.${ed}&business_type=not.is.null&select=work_minutes`, tk)
+      const mins = (entries || []).reduce((s, e) => s + (e.work_minutes || 0), 0)
+      setLast7dHours(mins / 60)
+    })()
+  }, [tk, user.id, isA, isHourly])
+
+  // 档案完善度（仅老师自己）
+  const profileCompletion = useMemo(() => {
+    if (isA) return null
+    const foreign = user.nationality && user.nationality !== "日本"
+    const required = [
+      { key: "name", label: "汉字姓名" },
+      { key: "name_kana", label: "假名" },
+      { key: "gender", label: "性别" },
+      { key: "birth_date", label: "生年月日" },
+      { key: "phone", label: "电话" },
+      { key: "email", label: "邮箱" },
+      { key: "postal_code", label: "邮编" },
+      { key: "address", label: "住址" },
+      { key: "bank_name", label: "银行名" },
+      { key: "bank_branch", label: "支店名" },
+      { key: "bank_account_number", label: "口座番号" },
+      { key: "bank_account_holder", label: "口座名义" },
+      { key: "my_number", label: "マイナンバー" },
+    ]
+    if (foreign) {
+      required.push(
+        { key: "residence_status", label: "在留资格" },
+        { key: "residence_card_number", label: "在留卡号" },
+        { key: "residence_expiry", label: "在留期限" },
+      )
+    }
+    const missing = required.filter(f => !user[f.key] || String(user[f.key]).trim() === "")
+    const filled = required.length - missing.length
+    const pct = Math.round(filled / required.length * 100)
+    return { pct, missing, total: required.length, filled }
+  }, [user, isA])
+
   useEffect(() => {
     if (isA || !isHourly) return
     (async () => {
@@ -201,6 +248,14 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
   }
 
   if (!stats) return <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
+
+  const navTileStyle = (accent) => ({
+    display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+    background: "rgba(255,255,255,.55)", border: `1px solid rgba(255,255,255,.9)`,
+    borderRadius: 14, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+    transition: "border-color .2s, box-shadow .2s, transform .15s",
+    boxShadow: `0 6px 20px -12px ${accent}33`,
+  })
 
   const Card = ({ label, value, sub, color }) => (
     <div style={{ background: t.bgC, borderRadius: 12, padding: "16px 18px", border: `1px solid ${t.bd}` }}>
@@ -694,6 +749,86 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, mobile }) {
                     <span key={`${year}-${month}`} className="home-chip">{month}月</span>
                   ))}
                 </div>
+              </div>
+            </button>
+          )}
+
+          {/* 最近 7 天累计（28h 合规）— baito */}
+          {isHourly && (() => {
+            const h = last7dHours
+            const over = h >= 28
+            const red = h >= 25
+            const amber = h >= 20
+            const color = over || red ? "#f43f5e" : amber ? "#f59e0b" : "#10b981"
+            const text = over ? "已超 28h 红线" : red ? "濒临 28h 红线" : amber ? "工时偏高" : "合规范围内"
+            const hv = over || red ? "hv-rose" : amber ? "hv-amber" : "hv-emerald"
+            return (
+              <div className={`glass-card stat-card ${hv} span-2 m-half`}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="stat-label">最近 7 天累计</span>
+                  <Activity size={16} color={`${color}B3`} strokeWidth={1.5} />
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                    <span className="stat-value" style={{ color }}>{h.toFixed(1)}</span>
+                    <span className="stat-sub">/ 28h</span>
+                  </div>
+                  <div className="stat-sub" style={{ color }}>{text}</div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* 提交月报入口双按钮（仅 baito） */}
+          {isHourly && (
+            <div className="glass-card span-4" style={{ padding: "18px 22px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span className="stat-label">提交月报</span>
+                <span className="stat-sub" style={{ color: "#94a3b8" }}>选一个方式填你的工时</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <button onClick={() => onNav("work")} className="nav-tile" style={navTileStyle("#3b82f6")}>
+                  <ClipboardList size={22} strokeWidth={1.5} color="#3b82f6" />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", letterSpacing: ".02em" }}>按日记录</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>一条一条填，适合少量</div>
+                  </div>
+                  <ChevronRight size={16} color="#94a3b8" style={{ marginLeft: "auto" }} />
+                </button>
+                <button onClick={() => onNav("upload")} className="nav-tile" style={navTileStyle("#10b981")}>
+                  <TableIcon size={22} strokeWidth={1.5} color="#10b981" />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", letterSpacing: ".02em" }}>一键上传</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Excel 整表导入，适合多条</div>
+                  </div>
+                  <ChevronRight size={16} color="#94a3b8" style={{ marginLeft: "auto" }} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 档案完善提醒 —— 未 100% 才显示 */}
+          {profileCompletion && profileCompletion.pct < 100 && (
+            <button onClick={() => onNav && onNav("empmgr")} className="home-banner span-4" style={{ marginTop: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(254,215,170,.5)", border: "1px solid rgba(254,215,170,.8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fb923c", flexShrink: 0 }}>
+                  <UserCircle2 size={16} strokeWidth={1.8} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(234,88,12,.9)", letterSpacing: ".02em" }}>个人档案完善度 {profileCompletion.pct}%</span>
+                    <span style={{ fontSize: 11, color: "rgba(249,115,22,.7)" }}>{profileCompletion.filled} / {profileCompletion.total} 项</span>
+                  </div>
+                  <div style={{ height: 5, background: "rgba(254,215,170,.3)", borderRadius: 3, overflow: "hidden", marginTop: 6, marginBottom: 4, maxWidth: 380 }}>
+                    <div style={{ height: "100%", width: `${profileCompletion.pct}%`, background: "linear-gradient(90deg, #fb923c, #f59e0b)", borderRadius: 3, transition: "width .5s" }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: "rgba(249,115,22,.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    还缺：{profileCompletion.missing.slice(0, 5).map(m => m.label).join("、")}{profileCompletion.missing.length > 5 ? ` 等 ${profileCompletion.missing.length} 项` : ""}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", color: "rgba(249,115,22,.8)", fontSize: 12, fontWeight: 500, letterSpacing: ".08em", whiteSpace: "nowrap" }}>
+                去完善 <ChevronRight size={14} />
               </div>
             </button>
           )}
