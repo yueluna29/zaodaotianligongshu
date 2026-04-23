@@ -135,7 +135,7 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
     setSubmitting(false)
   }
 
-  const iS = { padding: "11px 14px", borderRadius: 10, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" }
+  const iS = { padding: "11px 14px", borderRadius: 10, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tx, fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box", minHeight: 43 }
   const labelS = { fontSize: 10, color: t.ts, display: "block", marginBottom: 4, fontWeight: 500 }
   const field = (label, body, req) => (
     <div style={{ marginBottom: 10 }}>
