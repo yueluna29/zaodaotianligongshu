@@ -57,8 +57,10 @@ export default function UploadTable({ user, t, tk }) {
   const [companyFilter, setCompanyFilter] = useState("all")
 
   // 学部老师才显示班课绩效列
-  // 绩效列：学部老师（模板默认带绩效列）或任何老师只要有 EJU 班課 行都显示
-  const showBonus = (selectedEmp?.department || "") === "学部" || rows.some(r => r.business_type === EJU_TYPE)
+  // 绩效列显示条件：pay_rates 里有 EJU（admin 已开通该工种）/ 学部老师 / 或已经有 EJU 行
+  const showBonus = rates.some(r => r.business_type === EJU_TYPE)
+    || (selectedEmp?.department || "") === "学部"
+    || rows.some(r => r.business_type === EJU_TYPE)
 
   // admin 加载员工列表
   useEffect(() => {
