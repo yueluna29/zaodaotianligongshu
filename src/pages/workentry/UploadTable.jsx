@@ -1,11 +1,20 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check, Send } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check, Send, CheckCircle2, AlertCircle, CalendarCheck2 } from "lucide-react"
 import { pad, WEEKDAYS, sortByName, COMPANIES, EJU_TYPE, EJU_BONUS_PER_HOUR } from "../../config/constants"
 import { parsePayrollExcel, applyBizMapping, SUPPORTED_BIZ } from "../../utils/parsePayrollExcel"
 
 // 业务内容 master（从 Excel 模板提炼）— 映射到 DB business_type
 const BIZ_TYPES = ["事務性工作", "専業課老師", "答疑做題", "研究計画書修改", "過去問", "EJU講師（班課）"]
+
+const glassCard = {
+  background: "rgba(255, 255, 255, 0.65)",
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
+  borderRadius: 24,
+  border: "1px solid rgba(255, 255, 255, 0.9)",
+  boxShadow: "0 20px 50px -20px rgba(30, 64, 175, 0.05)",
+}
 
 const mkRow = (emp_id, date = "") => ({
   _key: Math.random().toString(36).slice(2), _isNew: true, _dirty: false,
@@ -298,11 +307,38 @@ export default function UploadTable({ user, t, tk }) {
 
   const hoursStatus = useMemo(() => {
     const h = worst7d.hours
-    if (h >= 28) return { color: t.rd, bg: `${t.rd}0D`, level: "over", text: "🚨 已超 28h 红线，请删减或改日" }
-    if (h >= 25) return { color: t.rd, bg: `${t.rd}0D`, level: "red", text: "🔴 濒临 28h 红线，慎重增加排班" }
-    if (h >= 20) return { color: t.wn, bg: `${t.wn}0D`, level: "amber", text: "⚡ 工时偏高，留意后续排班空间" }
-    return { color: t.gn, bg: `${t.gn}0D`, level: "ok", text: "✅ 合规范围内" }
+    if (h >= 28) return { color: t.rd, bg: `${t.rd}0D`, level: "over", text: "已超 28h 红线，请删减或改日" }
+    if (h >= 25) return { color: t.rd, bg: `${t.rd}0D`, level: "red", text: "濒临 28h 红线，慎重增加排班" }
+    if (h >= 20) return { color: t.wn, bg: `${t.wn}0D`, level: "amber", text: "工时偏高，留意后续排班空间" }
+    return { color: t.gn, bg: `${t.gn}0D`, level: "ok", text: "合规范围内" }
   }, [worst7d.hours, t])
+  const hoursIcon = hoursStatus.level === "ok" ? <CheckCircle2 size={14} color={t.gn} /> : <AlertCircle size={14} color={hoursStatus.color} />
+
+  // 月末提交提醒
+  const submitStatus = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const endOfMonth = new Date(year, month, 0)
+    endOfMonth.setHours(23, 59, 59, 999)
+    const MS = 86400000
+    const daysLeft = Math.ceil((endOfMonth.getTime() - today.getTime()) / MS)
+    if (isSubmitted) {
+      return { color: t.gn, bg: `${t.gn}0D`, level: "ok", icon: <CheckCircle2 size={14} color={t.gn} />, big: "已提交", unit: "", text: `于 ${submission?.submitted_at ? new Date(submission.submitted_at).toLocaleDateString() : "—"} 提交` }
+    }
+    if (daysLeft < 0) {
+      return { color: t.rd, bg: `${t.rd}0D`, level: "over", icon: <AlertCircle size={14} color={t.rd} />, big: `逾期 ${-daysLeft}`, unit: "天", text: `${year}年${month}月 已结束未提交，请尽快` }
+    }
+    if (daysLeft === 0) {
+      return { color: t.rd, bg: `${t.rd}0D`, level: "red", icon: <AlertCircle size={14} color={t.rd} />, big: "今天", unit: "截止", text: `请确认无误后立即提交` }
+    }
+    if (daysLeft <= 3) {
+      return { color: t.rd, bg: `${t.rd}0D`, level: "red", icon: <AlertCircle size={14} color={t.rd} />, big: daysLeft, unit: "天", text: `只剩 ${daysLeft} 天，请尽快提交` }
+    }
+    if (daysLeft <= 7) {
+      return { color: t.wn, bg: `${t.wn}0D`, level: "amber", icon: <CalendarCheck2 size={14} color={t.wn} />, big: daysLeft, unit: "天", text: `月末还有 ${daysLeft} 天，记得提交月报` }
+    }
+    return { color: t.tx, bg: "rgba(255,255,255,0.65)", level: "ok", icon: <CalendarCheck2 size={14} color={t.ac} />, big: daysLeft, unit: "天", text: `月末还有 ${daysLeft} 天，工时整理好后记得提交` }
+  }, [year, month, isSubmitted, submission, t])
 
   const submitReport = async () => {
     if (isAdmin) return
@@ -630,18 +666,35 @@ export default function UploadTable({ user, t, tk }) {
 
       {msg && <div style={{ padding: 10, borderRadius: 8, background: `${t.gn}15`, color: t.gn, marginBottom: 12, fontSize: 12 }}>{msg}</div>}
 
-      {/* 28h 警报（最近 7 天滑动窗口最坏值） */}
-      {rows.length > 0 && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, background: hoursStatus.bg, border: `1px solid ${hoursStatus.color}40`, marginBottom: 12, fontSize: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-            <span style={{ fontSize: 11, color: t.tm, fontWeight: 600 }}>最近 7 天累计</span>
-            <span style={{ fontSize: 18, fontWeight: 800, color: hoursStatus.color, marginLeft: 4 }}>{worst7d.hours.toFixed(1)}</span>
-            <span style={{ fontSize: 11, color: t.tm }}>/ 28h</span>
+      {/* 顶部并排双卡：最近7天累计 + 月末提交提醒（仅 baito 视角显示，admin 不需要提醒提交） */}
+      {!isAdmin && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: 14, background: hoursStatus.bg, border: hoursStatus.level !== "ok" ? `2px solid ${hoursStatus.color}` : glassCard.border }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11, fontWeight: 600, color: hoursStatus.color }}>
+              {hoursIcon} 最近 7 天累计
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ fontSize: 26, fontWeight: 800, color: hoursStatus.level === "ok" ? t.tx : hoursStatus.color, fontVariantNumeric: "tabular-nums" }}>{worst7d.hours.toFixed(1)}</span>
+              <span style={{ fontSize: 12, color: t.tm }}>/ 28h</span>
+            </div>
+            <div style={{ marginTop: 4, fontSize: 10, color: hoursStatus.level === "ok" ? t.tm : hoursStatus.color, fontWeight: 500, lineHeight: 1.35 }}>
+              {hoursStatus.text}
+              {worst7d.windowEnd && worst7d.hours >= 20 && <> · 最坏窗口截至 {worst7d.windowEnd}</>}
+            </div>
           </div>
-          <span style={{ color: hoursStatus.color, fontWeight: 600 }}>{hoursStatus.text}</span>
-          {worst7d.windowEnd && worst7d.hours >= 20 && (
-            <span style={{ color: t.tm, fontSize: 11, marginLeft: "auto" }}>最坏窗口截至：{worst7d.windowEnd}</span>
-          )}
+
+          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: 14, background: submitStatus.bg, border: submitStatus.level !== "ok" ? `2px solid ${submitStatus.color}` : glassCard.border }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontSize: 11, fontWeight: 600, color: submitStatus.color }}>
+              {submitStatus.icon} {year}年{month}月 月报
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ fontSize: 26, fontWeight: 800, color: submitStatus.level === "ok" ? t.tx : submitStatus.color, fontVariantNumeric: "tabular-nums" }}>{submitStatus.big}</span>
+              {submitStatus.unit && <span style={{ fontSize: 12, color: t.tm }}>{submitStatus.unit}</span>}
+            </div>
+            <div style={{ marginTop: 4, fontSize: 10, color: submitStatus.level === "ok" ? t.tm : submitStatus.color, fontWeight: 500, lineHeight: 1.35 }}>
+              {submitStatus.text}
+            </div>
+          </div>
         </div>
       )}
 
