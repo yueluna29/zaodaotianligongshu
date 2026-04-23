@@ -25,7 +25,6 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
     has_extra_work_permit: !!user.has_extra_work_permit,
     residence_card_drive_id: user.residence_card_drive_id || "",
     student_doc_drive_id: user.student_doc_drive_id || "",
-    declared_hourly_rate: user.declared_hourly_rate ?? "",
     bank_name: user.bank_name || "",
     bank_branch: user.bank_branch || "",
     bank_branch_code: user.bank_branch_code || "",
@@ -83,7 +82,6 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
     }
     if (!fm.residence_card_drive_id) return "请上传在留卡正反面 PDF"
     if (!fm.student_doc_drive_id) return "请上传合格通知书或学生卡 PDF"
-    if (fm.declared_hourly_rate === "" || Number(fm.declared_hourly_rate) <= 0) return "请填写时薪"
     if (!fm.email.trim()) return "请填写邮箱"
     if (!fm.bank_name.trim()) return "请填写银行名"
     if (!fm.bank_branch.trim()) return "请填写支店名"
@@ -117,7 +115,6 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
         has_extra_work_permit: !!fm.has_extra_work_permit,
         residence_card_drive_id: fm.residence_card_drive_id,
         student_doc_drive_id: fm.student_doc_drive_id,
-        declared_hourly_rate: Number(fm.declared_hourly_rate),
         bank_name: fm.bank_name.trim(),
         bank_branch: fm.bank_branch.trim(),
         bank_branch_code: fm.bank_branch_code.trim() || null,
@@ -150,7 +147,7 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
     </div>
   )
 
-  const UploadBox = ({ slot, label, folderKey, suffix, busy, currentId, driveUrl }) => (
+  const UploadBox = ({ slot, label, folderKey, suffix, busy, currentId }) => (
     <div style={{ padding: 14, borderRadius: 10, border: `1px dashed ${currentId ? t.gn : t.bd}`, background: currentId ? `${t.gn}08` : t.bgI, marginBottom: 10 }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: t.tx, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 10, color: t.tm, lineHeight: 1.6, marginBottom: 10 }}>
@@ -160,7 +157,6 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
       {currentId ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: t.gn }}>
           <span>✓ 已上传</span>
-          {driveUrl && <a href={driveUrl} target="_blank" rel="noreferrer" style={{ color: t.ac, textDecoration: "underline", fontSize: 11 }}>查看</a>}
           <label style={{ marginLeft: "auto", cursor: "pointer", padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.bd}`, color: t.ts, fontSize: 11 }}>
             重新上传
             <input type="file" accept="application/pdf,.pdf" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPdf(f, folderKey, suffix, slot); e.target.value = "" }} />
@@ -239,7 +235,6 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
             suffix="在留卡正反面"
             busy={up1}
             currentId={fm.residence_card_drive_id}
-            driveUrl={fm.residence_card_drive_id ? `https://drive.google.com/file/d/${fm.residence_card_drive_id}/view` : null}
           />
           <UploadBox
             slot={2}
@@ -248,12 +243,7 @@ export default function Onboarding({ user, t, onDone, onLogout }) {
             suffix="合格通知书或学生卡"
             busy={up2}
             currentId={fm.student_doc_drive_id}
-            driveUrl={fm.student_doc_drive_id ? `https://drive.google.com/file/d/${fm.student_doc_drive_id}/view` : null}
           />
-
-          {sectionTitle("时薪")}
-          {field("时薪（円/h，请按对接老师告知的薪资填写）",
-            <input type="number" min="0" step="1" value={fm.declared_hourly_rate} onChange={(e) => set("declared_hourly_rate", e.target.value)} style={iS} />, true)}
 
           {sectionTitle("邮箱", "用于系统通知和找回密码")}
           {field("邮箱", <input type="email" value={fm.email} onChange={(e) => set("email", e.target.value)} style={iS} />, true)}

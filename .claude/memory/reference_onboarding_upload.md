@@ -22,7 +22,7 @@ type: reference
 
 **DB 新列**（employees）：
 - `residence_card_drive_id`、`student_doc_drive_id`（两份 PDF 的 drive id）
-- `declared_hourly_rate`（老师自报时薪，admin 之后手动录入 `pay_rates`）
+- `declared_hourly_rate`（建表时留下的列，目前 UI 已撤掉，时薪由 admin 后台直接录到 `pay_rates`；列暂未删）
 - `onboarding_note`、`onboarding_completed_at`
 - `bank_branch_code`（支店番号，Login 4 步向导也能填但没在界面加字段）
 
