@@ -44,6 +44,13 @@ export const fmtDateW = (s) => {
   if (isNaN(d.getTime())) return s
   return `${ymd}(${WEEKDAYS[d.getDay()]})`
 }
+// 老师列表统一按 假名 > 拼音 > 姓名 A→Z 排序（ja locale 处理日文）
+export const sortByName = (list) => [...(list || [])].sort((a, b) => {
+  const ka = (a.furigana || a.pinyin || a.name || "").toLowerCase()
+  const kb = (b.furigana || b.pinyin || b.name || "").toLowerCase()
+  return ka.localeCompare(kb, "ja")
+})
+
 export const workingDays = (y, m) => {
   let c = 0
   for (let d = 1; d <= daysInMonth(y, m); d++) if (!isWeekend(y, m, d)) c++

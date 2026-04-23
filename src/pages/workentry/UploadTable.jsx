@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check } from "lucide-react"
-import { pad, WEEKDAYS } from "../../config/constants"
+import { pad, WEEKDAYS, sortByName, COMPANIES } from "../../config/constants"
 import { parsePayrollExcel, applyBizMapping, SUPPORTED_BIZ } from "../../utils/parsePayrollExcel"
 
 // 业务内容 master（从 Excel 模板提炼）— 映射到 DB business_type
@@ -55,8 +55,8 @@ export default function UploadTable({ user, t, tk }) {
   useEffect(() => {
     if (!isAdmin) return
     (async () => {
-      const d = await sbGet("employees?is_active=eq.true&employment_type=in.(アルバイト,外部講師)&order=name&select=id,name,furigana,pinyin,department,company_id", tk)
-      setAllEmps(d || [])
+      const d = await sbGet("employees?is_active=eq.true&employment_type=in.(アルバイト,外部講師)&select=id,name,furigana,pinyin,department,company_id", tk)
+      setAllEmps(sortByName(d))
     })()
   }, [isAdmin, tk])
 

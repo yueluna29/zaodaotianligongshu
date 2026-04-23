@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { fmtDateW } from "../../config/constants"
+import { fmtDateW, sortByName } from "../../config/constants"
 import DateMultiPicker from "../../components/DateMultiPicker"
 
 export default function DaySwapRequest({ user, t, tk }) {
@@ -28,8 +28,8 @@ export default function DaySwapRequest({ user, t, tk }) {
     )
     sReqs(r || [])
     if (isAdmin) {
-      const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name", tk)
-      setAllEmps(emps || [])
+      const emps = await sbGet("employees?is_active=eq.true&select=id,name,furigana,pinyin", tk)
+      setAllEmps(sortByName(emps))
     }
     sLd(false)
   }, [user.id, tk])

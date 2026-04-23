@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes, isFullTime, fmtDateW } from "../../config/constants"
+import { LEAVE_TYPES, WEEKDAYS, daysInMonth, weekday, isWeekend, pad, todayStr, fmtMinutes, isFullTime, fmtDateW, sortByName } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
 import { Pencil, Trash2, Plus, Save, ChevronLeft, ChevronRight, ClipboardList, CalendarX2, ArrowLeftRight, Train, Receipt, Check, X, Banknote, ListChecks, History, Users, Flag } from "lucide-react"
@@ -142,8 +142,8 @@ export default function AttendanceList({ user, t, tk }) {
     }
 
     if (isAdmin && !allEmps.length) {
-      const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name,employment_type,hire_date,company_id", tk)
-      setAllEmps(emps || [])
+      const emps = await sbGet("employees?is_active=eq.true&select=id,name,furigana,pinyin,employment_type,hire_date,company_id", tk)
+      setAllEmps(sortByName(emps))
     }
 
     setEditingKeys(new Set())
@@ -159,14 +159,14 @@ export default function AttendanceList({ user, t, tk }) {
     ;(async () => {
       setOverviewLoading(true)
       const [emps, leaves, swaps] = await Promise.all([
-        sbGet("employees?is_active=eq.true&order=name&select=id,name,employment_type,hire_date,company_id", tk),
+        sbGet("employees?is_active=eq.true&select=id,name,furigana,pinyin,employment_type,hire_date,company_id", tk),
         sbGet("leave_requests?status=eq.承認&select=employee_id,leave_type,leave_date,is_half_day", tk),
         sbGet("day_swap_requests?status=eq.承認&swap_type=eq.休日出勤&compensation_type=eq.換休&select=employee_id,swap_date,deadline", tk),
       ])
       if (cancelled) return
       const currentYear = new Date().getFullYear()
       const now = new Date()
-      const rows = (emps || []).filter(e => isFullTime(e.employment_type)).map(emp => {
+      const rows = sortByName((emps || []).filter(e => isFullTime(e.employment_type))).map(emp => {
         const myLeaves = (leaves || []).filter(l => l.employee_id === emp.id)
         const myPaid = myLeaves.filter(l => l.leave_type === "有休")
         const paid = calcPaidLeave(emp.hire_date, myPaid)

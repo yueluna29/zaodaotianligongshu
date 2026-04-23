@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { LEAVE_TYPES, fmtDateW } from "../../config/constants"
+import { LEAVE_TYPES, fmtDateW, sortByName } from "../../config/constants"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import DateMultiPicker from "../../components/DateMultiPicker"
 
@@ -31,8 +31,8 @@ export default function LeaveRequest({ user, t, tk }) {
     const unused = (compReqs || []).filter(c => !c.swap_date).length
     setCompBal(unused)
     if (user.role === "admin") {
-      const emps = await sbGet("employees?is_active=eq.true&order=name&select=id,name", tk)
-      setAllEmps(emps || [])
+      const emps = await sbGet("employees?is_active=eq.true&select=id,name,furigana,pinyin", tk)
+      setAllEmps(sortByName(emps))
     }
     sLd(false)
   }, [user.id, tk])

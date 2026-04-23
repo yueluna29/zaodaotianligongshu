@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { sbGet, sbPost, sbPatch, sbDel, sbFn } from "../../api/supabase"
 import { FileText, Plus, ChevronLeft, ChevronRight, Trash2, Save, AlertTriangle, AlertCircle, CheckCircle2, Pencil, ArrowLeft, Clock, User, Car, Receipt, CalendarDays, Download, DollarSign, Briefcase, ArrowRight, Lock, Send, Sparkles, Unlock, X as XIcon, Check, Camera, Upload } from "lucide-react"
-import { fmtDateW, WEEKDAYS, pad, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN } from "../../config/constants"
+import { fmtDateW, WEEKDAYS, pad, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, sortByName } from "../../config/constants"
 import { compressImage } from "../../utils/compressImage"
 
 const DEPTS = ["大学院", "学部", "文书", "语言类"]
@@ -110,8 +110,8 @@ export default function WorkEntryManager({ user, t, tk }) {
   useEffect(() => {
     if (!isAdmin) return
     (async () => {
-      const emps = await sbGet("employees?is_active=eq.true&order=department,name&select=id,name,furigana,pinyin,employment_type,department,company_id,is_teacher,login_id,has_commission,transport_amount", tk)
-      setAllEmps(emps || [])
+      const emps = await sbGet("employees?is_active=eq.true&select=id,name,furigana,pinyin,employment_type,department,company_id,is_teacher,login_id,has_commission,transport_amount", tk)
+      setAllEmps(sortByName(emps))
     })()
   }, [tk, isAdmin])
 
@@ -490,29 +490,36 @@ export default function WorkEntryManager({ user, t, tk }) {
     const filteredEmps = allEmps.filter(e => {
       if (companyFilter !== "all" && e.company_id !== companyFilter) return false
       if (typeFilter !== "all" && e.employment_type !== typeFilter) return false
-      // 所有雇佣类型：只显示已提交本月工资报表的
-      if (!adminSubmitted.has(e.id)) return false
       return true
     })
 
-    const rowsWithTotals = filteredEmps.map(emp => ({ emp, ...totalsFor(emp) }))
-    const hourlySum = rowsWithTotals.filter(r => r.isH).reduce((s, r) => s + r.total, 0)
-    const fulltimeSum = rowsWithTotals.filter(r => !r.isH).reduce((s, r) => s + r.total, 0)
+    const rowsWithTotals = filteredEmps.map(emp => {
+      const submitted = adminSubmitted.has(emp.id)
+      return { emp, submitted, ...totalsFor(emp) }
+    })
+    // 汇总只算已提交（未提交的不定，算进去没意义）
+    const submittedRows = rowsWithTotals.filter(r => r.submitted)
+    const hourlySum = submittedRows.filter(r => r.isH).reduce((s, r) => s + r.total, 0)
+    const fulltimeSum = submittedRows.filter(r => !r.isH).reduce((s, r) => s + r.total, 0)
     const grandTotal = hourlySum + fulltimeSum
-    const unsubmittedCount = allEmps.filter(e => {
-      if (companyFilter !== "all" && e.company_id !== companyFilter) return false
-      if (typeFilter !== "all" && e.employment_type !== typeFilter) return false
-      return !adminSubmitted.has(e.id)
-    }).length
+    const unsubmittedCount = filteredEmps.filter(e => !adminSubmitted.has(e.id)).length
+
+    // 按公司分组
+    const groupedByCompany = COMPANIES.map(c => ({
+      company: c,
+      rows: rowsWithTotals.filter(r => r.emp.company_id === c.id),
+      submittedCount: rowsWithTotals.filter(r => r.emp.company_id === c.id && r.submitted).length,
+    })).filter(g => g.rows.length > 0)
 
     const exportCSV = () => {
-      const rows = [["姓名", "公司", "雇佣类型", "部门", "工时(h)", "课时费", "交通费", "其他报销", "签单提成", "合计"]]
+      const rows = [["姓名", "公司", "雇佣类型", "部门", "提交状态", "工时(h)", "课时费", "交通费", "其他报销", "签单提成", "合计"]]
       for (const r of rowsWithTotals) {
         rows.push([
           r.emp.name,
           COMPANIES.find(c => c.id === r.emp.company_id)?.name || "",
           r.emp.employment_type,
           r.emp.department || "",
+          r.submitted ? "已提交" : "未提交",
           r.hours == null ? "" : r.hours.toFixed(1),
           r.wage == null ? "" : r.wage,
           r.transport, r.other, r.commission, r.total,
@@ -602,15 +609,15 @@ export default function WorkEntryManager({ user, t, tk }) {
             </div>
           </div>
 
-          {/* 尚未提交的员工提示 */}
+          {/* 未提交提示 */}
           {unsubmittedCount > 0 && (
             <div style={{ padding: 12, borderRadius: 12, background: `${t.wn}12`, border: `1px solid ${t.wn}40`, marginBottom: 16, fontSize: 12, color: t.tx, display: "flex", alignItems: "center", gap: 8 }}>
               <AlertCircle size={14} color={t.wn} />
-              <span>当前筛选下尚有 <strong style={{ color: t.wn }}>{unsubmittedCount}</strong> 位员工未提交本月工资报表，未提交的不在下方列表中显示。</span>
+              <span>当前筛选下 <strong style={{ color: t.wn }}>{unsubmittedCount}</strong> 位员工未提交本月工资报表。未提交的显示「⏳未提交」标记，数据不计入上方合计。</span>
             </div>
           )}
 
-          {/* 员工列表 */}
+          {/* 员工列表 —— 按公司分组 */}
           {adminLd ? (
             <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
           ) : rowsWithTotals.length === 0 ? (
@@ -618,49 +625,67 @@ export default function WorkEntryManager({ user, t, tk }) {
               当前筛选条件下无员工
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {rowsWithTotals.map(({ emp, isH, hours, wage, transport, other, commission, total }) => (
-                <div key={emp.id} onClick={() => setSelectedEmp(emp)}
-                  style={{ ...glassCard, padding: "18px 22px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 20, cursor: "pointer", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 25px 50px -12px ${t.ac}26`; e.currentTarget.style.borderColor = `${t.ac}50` }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = glassCard.boxShadow; e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)" }}>
-
-                  {/* 名片区 */}
-                  <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 220, flex: "1 1 auto" }}>
-                    <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${t.ac}18`, color: t.ac, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>{(emp.name || "?").slice(0, 1)}</div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 15, fontWeight: 700, color: t.tx }}>{emp.name}</span>
-                        {(emp.furigana || emp.pinyin) && <span style={{ fontSize: 11, color: t.tm }}>{emp.furigana || emp.pinyin}</span>}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {emp.company_id && <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "#FEF3C7", color: t.wn, whiteSpace: "nowrap" }}>{COMPANIES.find(c => c.id === emp.company_id)?.name}</span>}
-                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "#D1FAE5", color: t.gn, whiteSpace: "nowrap" }}>{emp.employment_type}</span>
-                        {emp.department && <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: t.tb, color: t.ac, whiteSpace: "nowrap" }}>{emp.department}</span>}
-                      </div>
-                    </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+              {groupedByCompany.map(({ company, rows: groupRows, submittedCount }) => (
+                <div key={company.id}>
+                  {/* 公司分组标题 */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${t.ac}33` }}>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: t.tx }}>{company.name}</h2>
+                    <span style={{ fontSize: 12, color: t.tm }}>
+                      {groupRows.length} 人 · <strong style={{ color: t.gn }}>{submittedCount}</strong> 已提交 · <strong style={{ color: submittedCount < groupRows.length ? t.wn : t.gn }}>{groupRows.length - submittedCount}</strong> 未提交
+                    </span>
                   </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {groupRows.map(({ emp, submitted, isH, hours, wage, transport, other, commission, total }) => {
+                      const fade = !submitted
+                      return (
+                        <div key={emp.id} onClick={() => setSelectedEmp(emp)}
+                          style={{ ...glassCard, padding: "16px 20px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 18, cursor: "pointer", transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)", opacity: fade ? 0.75 : 1, borderLeft: `3px solid ${submitted ? t.gn : t.wn}` }}
+                          onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 25px 50px -12px ${t.ac}26`; e.currentTarget.style.borderLeftColor = submitted ? t.gn : t.wn }}
+                          onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = glassCard.boxShadow }}>
 
-                  {/* 数据列 */}
-                  <div style={{ display: "flex", gap: 20, flexWrap: "wrap", flex: "2 1 auto" }}>
-                    <DataCol label="总工时" value={hours == null ? "—" : `${hours.toFixed(1)}h`} isMoney={false} t={t} />
-                    <DataCol label="课时费" value={fmt(wage)} t={t} />
-                    <DataCol label="交通费" value={fmt(transport)} t={t} />
-                    {(other > 0 || commission > 0) && <DataCol label="报销+提成" value={fmt(other + commission)} t={t} />}
-                  </div>
+                          {/* 名片区 */}
+                          <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 220, flex: "1 1 auto" }}>
+                            <div style={{ width: 40, height: 40, borderRadius: "50%", background: submitted ? `${t.gn}18` : `${t.wn}18`, color: submitted ? t.gn : t.wn, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>{(emp.name || "?").slice(0, 1)}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: t.tx }}>{emp.name}</span>
+                                {(emp.furigana || emp.pinyin) && <span style={{ fontSize: 10, color: t.tm }}>{emp.furigana || emp.pinyin}</span>}
+                                {submitted
+                                  ? <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: `${t.gn}18`, color: t.gn, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 3 }}><Check size={10} strokeWidth={3} />已提交</span>
+                                  : <span style={{ padding: "2px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: `${t.wn}18`, color: t.wn, whiteSpace: "nowrap" }}>⏳ 未提交</span>}
+                              </div>
+                              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                <span style={{ padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#D1FAE5", color: t.gn, whiteSpace: "nowrap" }}>{emp.employment_type}</span>
+                                {emp.department && <span style={{ padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: t.tb, color: t.ac, whiteSpace: "nowrap" }}>{emp.department}</span>}
+                              </div>
+                            </div>
+                          </div>
 
-                  {/* 合计 + 详情 */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 18, marginLeft: "auto", paddingLeft: 18, borderLeft: `1px dashed ${t.bd}` }}>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 11, color: t.tm, marginBottom: 2, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
-                        本月合计
-                        {!isH && <span style={{ color: t.wn, background: "#FEF3C7", padding: "1px 5px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>未含基本给</span>}
-                      </div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: t.ac, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5 }}>¥{total.toLocaleString()}</div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: t.ts, fontWeight: 600 }}>
-                      详情 <ArrowRight size={14} />
-                    </div>
+                          {/* 数据列 */}
+                          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", flex: "2 1 auto" }}>
+                            <DataCol label="总工时" value={hours == null ? "—" : `${hours.toFixed(1)}h`} isMoney={false} t={t} />
+                            <DataCol label="课时费" value={fmt(wage)} t={t} />
+                            <DataCol label="交通费" value={fmt(transport)} t={t} />
+                            {(other > 0 || commission > 0) && <DataCol label="报销+提成" value={fmt(other + commission)} t={t} />}
+                          </div>
+
+                          {/* 合计 + 详情 */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto", paddingLeft: 16, borderLeft: `1px dashed ${t.bd}` }}>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 10, color: t.tm, marginBottom: 2, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                                本月合计
+                                {!isH && <span style={{ color: t.wn, background: "#FEF3C7", padding: "1px 5px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>未含基本给</span>}
+                              </div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: submitted ? t.ac : t.tm, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5 }}>¥{total.toLocaleString()}</div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: t.ts, fontWeight: 600 }}>
+                              详情 <ArrowRight size={13} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               ))}

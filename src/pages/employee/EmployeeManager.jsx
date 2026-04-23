@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel, sbFn, sbRpc } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
-import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW } from "../../config/constants"
+import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW, sortByName } from "../../config/constants"
 import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, AlertTriangle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight, CheckSquare, Square, Trash2 } from "lucide-react"
 import PayRateSection from "../../components/PayRateSection"
 
@@ -266,8 +266,8 @@ export default function EmployeeManager({ user, t, tk }) {
 
   const load = useCallback(async () => {
     sLd(true)
-    const d = await sbGet("employees?is_active=eq.true&order=name", tk)
-    sEmps(d || [])
+    const d = await sbGet("employees?is_active=eq.true&select=*", tk)
+    sEmps(sortByName(d))
     if (user && user.role !== "admin") {
       const me = (d || []).find((e) => e.id === user.id)
       if (me) sSelected(me)
