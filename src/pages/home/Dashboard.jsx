@@ -184,9 +184,13 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, onUpdateUser, 
     })()
   }, [tk, user.id, isA, isHourly])
 
-  // 在留卡期限状态（仅有 residence_expiry 的老师）
+  // 在留卡期限状态。日本籍老师不显示；外国籍没填也要提醒填
   const residenceStatus = useMemo(() => {
-    if (!user.residence_expiry) return null
+    const isForeign = user.nationality && user.nationality !== "日本"
+    if (!isForeign) return null
+    if (!user.residence_expiry) {
+      return { daysLeft: null, color: "#f43f5e", level: "missing", text: "请先填写在留期限" }
+    }
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const exp = new Date(user.residence_expiry + "T00:00:00")
     const daysLeft = Math.ceil((exp.getTime() - today.getTime()) / 86400000)
@@ -197,7 +201,7 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, onUpdateUser, 
     else if (daysLeft <= 90) { color = "#f59e0b"; level = "amber-low"; text = "请留意" }
     else { color = "#10b981"; level = "ok"; text = "有效期内" }
     return { daysLeft, color, level, text }
-  }, [user.residence_expiry])
+  }, [user.residence_expiry, user.nationality])
 
   // 档案完善度（仅老师自己）
   const profileCompletion = useMemo(() => {
@@ -796,10 +800,11 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, onUpdateUser, 
             )
           })()}
 
-          {/* 在留卡期限（baito 有 residence_expiry 的才显示）*/}
+          {/* 在留卡期限（仅外国籍 baito；未填/将到期都会提醒） */}
           {isHourly && residenceStatus && (() => {
             const { daysLeft, color, level, text } = residenceStatus
             const hv = level === "ok" ? "hv-emerald" : level.startsWith("amber") ? "hv-amber" : "hv-rose"
+            const missing = level === "missing"
             const needsUpdate = level !== "ok"
             return (
               <div className={`glass-card stat-card ${hv} span-2 m-half`} style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
@@ -808,18 +813,25 @@ export default function Dashboard({ user, t, tk, onNav, onLogout, onUpdateUser, 
                   <IdCard size={16} color={`${color}B3`} strokeWidth={1.5} />
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                    <span className="stat-value" style={{ color }}>{daysLeft < 0 ? -daysLeft : daysLeft}</span>
-                    <span className="stat-sub">{daysLeft < 0 ? "天前过期" : "天后到期"}</span>
-                  </div>
+                  {missing ? (
+                    <div style={{ fontSize: 18, fontWeight: 400, color, lineHeight: 1.2, letterSpacing: ".02em" }}>未填写</div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                      <span className="stat-value" style={{ color }}>{daysLeft < 0 ? -daysLeft : daysLeft}</span>
+                      <span className="stat-sub">{daysLeft < 0 ? "天前过期" : "天后到期"}</span>
+                    </div>
+                  )}
                   {needsUpdate ? (
                     <button onClick={() => setResidenceModalOpen(true)} style={{ padding: "4px 10px", borderRadius: 999, border: `1px solid ${color}66`, background: `${color}10`, color, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", letterSpacing: ".05em" }}>
-                      更新 →
+                      {missing ? "去填写 →" : "更新 →"}
                     </button>
                   ) : (
                     <div className="stat-sub" style={{ color }}>{text}</div>
                   )}
                 </div>
+                {missing && (
+                  <div className="stat-sub" style={{ color, marginTop: 6, fontSize: 10 }}>{text}</div>
+                )}
               </div>
             )
           })()}
