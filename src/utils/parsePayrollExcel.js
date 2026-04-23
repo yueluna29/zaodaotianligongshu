@@ -123,11 +123,24 @@ export async function parsePayrollExcel(file) {
   const unmapped = new Set()
   const rows = []
 
+  // 模板里有"填写示例"区块（标记行 + 通常 3 条 2025 年示例数据 + 一行"以上为书写格式..."分隔语）
+  // 整个区块都不能当真实数据导入。检测策略：扫到"填写示例"后进入 skip 模式，
+  // 直到扫到"以上为书写格式"那一行才退出。
+  let inExample = false
+
   for (let i = hdrIdx + 1; i < aoa.length; i++) {
     const r = aoa[i] || []
+    const rowText = r.map(c => String(c || "")).join("")
+
+    if (!inExample && /填写示例|填寫示例/.test(rowText)) { inExample = true; continue }
+    if (inExample) {
+      if (/以上为书写格式|以上為書寫格式/.test(rowText)) inExample = false
+      continue
+    }
+
     const dateVal = r[idx.date]
     const bizVal = r[idx.biz]
-    // 跳过空行、示例行、说明行
+    // 跳过空行、说明行
     if (!dateVal && !bizVal) continue
     const rawBiz = String(bizVal || "").trim()
     if (!rawBiz || rawBiz === "填写示例" || rawBiz.includes("以上为书写格式")) continue
