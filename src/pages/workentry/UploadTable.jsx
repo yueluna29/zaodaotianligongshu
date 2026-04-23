@@ -666,13 +666,14 @@ export default function UploadTable({ user, t, tk }) {
 
   // ========== 主表格视图 ==========
   const colWidths = {
-    num: 36, date: 110, biz: 150, start: 76, end: 76,
+    num: 36, date: 140, biz: 150, start: 76, end: 76,
     hours: 66, rate: 80, bonus: 82, trans: 82, subtotal: 96,
     student: 100, course: 160, del: 36,
   }
   const thStyle = { padding: "8px 6px", fontSize: 10, color: t.tm, fontWeight: 600, textAlign: "left", borderBottom: `1px solid ${t.bd}`, background: t.bgH, position: "sticky", top: 0, zIndex: 1, whiteSpace: "nowrap" }
   const tdStyle = { padding: "4px 6px", fontSize: 12, color: t.tx, borderBottom: `1px solid ${t.bl}`, verticalAlign: "middle" }
   const inpStyle = { width: "100%", padding: "4px 6px", border: "1px solid transparent", borderRadius: 4, fontSize: 12, background: "transparent", color: t.tx, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }
+  const numStyle = { ...tdStyle, textAlign: "right", fontVariantNumeric: "tabular-nums" }
 
   return (
     <div>
@@ -805,13 +806,13 @@ export default function UploadTable({ user, t, tk }) {
           <thead>
             <tr>
               <th style={{ ...thStyle, width: colWidths.num, textAlign: "center" }}>#</th>
-              <th style={{ ...thStyle, width: colWidths.date }}>日付</th>
+              <th style={{ ...thStyle, width: colWidths.date, paddingLeft: 10 }}>日付</th>
               <th style={{ ...thStyle, width: colWidths.biz }}>業務内容</th>
               <th style={{ ...thStyle, width: colWidths.start }}>開始</th>
               <th style={{ ...thStyle, width: colWidths.end }}>終了</th>
               <th style={{ ...thStyle, width: colWidths.hours, textAlign: "right" }}>時間数</th>
               <th style={{ ...thStyle, width: colWidths.rate, textAlign: "right" }}>時給</th>
-              {showBonus && <th style={{ ...thStyle, width: colWidths.bonus, textAlign: "right" }}>班课绩效</th>}
+              {showBonus && <th style={{ ...thStyle, width: colWidths.bonus, textAlign: "center" }}>班课绩效</th>}
               <th style={{ ...thStyle, width: colWidths.trans, textAlign: "right" }}>交通費</th>
               <th style={{ ...thStyle, width: colWidths.subtotal, textAlign: "right" }}>回当り総額</th>
               <th style={{ ...thStyle, width: colWidths.student }}>学生氏名</th>
@@ -829,9 +830,11 @@ export default function UploadTable({ user, t, tk }) {
               return (
                 <tr key={r._key} style={{ background: r._isNew ? `${t.ac}05` : "transparent" }}>
                   <td style={{ ...tdStyle, textAlign: "center", color: t.tm }}>{i + 1}</td>
-                  <td style={tdStyle}>
-                    <input type="date" value={r.work_date} onChange={(e) => updateRow(r._key, "work_date", e.target.value)} style={inpStyle} />
-                    {wd !== null && <div style={{ fontSize: 9, color: wd === 0 || wd === 6 ? t.rd : t.td, paddingLeft: 6 }}>{WEEKDAYS[wd]}</div>}
+                  <td style={{ ...tdStyle, paddingLeft: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input type="date" value={r.work_date} onChange={(e) => updateRow(r._key, "work_date", e.target.value)} style={{ ...inpStyle, width: 104, flex: "0 0 auto" }} />
+                      {wd !== null && <span style={{ fontSize: 10, fontWeight: 600, color: wd === 0 || wd === 6 ? t.rd : t.td, flex: "0 0 auto" }}>{WEEKDAYS[wd]}</span>}
+                    </div>
                   </td>
                   <td style={tdStyle}>
                     <select value={r.business_type} onChange={(e) => updateRow(r._key, "business_type", e.target.value)}
@@ -844,8 +847,8 @@ export default function UploadTable({ user, t, tk }) {
                   </td>
                   <td style={tdStyle}><input type="time" value={r.start_time} onChange={(e) => updateRow(r._key, "start_time", e.target.value)} style={inpStyle} /></td>
                   <td style={tdStyle}><input type="time" value={r.end_time} onChange={(e) => updateRow(r._key, "end_time", e.target.value)} style={inpStyle} /></td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontVariantNumeric: "tabular-nums", color: t.tm }}>{fmtHours(r.work_minutes || 0)}</td>
-                  <td style={tdStyle}>
+                  <td style={{ ...numStyle, color: t.tm }}>{fmtHours(r.work_minutes || 0)}</td>
+                  <td style={numStyle}>
                     <input type="number" value={r.hourly_rate || ""} onChange={(e) => updateRow(r._key, "hourly_rate", parseInt(e.target.value) || 0)} style={{ ...inpStyle, textAlign: "right" }} />
                   </td>
                   {showBonus && (
@@ -860,10 +863,10 @@ export default function UploadTable({ user, t, tk }) {
                       )}
                     </td>
                   )}
-                  <td style={tdStyle}>
+                  <td style={numStyle}>
                     <input type="number" value={r.transport_fee} onChange={(e) => updateRow(r._key, "transport_fee", e.target.value)} style={{ ...inpStyle, textAlign: "right" }} />
                   </td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600, color: t.ac, fontVariantNumeric: "tabular-nums" }}>{yen(rowSubtotal(r))}</td>
+                  <td style={{ ...numStyle, fontWeight: 600, color: t.ac }}>{yen(rowSubtotal(r))}</td>
                   <td style={tdStyle}>
                     <input value={r.student_name || ""} onChange={(e) => updateRow(r._key, "student_name", e.target.value)} placeholder="一对一必填" style={inpStyle} />
                   </td>
