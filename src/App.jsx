@@ -8,6 +8,7 @@ import Onboarding from "./pages/onboarding/Onboarding"
 import Sidebar from "./components/Sidebar"
 import MobileNav from "./components/MobileNav"
 import ChangePasswordModal from "./components/ChangePasswordModal"
+import ChangeLoginIdModal from "./components/ChangeLoginIdModal"
 
 import Dashboard from "./pages/home/Dashboard"
 import AttendanceList from "./pages/attendance/AttendanceList"
@@ -31,6 +32,7 @@ export default function App() {
   const [badge, setBadge] = useState(0)
   const [workBadge, setWorkBadge] = useState(0)
   const [pwdShow, setPwdShow] = useState(false)
+  const [idShow, setIdShow] = useState(false)
   const t = themes[theme]
 
   useEffect(() => {
@@ -105,6 +107,7 @@ export default function App() {
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button onClick={() => setPwdShow(true)} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>密码</button>
+                <button onClick={() => setIdShow(true)} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.ts, fontSize: 10, cursor: "pointer" }}>改ID</button>
                 <button onClick={logout} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 10, cursor: "pointer" }}>退出</button>
               </div>
             </div>
@@ -114,6 +117,7 @@ export default function App() {
       </div>
       {mobile && <MobileNav user={user} view={view} onNav={setView} t={t} badge={badge} workBadge={workBadge} />}
       {pwdShow && <ChangePasswordModal t={t} token={user.token} onClose={() => setPwdShow(false)} />}
+      {idShow && <ChangeLoginIdModal t={t} user={user} token={user.token} onLogout={logout} onClose={() => setIdShow(false)} />}
     </div>
   )
 }
