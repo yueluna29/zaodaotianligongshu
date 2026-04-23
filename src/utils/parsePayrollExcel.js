@@ -103,10 +103,12 @@ export async function parsePayrollExcel(file) {
 
   const header = aoa[hdrIdx].map(c => String(c || "").trim())
   const col = (keyword) => header.findIndex(h => h && h.includes(keyword))
+  const colRE = (re) => header.findIndex(h => h && re.test(h))
 
   const idx = {
     date: col("日付"),
-    biz: col("業務内容"),
+    // 新模板用「業務内容」，老模板用「授業科目」
+    biz: colRE(/業務内容|授業科目/),
     start: col("開始時間") >= 0 ? col("開始時間") : col("開始"),
     end: col("終了時間") >= 0 ? col("終了時間") : col("終了"),
     hours: col("時間数"),
@@ -117,17 +119,22 @@ export async function parsePayrollExcel(file) {
     remark: header.findIndex(h => /備考|备注|工作内容/.test(h)),
   }
 
-  if (idx.date < 0 || idx.biz < 0) throw new Error("必须有「日付」和「業務内容」列")
+  if (idx.date < 0 || idx.biz < 0) throw new Error("必须有「日付」和「業務内容 / 授業科目」列")
+
+  // 模板新旧识别：新用「業務内容」，老用「授業科目」。旧模板没有预填示例，导入时不能跳第 1 行。
+  const isOldTemplate = idx.biz >= 0 && /授業科目/.test(header[idx.biz])
 
   const hasBonus = idx.bonus >= 0
   const unmapped = new Set()
   const rows = []
 
-  // 两种模板有不同的示例结构，都要跳过：
-  // (A) 学部/教务：有"填写示例"标记行 + 3 条示例数据 + "以上为书写格式..."分隔语 → 扫到标记进入 skip，扫到分隔语退出
-  // (B) 大学院/咨询：表头紧跟下一行直接就是 1 条示例数据（没标记）→ 自动跳过第一条真实看起来的数据行
+  // 三种模板示例结构不同：
+  // (A) 学部/教务 (新)：有"填写示例"标记 + 3 条示例 + "以上为书写格式..."分隔语 → 扫到标记进入 skip，扫到分隔语退出
+  // (B) 大学院/咨询 (新)：表头紧跟下一行直接就是 1 条示例（无标记）→ 自动跳过首条看起来有数据的行
+  // (C) 老模板 (列名「授業科目」)：空白模板，表头后直接是老师真实数据，什么都不跳
   const fullSheetText = aoa.map(r => (r || []).map(c => String(c || "")).join("")).join("\n")
   const hasExampleMarkers = /填写示例|填寫示例/.test(fullSheetText)
+  const skipFirstDataRow = !isOldTemplate && !hasExampleMarkers
   let inExample = false
   let dataRowsSeen = 0
 
@@ -150,8 +157,8 @@ export async function parsePayrollExcel(file) {
     const rawBiz = String(bizVal || "").trim()
     if (!rawBiz || rawBiz === "填写示例" || rawBiz.includes("以上为书写格式")) continue
 
-    // 无标记模板（大学院/咨询）：表头后第一条有数据的行视为模板自带示例，跳过
-    if (!hasExampleMarkers && dataRowsSeen === 0) { dataRowsSeen++; continue }
+    // 无标记的新模板（大学院/咨询）：表头后第一条有数据的行视为模板自带示例，跳过
+    if (skipFirstDataRow && dataRowsSeen === 0) { dataRowsSeen++; continue }
     dataRowsSeen++
 
     const work_date = excelDateToStr(dateVal)
