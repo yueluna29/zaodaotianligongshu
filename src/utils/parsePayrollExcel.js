@@ -123,19 +123,24 @@ export async function parsePayrollExcel(file) {
   const unmapped = new Set()
   const rows = []
 
-  // 模板里有"填写示例"区块（标记行 + 通常 3 条 2025 年示例数据 + 一行"以上为书写格式..."分隔语）
-  // 整个区块都不能当真实数据导入。检测策略：扫到"填写示例"后进入 skip 模式，
-  // 直到扫到"以上为书写格式"那一行才退出。
+  // 两种模板有不同的示例结构，都要跳过：
+  // (A) 学部/教务：有"填写示例"标记行 + 3 条示例数据 + "以上为书写格式..."分隔语 → 扫到标记进入 skip，扫到分隔语退出
+  // (B) 大学院/咨询：表头紧跟下一行直接就是 1 条示例数据（没标记）→ 自动跳过第一条真实看起来的数据行
+  const fullSheetText = aoa.map(r => (r || []).map(c => String(c || "")).join("")).join("\n")
+  const hasExampleMarkers = /填写示例|填寫示例/.test(fullSheetText)
   let inExample = false
+  let dataRowsSeen = 0
 
   for (let i = hdrIdx + 1; i < aoa.length; i++) {
     const r = aoa[i] || []
     const rowText = r.map(c => String(c || "")).join("")
 
-    if (!inExample && /填写示例|填寫示例/.test(rowText)) { inExample = true; continue }
-    if (inExample) {
-      if (/以上为书写格式|以上為書寫格式/.test(rowText)) inExample = false
-      continue
+    if (hasExampleMarkers) {
+      if (!inExample && /填写示例|填寫示例/.test(rowText)) { inExample = true; continue }
+      if (inExample) {
+        if (/以上为书写格式|以上為書寫格式/.test(rowText)) inExample = false
+        continue
+      }
     }
 
     const dateVal = r[idx.date]
@@ -144,6 +149,10 @@ export async function parsePayrollExcel(file) {
     if (!dateVal && !bizVal) continue
     const rawBiz = String(bizVal || "").trim()
     if (!rawBiz || rawBiz === "填写示例" || rawBiz.includes("以上为书写格式")) continue
+
+    // 无标记模板（大学院/咨询）：表头后第一条有数据的行视为模板自带示例，跳过
+    if (!hasExampleMarkers && dataRowsSeen === 0) { dataRowsSeen++; continue }
+    dataRowsSeen++
 
     const work_date = excelDateToStr(dateVal)
     if (!work_date) continue // 无法识别日期就跳
