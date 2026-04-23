@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react"
-import { sbGet, sbPost, sbPatch, sbDel, sbFn } from "../../api/supabase"
+import { sbGet, sbPost, sbPatch, sbDel, sbFn, sbRpc } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
 import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW } from "../../config/constants"
-import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, AlertTriangle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight, CheckSquare, Square } from "lucide-react"
+import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, AlertTriangle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight, CheckSquare, Square, Trash2 } from "lucide-react"
 import PayRateSection from "../../components/PayRateSection"
 
 const EMP_TYPES_ALL = [...EMP_TYPES_JP, ...EMP_TYPES_CN]
@@ -338,6 +338,15 @@ export default function EmployeeManager({ user, t, tk }) {
 
   const startCreate = () => { sSelected({ id: "__new__" }); sCreating(true); sFm(emptyForm()); sEditing(true); setActiveTab("basic") }
 
+  const deleteEmployee = async (emp) => {
+    if (!confirm(`确认删除「${emp.name}」的档案？\n\n会一并清除：账号（无法登录）、勤怠、请假、工时、时薪、交通费等所有历史记录。\n此操作不可撤销。`)) return
+    const r = await sbRpc("admin_delete_employee", { p_emp_id: emp.id }, tk)
+    if (r?.error) { alert("删除失败：" + r.error); return }
+    alert(`已删除：${r.name || emp.name}`)
+    sSelected(null); sEditing(false); sCreating(false)
+    await load()
+  }
+
   // 批量快速注册 baito 老师（仅 login_id / 姓名 / 公司，统一密码 123456）
   const emptyBulkRow = () => ({ _key: Math.random().toString(36).slice(2), login_id: "", name: "", company_id: 1 })
   const openBulkModal = () => {
@@ -494,9 +503,16 @@ export default function EmployeeManager({ user, t, tk }) {
                     </HoverButton>
                   </>
                 ) : (
-                  <HoverButton primary onClick={() => startEdit(e)} t={t}>
-                    <Edit3 size={15} /> 编辑档案
-                  </HoverButton>
+                  <>
+                    <HoverButton primary onClick={() => startEdit(e)} t={t}>
+                      <Edit3 size={15} /> 编辑档案
+                    </HoverButton>
+                    {isAdmin && !creating && e.id !== "__new__" && e.id !== user.id && (
+                      <HoverButton onClick={() => deleteEmployee(e)} t={t} style={{ color: t.rd, borderColor: `${t.rd}55` }}>
+                        <Trash2 size={14} /> 删除档案
+                      </HoverButton>
+                    )}
+                  </>
                 )}
               </div>
             )}
