@@ -1,15 +1,18 @@
 import { useState } from "react"
-import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, KeyRound, UserCog, Table as TableIcon } from "lucide-react"
-import { isHourly as empIsHourly } from "../config/constants"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, KeyRound, UserCog, ShieldAlert, Table as TableIcon } from "lucide-react"
+import { isHourly as empIsHourly, isSuperAdmin } from "../config/constants"
 import ChangePasswordModal from "./ChangePasswordModal"
 import ChangeLoginIdModal from "./ChangeLoginIdModal"
+import MaintenanceModeModal from "./MaintenanceModeModal"
 
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge, workBadge }) {
   const isA = user.role === "admin"
+  const isSA = isSuperAdmin(user)
   const et = user.employment_type || "正社員"
   const isHourly = empIsHourly(et)
   const [pwdShow, setPwdShow] = useState(false)
   const [idShow, setIdShow] = useState(false)
+  const [maintShow, setMaintShow] = useState(false)
 
   const items = [
     { id: "home", l: "首页", ic: Home, show: true },
@@ -66,11 +69,17 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
             <UserCog size={12} /> 改ID
           </button>
         </div>
+        {isSA && (
+          <button onClick={() => setMaintShow(true)} style={{ width: "100%", padding: 8, borderRadius: 7, border: `1px solid ${t.wn}40`, background: `${t.wn}10`, color: t.wn, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 6, fontFamily: "inherit", fontWeight: 600 }}>
+            <ShieldAlert size={12} /> 维护模式
+          </button>
+        )}
         <button onClick={onLogout} style={{ width: "100%", padding: 8, borderRadius: 7, border: `1px solid ${t.bd}`, background: "transparent", color: t.tm, fontSize: 11, cursor: "pointer" }}>退出登录</button>
       </div>
     </div>
     {pwdShow && <ChangePasswordModal t={t} token={user.token} onClose={() => setPwdShow(false)} />}
     {idShow && <ChangeLoginIdModal t={t} user={user} token={user.token} onLogout={onLogout} onClose={() => setIdShow(false)} />}
+    {maintShow && isSA && <MaintenanceModeModal t={t} token={user.token} onClose={() => setMaintShow(false)} />}
     </>
   )
 }

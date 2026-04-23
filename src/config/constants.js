@@ -23,6 +23,10 @@ export const empTypesFor = (companyId) => isChinaCompany(companyId) ? EMP_TYPES_
 export const isFullTime = (et) => et === "正社員" || et === "契約社員" || et === "正社员"
 export const isHourly = (et) => et === "アルバイト" || et === "外部講師" || et === "兼职"
 
+// 超级管理员（能开启维护模式）。当前硬编码，如果 luna 以后改 ID 也要同步改这里
+export const SUPER_ADMIN_LOGIN_ID = "luna"
+export const isSuperAdmin = (user) => user?.login_id === SUPER_ADMIN_LOGIN_ID
+
 export const daysInMonth = (y, m) => new Date(y, m, 0).getDate()
 export const weekday = (y, m, d) => new Date(y, m - 1, d).getDay()
 export const isWeekend = (y, m, d) => {
