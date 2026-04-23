@@ -262,6 +262,37 @@ export default function UploadTable({ user, t, tk }) {
   const isSubmitted = submission?.status === "submitted"
   const hasChanges = rows.some(r => r._isNew || r._dirty)
 
+  // 最近 7 天滑动窗口：在本月内找最大的 7 日累计工时。>=28 红线，20 黄色预警
+  const worst7d = useMemo(() => {
+    const byDate = {}
+    for (const r of rows) {
+      if (!r.work_date || !r.work_minutes) continue
+      byDate[r.work_date] = (byDate[r.work_date] || 0) + r.work_minutes
+    }
+    const dates = Object.keys(byDate).sort()
+    if (!dates.length) return { hours: 0, windowEnd: null }
+    let maxMin = 0, windowEnd = null
+    for (const endDate of dates) {
+      const endD = new Date(endDate + "T00:00:00")
+      const startD = new Date(endD); startD.setDate(endD.getDate() - 6)
+      let sum = 0
+      for (const d of dates) {
+        const dd = new Date(d + "T00:00:00")
+        if (dd >= startD && dd <= endD) sum += byDate[d]
+      }
+      if (sum > maxMin) { maxMin = sum; windowEnd = endDate }
+    }
+    return { hours: maxMin / 60, windowEnd }
+  }, [rows])
+
+  const hoursStatus = useMemo(() => {
+    const h = worst7d.hours
+    if (h >= 28) return { color: t.rd, bg: `${t.rd}0D`, level: "over", text: "🚨 已超 28h 红线，请删减或改日" }
+    if (h >= 25) return { color: t.rd, bg: `${t.rd}0D`, level: "red", text: "🔴 濒临 28h 红线，慎重增加排班" }
+    if (h >= 20) return { color: t.wn, bg: `${t.wn}0D`, level: "amber", text: "⚡ 工时偏高，留意后续排班空间" }
+    return { color: t.gn, bg: `${t.gn}0D`, level: "ok", text: "✅ 合规范围内" }
+  }, [worst7d.hours, t])
+
   const submitReport = async () => {
     if (isAdmin) return
     if (hasChanges) { setMsg("请先点「保存全部」把未保存的修改存下来再提交"); setTimeout(() => setMsg(""), 6000); return }
@@ -583,6 +614,21 @@ export default function UploadTable({ user, t, tk }) {
 
       {msg && <div style={{ padding: 10, borderRadius: 8, background: `${t.gn}15`, color: t.gn, marginBottom: 12, fontSize: 12 }}>{msg}</div>}
 
+      {/* 28h 警报（最近 7 天滑动窗口最坏值） */}
+      {rows.length > 0 && (
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: hoursStatus.bg, border: `1px solid ${hoursStatus.color}40`, marginBottom: 12, fontSize: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <span style={{ fontSize: 11, color: t.tm, fontWeight: 600 }}>最近 7 天累计</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: hoursStatus.color, marginLeft: 4 }}>{worst7d.hours.toFixed(1)}</span>
+            <span style={{ fontSize: 11, color: t.tm }}>/ 28h</span>
+          </div>
+          <span style={{ color: hoursStatus.color, fontWeight: 600 }}>{hoursStatus.text}</span>
+          {worst7d.windowEnd && worst7d.hours >= 20 && (
+            <span style={{ color: t.tm, fontSize: 11, marginLeft: "auto" }}>最坏窗口截至：{worst7d.windowEnd}</span>
+          )}
+        </div>
+      )}
+
       {ld ? (
         <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
       ) : (
@@ -624,7 +670,7 @@ export default function UploadTable({ user, t, tk }) {
                     <select value={r.business_type} onChange={(e) => updateRow(r._key, "business_type", e.target.value)}
                       style={{ ...inpStyle, fontFamily: "inherit" }}>
                       <option value="">—</option>
-                      {[...new Set([...BIZ_TYPES, ...rateOptions])].map(bt => (
+                      {[...new Set([...rateOptions, r.business_type].filter(Boolean))].map(bt => (
                         <option key={bt} value={bt}>{bt}{rateOptions.includes(bt) ? ` ¥${getRateFor(bt)}` : ""}</option>
                       ))}
                     </select>
