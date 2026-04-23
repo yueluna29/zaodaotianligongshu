@@ -8,4 +8,4 @@
 - [改 login_id 一次性额度](reference_change_login_id.md) — service-role edge fn change-login-id，employees.login_id_changed_at 锁额度
 - [Drive 上传通用攻略](../../docs/google-drive-上传攻略.md) — 复用到新项目的完整步骤（GCP / OAuth / Edge Function / RLS / 前端）
 - [SQL 批量建 auth 用户的坑](project_bulk_create_auth_users.md) — 密码 cost≥10、8 个 token 字段不能 NULL，否则 "Database error querying schema"
-- [2026-04-23 遗留 TODO](project_open_items_2026_04_23.md) — 一键上传 Phase 3/4 / 75 位 baito 公司审核 / 异常时薪 / 未改密码
+- [2026-04-24 进度快照](project_open_items_2026_04_24.md) — 今天做完的 + 还欠的功能（税务重做 / 扶养控除页 / Phase 3-4 / 正契入职）+ admin 人肉清单
