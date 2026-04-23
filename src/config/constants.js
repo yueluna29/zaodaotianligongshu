@@ -27,6 +27,10 @@ export const isHourly = (et) => et === "アルバイト" || et === "外部講師
 export const SUPER_ADMIN_LOGIN_ID = "luna"
 export const isSuperAdmin = (user) => user?.login_id === SUPER_ADMIN_LOGIN_ID
 
+// EJU 班课绩效：老师自申报，仅 EJU班課 业务类型可用，固定 300 円/h
+export const EJU_TYPE = "EJU講師（班課）"
+export const EJU_BONUS_PER_HOUR = 300
+
 export const daysInMonth = (y, m) => new Date(y, m, 0).getDate()
 export const weekday = (y, m, d) => new Date(y, m - 1, d).getDay()
 export const isWeekend = (y, m, d) => {

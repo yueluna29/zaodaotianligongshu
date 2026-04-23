@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
 import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check, Send } from "lucide-react"
-import { pad, WEEKDAYS, sortByName, COMPANIES } from "../../config/constants"
+import { pad, WEEKDAYS, sortByName, COMPANIES, EJU_TYPE, EJU_BONUS_PER_HOUR } from "../../config/constants"
 import { parsePayrollExcel, applyBizMapping, SUPPORTED_BIZ } from "../../utils/parsePayrollExcel"
 
 // 业务内容 master（从 Excel 模板提炼）— 映射到 DB business_type
@@ -122,11 +122,13 @@ export default function UploadTable({ user, t, tk }) {
         if (start_time && end_time && (!work_minutes || work_minutes === 0)) {
           work_minutes = calcMin(start_time, end_time)
         }
+        // EJU 绩效：优先取 DB 的 eju_bonus 布尔；若无则看旧数据 bonus_per_hour > 0 且业务是 EJU 的兜底
+        const eju_bonus = !!e.eju_bonus || (Number(e.bonus_per_hour || 0) > 0 && e.business_type === EJU_TYPE)
         return {
           ...e, work_minutes, _key: e.id, _isNew: false, _dirty: false,
           start_time, end_time,
           transport_fee: e.transport_fee != null ? String(e.transport_fee) : "",
-          bonus_per_hour: e.bonus_per_hour != null ? Number(e.bonus_per_hour) : 0,
+          eju_bonus,
         }
       })
     setRows(loaded)
@@ -178,7 +180,10 @@ export default function UploadTable({ user, t, tk }) {
     setRows(prev => prev.map(r => {
       if (r._key !== key) return r
       const next = { ...r, [field]: value, _dirty: true }
-      if (field === "business_type") next.hourly_rate = getRateFor(value)
+      if (field === "business_type") {
+        next.hourly_rate = getRateFor(value)
+        if (value !== EJU_TYPE) next.eju_bonus = false // 切换到非 EJU 业务，自动撤销绩效申报
+      }
       const st = field === "start_time" ? value : next.start_time
       const et = field === "end_time" ? value : next.end_time
       if (st && et) next.work_minutes = calcMin(st, et)
@@ -200,10 +205,12 @@ export default function UploadTable({ user, t, tk }) {
     setRows(prev => [...prev, mkRow(selectedEmp.id, defaultDate)])
   }
 
+  const ejuBonusPerHour = (r) => (r.eju_bonus && r.business_type === EJU_TYPE) ? EJU_BONUS_PER_HOUR : 0
+
   const rowSubtotal = (r) => {
     const hours = (r.work_minutes || 0) / 60
     const base = hours * Number(r.hourly_rate || 0)
-    const bonus = hours * Number(r.bonus_per_hour || 0)
+    const bonus = hours * ejuBonusPerHour(r)
     const trans = parseFloat(r.transport_fee) || 0
     return Math.round(base + bonus + trans)
   }
@@ -214,7 +221,7 @@ export default function UploadTable({ user, t, tk }) {
       const hours = (r.work_minutes || 0) / 60
       totalMin += r.work_minutes || 0
       wageSum += hours * Number(r.hourly_rate || 0)
-      bonusSum += hours * Number(r.bonus_per_hour || 0)
+      bonusSum += hours * ejuBonusPerHour(r)
       transSum += parseFloat(r.transport_fee) || 0
     }
     return {
@@ -239,7 +246,8 @@ export default function UploadTable({ user, t, tk }) {
         end_time: r.end_time + ":00",
         work_minutes: r.work_minutes || 0,
         hourly_rate: r.hourly_rate || 0,
-        bonus_per_hour: r.bonus_per_hour || 0,
+        eju_bonus: !!r.eju_bonus && r.business_type === EJU_TYPE,
+        bonus_per_hour: ejuBonusPerHour(r),
         transport_fee: parseFloat(r.transport_fee) || 0,
         subtotal: rowSubtotal(r),
         student_name: r.student_name || null,
@@ -363,8 +371,12 @@ export default function UploadTable({ user, t, tk }) {
       }
       let ok = 0, err = 0
       for (const r of uploadData.rows) {
+        // Excel 班课绩效列只对 EJU 业务有效；其他业务即使 Excel 填了也忽略（教师自申报，仅 EJU 班課 可用）
+        const isEju = r.business_type === EJU_TYPE
+        const ejuBonus = isEju && Number(r.bonus_per_hour || 0) > 0
+        const bonusPerHour = ejuBonus ? EJU_BONUS_PER_HOUR : 0
         const hours = (r.work_minutes || 0) / 60
-        const subtotal = Math.round(hours * (r.hourly_rate + r.bonus_per_hour) + r.transport_fee)
+        const subtotal = Math.round(hours * (r.hourly_rate + bonusPerHour) + (r.transport_fee || 0))
         const body = {
           employee_id: selectedEmp.id,
           work_date: r.work_date,
@@ -373,7 +385,8 @@ export default function UploadTable({ user, t, tk }) {
           end_time: r.end_time ? r.end_time + ":00" : null,
           work_minutes: r.work_minutes,
           hourly_rate: r.hourly_rate,
-          bonus_per_hour: r.bonus_per_hour || 0,
+          eju_bonus: ejuBonus,
+          bonus_per_hour: bonusPerHour,
           transport_fee: r.transport_fee,
           subtotal,
           student_name: r.student_name || null,
@@ -682,8 +695,15 @@ export default function UploadTable({ user, t, tk }) {
                     <input type="number" value={r.hourly_rate || ""} onChange={(e) => updateRow(r._key, "hourly_rate", parseInt(e.target.value) || 0)} style={{ ...inpStyle, textAlign: "right" }} />
                   </td>
                   {showBonus && (
-                    <td style={tdStyle}>
-                      <input type="number" value={r.bonus_per_hour || ""} onChange={(e) => updateRow(r._key, "bonus_per_hour", parseInt(e.target.value) || 0)} placeholder="円/h" style={{ ...inpStyle, textAlign: "right" }} />
+                    <td style={{ ...tdStyle, textAlign: "center" }}>
+                      {r.business_type === EJU_TYPE ? (
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: r.eju_bonus ? t.gn : t.ts }} title={`EJU 班課 +¥${EJU_BONUS_PER_HOUR}/h`}>
+                          <input type="checkbox" checked={!!r.eju_bonus} onChange={(e) => updateRow(r._key, "eju_bonus", e.target.checked)} style={{ width: 14, height: 14, accentColor: "#10B981", cursor: "pointer" }} />
+                          +¥{EJU_BONUS_PER_HOUR}
+                        </label>
+                      ) : (
+                        <span style={{ color: t.td, fontSize: 11 }}>—</span>
+                      )}
                     </td>
                   )}
                   <td style={tdStyle}>
@@ -805,7 +825,8 @@ export default function UploadTable({ user, t, tk }) {
               const mismatches = uploadData.rows
                 .map((r, i) => {
                   const hours = (r.work_minutes || 0) / 60
-                  const computed = Math.round(hours * (r.hourly_rate + (r.bonus_per_hour || 0)) + (r.transport_fee || 0))
+                  const effBonus = r.business_type === EJU_TYPE ? (r.bonus_per_hour || 0) : 0 // 仅 EJU 班課 才计绩效
+                  const computed = Math.round(hours * (r.hourly_rate + effBonus) + (r.transport_fee || 0))
                   if (r.subtotal_excel == null) return null
                   const diff = r.subtotal_excel - computed
                   if (Math.abs(diff) <= TOLERANCE) return null
@@ -862,7 +883,8 @@ export default function UploadTable({ user, t, tk }) {
                 <tbody>
                   {uploadData.rows.map((r, i) => {
                     const hours = (r.work_minutes || 0) / 60
-                    const computed = Math.round(hours * (r.hourly_rate + (r.bonus_per_hour || 0)) + (r.transport_fee || 0))
+                    const effBonus = r.business_type === EJU_TYPE ? (r.bonus_per_hour || 0) : 0 // 仅 EJU 班課 才计绩效
+                  const computed = Math.round(hours * (r.hourly_rate + effBonus) + (r.transport_fee || 0))
                     const diff = r.subtotal_excel != null ? r.subtotal_excel - computed : 0
                     const mismatch = r.subtotal_excel != null && Math.abs(diff) > 2  // ±2 円容差，屏蔽 Excel 浮点噪音
                     return (
