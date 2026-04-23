@@ -3,6 +3,7 @@
 - [假期相关 DB 枚举](project_leave_enums.md) — 赤日休 / 使用代休 / 赤日補休 的合法值与 balance 计算规则
 - [Edge Function 用 anon key 鉴权](project_edge_fn_auth.md) — user access_token 过期踩坑，前端统一走 anon key
 - [打卡照片 Drive 上传系统](reference_clock_photo_drive.md) — OAuth refresh_token 方案（换掉了 SA），2 个 edge function，secrets 清单
+- [Baito 老师入职页上传系统](reference_onboarding_upload.md) — upload-onboarding-file + 2 个文件夹白名单 + Onboarding 守卫触发条件
 - [Drive 上传通用攻略](../../docs/google-drive-上传攻略.md) — 复用到新项目的完整步骤（GCP / OAuth / Edge Function / RLS / 前端）
 - [SQL 批量建 auth 用户的坑](project_bulk_create_auth_users.md) — 密码 cost≥10、8 个 token 字段不能 NULL，否则 "Database error querying schema"
 - [2026-04-23 遗留 TODO](project_open_items_2026_04_23.md) — 一键上传 Phase 3/4 / 75 位 baito 公司审核 / 异常时薪 / 未改密码
