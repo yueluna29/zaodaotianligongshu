@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check, Send } from "lucide-react"
 import { pad, WEEKDAYS, sortByName, COMPANIES } from "../../config/constants"
 import { parsePayrollExcel, applyBizMapping, SUPPORTED_BIZ } from "../../utils/parsePayrollExcel"
 
@@ -41,6 +41,8 @@ export default function UploadTable({ user, t, tk }) {
   const [rates, setRates] = useState([])
   const [ld, setLd] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [submittingReport, setSubmittingReport] = useState(false)
+  const [submission, setSubmission] = useState(null)
   const [msg, setMsg] = useState("")
 
   // 上传状态
@@ -104,10 +106,12 @@ export default function UploadTable({ user, t, tk }) {
     setLd(true)
     const sd = `${year}-${pad(month)}-01`
     const ed = month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`
-    const [entries, payRates] = await Promise.all([
+    const [entries, payRates, subs] = await Promise.all([
       sbGet(`work_entries?employee_id=eq.${selectedEmp.id}&work_date=gte.${sd}&work_date=lt.${ed}&order=work_date,start_time&select=*`, tk),
       sbGet(`pay_rates?employee_id=eq.${selectedEmp.id}&order=business_type&select=business_type,hourly_rate`, tk),
+      sbGet(`monthly_report_submissions?employee_id=eq.${selectedEmp.id}&year=eq.${year}&month=eq.${month}&select=*`, tk),
     ])
+    setSubmission((subs && subs[0]) || null)
     const loaded = (entries || [])
       .filter(e => e.business_type) // 过滤掉纯"其他报销"行
       .map(e => {
@@ -251,6 +255,34 @@ export default function UploadTable({ user, t, tk }) {
     setSaving(false)
     setMsg(err ? `保存：成功 ${ok}，失败 ${err}` : `已保存 ${ok} 行`)
     setTimeout(() => setMsg(""), 5000)
+    await load()
+  }
+
+  // ========== 提交月报 ==========
+  const isSubmitted = submission?.status === "submitted"
+  const hasChanges = rows.some(r => r._isNew || r._dirty)
+
+  const submitReport = async () => {
+    if (isAdmin) return
+    if (hasChanges) { setMsg("请先点「保存全部」把未保存的修改存下来再提交"); setTimeout(() => setMsg(""), 6000); return }
+    if (rows.length === 0) { setMsg("本月还没有任何工时记录，无法提交"); setTimeout(() => setMsg(""), 6000); return }
+    if (!confirm(`提交 ${year}年${month}月 工时报表？\n\n提交后将不能再修改，如需更改请联系管理员解锁。`)) return
+    setSubmittingReport(true)
+    const payload = { employee_id: selectedEmp.id, year, month, status: "submitted", submitted_at: new Date().toISOString(), unlocked_by: null, unlocked_at: null }
+    let res
+    if (submission) {
+      res = await sbPatch(`monthly_report_submissions?id=eq.${submission.id}`, { status: "submitted", submitted_at: payload.submitted_at, unlocked_by: null, unlocked_at: null }, tk)
+    } else {
+      res = await sbPost("monthly_report_submissions", payload, tk)
+    }
+    setSubmittingReport(false)
+    if (res && !Array.isArray(res) && (res.code || res.message)) {
+      setMsg(`提交失败：${res.message || res.code}`)
+      setTimeout(() => setMsg(""), 10000)
+      return
+    }
+    setMsg(`已提交 ${year}年${month}月 工时报表`)
+    setTimeout(() => setMsg(""), 6000)
     await load()
   }
 
@@ -630,13 +662,26 @@ export default function UploadTable({ user, t, tk }) {
         </table>
       </div>
 
+      {isSubmitted && (
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: `${t.gn}10`, border: `1px solid ${t.gn}40`, marginBottom: 12, fontSize: 12, color: t.gn, display: "flex", alignItems: "center", gap: 8 }}>
+          <Check size={14} /> 本月工时已于 {submission?.submitted_at ? new Date(submission.submitted_at).toLocaleString() : "—"} 提交。如需修改请联系管理员解锁。
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <button onClick={addRow} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.ac}`, background: `${t.ac}08`, color: t.ac, cursor: "pointer", fontSize: 12, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <button onClick={addRow} disabled={isSubmitted && !isAdmin} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.ac}`, background: `${t.ac}08`, color: t.ac, cursor: (isSubmitted && !isAdmin) ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, opacity: (isSubmitted && !isAdmin) ? 0.4 : 1 }}>
           <Plus size={14} /> 新增一行
         </button>
-        <button onClick={save} disabled={saving || rows.every(r => !r._dirty && !r._isNew)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, opacity: (saving || rows.every(r => !r._dirty && !r._isNew)) ? 0.5 : 1 }}>
-          <Save size={14} /> {saving ? "保存中..." : "保存全部"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={save} disabled={saving || (isSubmitted && !isAdmin) || rows.every(r => !r._dirty && !r._isNew)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, opacity: (saving || (isSubmitted && !isAdmin) || rows.every(r => !r._dirty && !r._isNew)) ? 0.5 : 1 }}>
+            <Save size={14} /> {saving ? "保存中..." : "保存全部"}
+          </button>
+          {!isAdmin && !isSubmitted && (
+            <button onClick={submitReport} disabled={submittingReport || hasChanges || rows.length === 0} title={hasChanges ? "请先保存修改" : rows.length === 0 ? "本月无工时记录" : ""} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: t.gn, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submittingReport ? "wait" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, opacity: (submittingReport || hasChanges || rows.length === 0) ? 0.5 : 1 }}>
+              <Send size={14} /> {submittingReport ? "提交中..." : "提交月报"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 底部汇总（粘性） */}
