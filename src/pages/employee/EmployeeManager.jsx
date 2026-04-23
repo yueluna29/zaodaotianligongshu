@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { sbGet, sbPost, sbPatch, sbDel, sbFn, sbRpc } from "../../api/supabase"
 import { calcPaidLeave } from "../../config/leaveCalc"
-import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW, sortByName } from "../../config/constants"
+import { WEEKDAYS, COMPANIES, EMP_TYPES_JP, EMP_TYPES_CN, empTypesFor, isChinaCompany, isFullTime, isHourly as empIsHourly, fmtDateW, sortByName, isSuperAdmin } from "../../config/constants"
 import { Users, ArrowLeft, Plus, Search, Phone, Mail, AlertCircle, AlertTriangle, Lock, Edit3, Save, User as UserIcon, CreditCard, Clock, Check, X, ChevronRight, CheckSquare, Square, Trash2 } from "lucide-react"
 import PayRateSection from "../../components/PayRateSection"
 
@@ -840,9 +840,54 @@ export default function EmployeeManager({ user, t, tk }) {
                   </div>
                 </div>
 
-                {/* 税务与合同信息 —— 暂时对所有人隐藏，待重新设计
-                  包含字段：固定加班、支付方式、交通费方式、扶养人数、My Number、合同起止日、扶养控除、签单提成 checkbox
-                  现阶段 admin 可在 DB / 其他入口管理。重做后恢复 */}
+                {/* 税务与合同信息 —— 暂时仅超级管理员可见（其他人等重做完再开） */}
+                {isSuperAdmin(user) && (
+                  <>
+                    <div style={{ height: 1, backgroundColor: t.bd, opacity: 0.5 }} />
+                    <div>
+                      <SectionTitle t={t}>{isHourly ? "税务与合同信息" : "常规薪资配置"} <span style={{ fontSize: 10, color: t.wn, marginLeft: 8, padding: "2px 8px", borderRadius: 10, background: `${t.wn}15`, border: `1px solid ${t.wn}40`, fontWeight: 600 }}>超管可见</span></SectionTitle>
+                      <div style={{ padding: !isAdmin ? 20 : 0, backgroundColor: !isAdmin ? t.bl : "transparent", borderRadius: 16, border: !isAdmin ? `1px dashed ${t.bd}` : "none" }}>
+                        <div style={flexRow}>
+                          {!isHourly && (
+                            <Field
+                              label="固定加班 (h)"
+                              value={editing ? fm.fixed_overtime_hours : `${e.fixed_overtime_hours || 20}h`}
+                              onChange={(v) => sFm(p => ({ ...p, fixed_overtime_hours: v }))}
+                              isEditing={editing} isLocked={!isAdmin} type="number"
+                              t={t}
+                            />
+                          )}
+                          {fld("payment_method", "支付方式", { locked: isHourly ? false : !isAdmin, type: "select", options: PAY_METHODS })}
+                          {!isHourly && fld("transport_method", "交通费方式", { locked: !isAdmin, type: "select", options: TRANSPORT_METHODS })}
+                          {fld("dependents_count", "扶养人数", { locked: isHourly ? false : !isAdmin, type: "number" })}
+                          {fld("my_number", "My Number", { locked: isHourly ? false : !isAdmin })}
+                          {fld("contract_start_date", "合同开始日", { locked: isHourly ? false : !isAdmin, type: "date" })}
+                          {fld("contract_end_date", "合同结束日", { locked: isHourly ? false : !isAdmin, type: "date" })}
+                        </div>
+                        <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
+                          {!isHourly && (
+                            <CheckBox
+                              label="启用扶养控除"
+                              checked={editing ? fm.has_dependent_deduction : e.has_dependent_deduction}
+                              onChange={(v) => sFm(p => ({ ...p, has_dependent_deduction: v }))}
+                              disabled={!isAdmin}
+                              isEditing={editing}
+                              t={t}
+                            />
+                          )}
+                          <CheckBox
+                            label="计算签单提成"
+                            checked={editing ? fm.has_commission : e.has_commission}
+                            onChange={(v) => sFm(p => ({ ...p, has_commission: v }))}
+                            disabled={!isAdmin}
+                            isEditing={editing}
+                            t={t}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
