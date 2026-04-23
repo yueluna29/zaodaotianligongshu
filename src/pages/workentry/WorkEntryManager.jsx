@@ -1253,34 +1253,11 @@ export default function WorkEntryManager({ user, t, tk }) {
               </div>
             </div>
 
-            {/* 打卡照片状态提示（上传入口已挪到 28h 旁边的卡里） */}
-            {(() => {
-              const bothUploaded = submission?.photo_1_drive_id && submission?.photo_2_drive_id
-              return (
-                <div style={{ marginBottom: 20, padding: "10px 14px", borderRadius: 12,
-                  background: bothUploaded ? `${t.gn}0D` : `${t.wn}12`,
-                  border: `1px solid ${bothUploaded ? `${t.gn}40` : `${t.wn}40`}`,
-                  display: "flex", alignItems: "center", gap: 8, fontSize: 12,
-                  color: bothUploaded ? t.gn : t.wn }}>
-                  <Camera size={14} />
-                  {bothUploaded
-                    ? <span>打卡照片已上传</span>
-                    : <span>打卡照片还没上传完，请先在「最近 7 天累计」旁边的打卡照片卡里传两张。</span>}
-                </div>
-              )
-            })()}
-
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <HoverBtn onClick={() => setSubmitModal(false)} disabled={submittingReport} t={t}>取消</HoverBtn>
-              {(() => {
-                const bothUploaded = submission?.photo_1_drive_id && submission?.photo_2_drive_id
-                const disabled = submittingReport || !bothUploaded
-                return (
-                  <HoverBtn primary onClick={submitReport} disabled={disabled} t={t}>
-                    <Send size={14} /> {submittingReport ? "提交中..." : bothUploaded ? "确认提交" : "请先上传两张照片"}
-                  </HoverBtn>
-                )
-              })()}
+              <HoverBtn primary onClick={submitReport} disabled={submittingReport} t={t}>
+                <Send size={14} /> {submittingReport ? "提交中..." : "确认提交"}
+              </HoverBtn>
             </div>
           </div>
         </div>
