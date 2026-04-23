@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { sbGet, sbPost, sbPatch, sbDel } from "../../api/supabase"
-import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check, Send, CheckCircle2, AlertCircle, CalendarCheck2 } from "lucide-react"
+import { sbGet, sbPost, sbPatch, sbDel, sbFn } from "../../api/supabase"
+import { ChevronLeft, ChevronRight, Plus, Trash2, Save, Upload, Download, ArrowLeft, Search, X as XIcon, AlertTriangle, Check, Send, CheckCircle2, AlertCircle, CalendarCheck2, Camera } from "lucide-react"
 import { pad, WEEKDAYS, sortByName, COMPANIES, EJU_TYPE, EJU_BONUS_PER_HOUR } from "../../config/constants"
 import { parsePayrollExcel, applyBizMapping, SUPPORTED_BIZ } from "../../utils/parsePayrollExcel"
+import { compressImage } from "../../utils/compressImage"
 
 // 业务内容 master（从 Excel 模板提炼）— 映射到 DB business_type
 const BIZ_TYPES = ["事務性工作", "専業課老師", "答疑做題", "研究計画書修改", "過去問", "EJU講師（班課）"]
@@ -52,6 +53,9 @@ export default function UploadTable({ user, t, tk }) {
   const [saving, setSaving] = useState(false)
   const [submittingReport, setSubmittingReport] = useState(false)
   const [submission, setSubmission] = useState(null)
+  const [photoUploading, setPhotoUploading] = useState({ 1: false, 2: false })
+  const [photoError, setPhotoError] = useState("")
+  const [lightboxPhoto, setLightboxPhoto] = useState(null) // { slot, driveId }
   const [msg, setMsg] = useState("")
 
   // 上传状态
@@ -364,6 +368,41 @@ export default function UploadTable({ user, t, tk }) {
     await load()
   }
 
+  // ========== 打卡照片（和工资报表读写同一张 monthly_report_submissions，数据互通） ==========
+  const uploadClockPhoto = async (slot, file) => {
+    if (!file || !selectedEmp) return
+    setPhotoError("")
+    setPhotoUploading(p => ({ ...p, [slot]: true }))
+    try {
+      const blob = await compressImage(file, 500, 1600)
+      const ym = `${year}-${pad(month)}`
+      const ts = Date.now()
+      const safeName = (selectedEmp?.name || user.name || "emp").replace(/[\\/:*?"<>|]/g, "_")
+      const filename = `${safeName}_${ym}_${slot}_${ts}.jpg`
+      const fd = new FormData()
+      fd.append("file", blob, filename)
+      fd.append("filename", filename)
+      const res = await sbFn("upload-clock-photo", fd)
+      if (!res?.id) {
+        const parts = [res?.error || "未知错误"]
+        if (res?.status) parts.push(`HTTP ${res.status}`)
+        setPhotoError(`照片 ${slot} 上传失败：${parts.join(" | ")}`)
+        return
+      }
+      const col = slot === 1 ? "photo_1_drive_id" : "photo_2_drive_id"
+      if (submission) {
+        await sbPatch(`monthly_report_submissions?id=eq.${submission.id}`, { [col]: res.id }, tk)
+      } else {
+        await sbPost("monthly_report_submissions", { employee_id: selectedEmp.id, year, month, status: "draft", [col]: res.id }, tk)
+      }
+      await load()
+    } catch (e) {
+      setPhotoError(`照片 ${slot} 上传失败：${e.message || String(e)}`)
+    } finally {
+      setPhotoUploading(p => ({ ...p, [slot]: false }))
+    }
+  }
+
   // ========== Excel 上传 ==========
   const handleFilePick = async (file) => {
     if (!file) return
@@ -666,7 +705,7 @@ export default function UploadTable({ user, t, tk }) {
 
       {msg && <div style={{ padding: 10, borderRadius: 8, background: `${t.gn}15`, color: t.gn, marginBottom: 12, fontSize: 12 }}>{msg}</div>}
 
-      {/* 顶部并排双卡：最近7天累计 + 月末提交提醒（仅 baito 视角显示，admin 不需要提醒提交） */}
+      {/* 顶部并排三卡：最近7天累计 + 月末提交提醒 + 打卡照片（仅 baito 视角） */}
       {!isAdmin && (
         <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: 14, background: hoursStatus.bg, border: hoursStatus.level !== "ok" ? `2px solid ${hoursStatus.color}` : glassCard.border }}>
@@ -695,6 +734,65 @@ export default function UploadTable({ user, t, tk }) {
               {submitStatus.text}
             </div>
           </div>
+
+          <div style={{ flex: 1, minWidth: 200, ...glassCard, padding: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontSize: 11, fontWeight: 600, color: t.ac }}>
+              <Camera size={13} /> 打卡照片
+              {submission?.photo_1_drive_id && submission?.photo_2_drive_id && (
+                <span style={{ fontSize: 10, color: t.gn, fontWeight: 600, marginLeft: "auto" }}>已完成</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[1, 2].map((slot) => {
+                const driveId = submission?.[`photo_${slot}_drive_id`]
+                const uploading = photoUploading[slot]
+                const editLocked = isSubmitted && !isAdmin
+                const tileBase = {
+                  position: "relative", flex: 1, minWidth: 0, aspectRatio: "1 / 1",
+                  borderRadius: 8,
+                  border: `1px dashed ${driveId ? `${t.gn}66` : t.bd}`,
+                  background: driveId ? `${t.gn}08` : "rgba(255,255,255,0.55)",
+                  overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                }
+                if (driveId) {
+                  return (
+                    <div key={slot} onClick={() => setLightboxPhoto({ slot, driveId })} style={{ ...tileBase, cursor: "zoom-in" }}>
+                      <img src={`https://cssnsgdawdhrkrmztuas.supabase.co/functions/v1/get-clock-photo?id=${driveId}`} alt={`打卡${slot}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <span style={{ position: "absolute", top: 3, left: 3, width: 16, height: 16, borderRadius: "50%", background: t.gn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                        <Check size={10} strokeWidth={3} />
+                      </span>
+                    </div>
+                  )
+                }
+                return (
+                  <label key={slot} style={{ ...tileBase, cursor: uploading ? "wait" : editLocked ? "not-allowed" : "pointer" }}>
+                    {uploading ? (
+                      <div style={{ width: 16, height: 16, border: `2px solid ${t.ac}33`, borderTopColor: t.ac, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: t.tm }}>
+                        <Upload size={14} />
+                        <span style={{ fontSize: 9, fontWeight: 600 }}>{slot}</span>
+                      </div>
+                    )}
+                    {!editLocked && (
+                      <input type="file" accept="image/*" disabled={uploading}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClockPhoto(slot, f); e.target.value = "" }}
+                        style={{ position: "absolute", inset: 0, opacity: 0, cursor: uploading ? "wait" : "pointer" }} />
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+            {photoError && <div style={{ fontSize: 9, color: t.rd, marginTop: 4 }}>{photoError}</div>}
+          </div>
+        </div>
+      )}
+
+      {/* 打卡照片 lightbox */}
+      {lightboxPhoto && (
+        <div onClick={() => setLightboxPhoto(null)} style={{ position: "fixed", inset: 0, zIndex: 1400, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 20 }}>
+          <img src={`https://cssnsgdawdhrkrmztuas.supabase.co/functions/v1/get-clock-photo?id=${lightboxPhoto.driveId}`} alt={`打卡照片 ${lightboxPhoto.slot}`} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 12px 60px rgba(0,0,0,0.5)" }} />
+          <button onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null) }} style={{ position: "absolute", top: 20, right: 20, background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", padding: "6px 10px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}><XIcon size={16} /></button>
         </div>
       )}
 
