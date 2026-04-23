@@ -662,12 +662,12 @@ export default function WorkEntryManager({ user, t, tk }) {
                             </div>
                           </div>
 
-                          {/* 数据列 */}
-                          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", flex: "2 1 auto" }}>
+                          {/* 数据列（4 列固定宽，跨行对齐） */}
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(72px, 1fr))", gap: 10, flex: "2 1 auto" }}>
                             <DataCol label="总工时" value={hours == null ? "—" : `${hours.toFixed(1)}h`} isMoney={false} t={t} />
                             <DataCol label="课时费" value={fmt(wage)} t={t} />
                             <DataCol label="交通费" value={fmt(transport)} t={t} />
-                            {(other > 0 || commission > 0) && <DataCol label="报销+提成" value={fmt(other + commission)} t={t} />}
+                            <DataCol label="报销+提成" value={fmt(other + commission)} t={t} />
                           </div>
 
                           {/* 合计 + 详情 */}
