@@ -670,9 +670,9 @@ export default function UploadTable({ user, t, tk }) {
     hours: 66, rate: 80, bonus: 82, trans: 82, subtotal: 96,
     student: 100, course: 160, del: 36,
   }
-  const thStyle = { padding: "8px 6px", fontSize: 10, color: t.tm, fontWeight: 600, textAlign: "left", borderBottom: `1px solid ${t.bd}`, background: t.bgH, position: "sticky", top: 0, zIndex: 1, whiteSpace: "nowrap" }
-  const tdStyle = { padding: "4px 6px", fontSize: 12, color: t.tx, borderBottom: `1px solid ${t.bl}`, verticalAlign: "middle" }
-  const inpStyle = { width: "100%", padding: "4px 6px", border: "1px solid transparent", borderRadius: 4, fontSize: 12, background: "transparent", color: t.tx, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }
+  const thStyle = { padding: "12px 10px", fontSize: 11, color: t.ts, fontWeight: 700, textAlign: "left", borderBottom: `2px solid rgba(255,255,255,0.5)`, background: "rgba(255,255,255,0.4)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 1, whiteSpace: "nowrap", letterSpacing: "0.02em" }
+  const tdStyle = { padding: "8px 10px", fontSize: 12, color: t.tx, borderBottom: `1px solid ${t.bl}`, verticalAlign: "middle", transition: "background .2s ease" }
+  const inpStyle = { width: "100%", padding: "6px 10px", border: "1px solid rgba(255,255,255,0.4)", borderRadius: 8, fontSize: 12, background: "rgba(255,255,255,0.5)", color: t.tx, outline: "none", fontFamily: "inherit", boxSizing: "border-box", transition: "all .2s cubic-bezier(0.4, 0, 0.2, 1)", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.03)" }
   const numStyle = { ...tdStyle, textAlign: "right", fontVariantNumeric: "tabular-nums" }
 
   return (
@@ -801,7 +801,8 @@ export default function UploadTable({ user, t, tk }) {
         <div style={{ textAlign: "center", padding: 40, color: t.tm }}>加载中...</div>
       ) : (
       <>
-      <div style={{ background: t.bgC, border: `1px solid ${t.bd}`, borderRadius: 10, overflow: "auto", marginBottom: 12 }}>
+      <div style={{ ...glassCard, overflow: "hidden", marginBottom: 16, padding: 2 }}>
+       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: showBonus ? 1100 : 1000 }}>
           <thead>
             <tr>
@@ -828,27 +829,27 @@ export default function UploadTable({ user, t, tk }) {
               const rateOptions = rates.map(x => x.business_type)
               const wd = r.work_date ? new Date(r.work_date + "T00:00:00").getDay() : null
               return (
-                <tr key={r._key} style={{ background: r._isNew ? `${t.ac}05` : "transparent" }}>
-                  <td style={{ ...tdStyle, textAlign: "center", color: t.tm }}>{i + 1}</td>
-                  <td style={{ ...tdStyle, paddingLeft: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <input type="date" value={r.work_date} onChange={(e) => updateRow(r._key, "work_date", e.target.value)} style={{ ...inpStyle, width: 104, flex: "0 0 auto" }} />
-                      {wd !== null && <span style={{ fontSize: 10, fontWeight: 600, color: wd === 0 || wd === 6 ? t.rd : t.td, flex: "0 0 auto" }}>{WEEKDAYS[wd]}</span>}
+                <tr key={r._key} className="upload-row" style={{ background: r._isNew ? `${t.ac}05` : "transparent" }}>
+                  <td style={{ ...tdStyle, textAlign: "center", color: t.tm, fontWeight: 600 }}>{i + 1}</td>
+                  <td className="upload-cell" style={{ ...tdStyle, paddingLeft: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input type="date" value={r.work_date} onChange={(e) => updateRow(r._key, "work_date", e.target.value)} style={{ ...inpStyle, width: 110, flex: "0 0 auto", cursor: "pointer" }} />
+                      {wd !== null && <span style={{ fontSize: 10, fontWeight: 700, color: wd === 0 || wd === 6 ? t.rd : t.tm, flex: "0 0 auto" }}>{WEEKDAYS[wd]}</span>}
                     </div>
                   </td>
-                  <td style={tdStyle}>
+                  <td className="upload-cell" style={tdStyle}>
                     <select value={r.business_type} onChange={(e) => updateRow(r._key, "business_type", e.target.value)}
-                      style={{ ...inpStyle, fontFamily: "inherit" }}>
+                      style={{ ...inpStyle, fontFamily: "inherit", cursor: "pointer" }}>
                       <option value="">—</option>
                       {[...new Set([...rateOptions, r.business_type].filter(Boolean))].map(bt => (
                         <option key={bt} value={bt}>{bt}{rateOptions.includes(bt) ? ` ¥${getRateFor(bt)}` : ""}</option>
                       ))}
                     </select>
                   </td>
-                  <td style={tdStyle}><input type="time" value={r.start_time} onChange={(e) => updateRow(r._key, "start_time", e.target.value)} style={inpStyle} /></td>
-                  <td style={tdStyle}><input type="time" value={r.end_time} onChange={(e) => updateRow(r._key, "end_time", e.target.value)} style={inpStyle} /></td>
-                  <td style={{ ...numStyle, color: t.tm }}>{fmtHours(r.work_minutes || 0)}</td>
-                  <td style={numStyle}>
+                  <td className="upload-cell" style={tdStyle}><input type="time" value={r.start_time} onChange={(e) => updateRow(r._key, "start_time", e.target.value)} style={inpStyle} /></td>
+                  <td className="upload-cell" style={tdStyle}><input type="time" value={r.end_time} onChange={(e) => updateRow(r._key, "end_time", e.target.value)} style={inpStyle} /></td>
+                  <td style={{ ...numStyle, color: t.tm, fontWeight: 600 }}>{fmtHours(r.work_minutes || 0)}</td>
+                  <td className="upload-cell" style={numStyle}>
                     <input type="number" value={r.hourly_rate || ""} onChange={(e) => updateRow(r._key, "hourly_rate", parseInt(e.target.value) || 0)} style={{ ...inpStyle, textAlign: "right" }} />
                   </td>
                   {showBonus && (
@@ -863,19 +864,19 @@ export default function UploadTable({ user, t, tk }) {
                       )}
                     </td>
                   )}
-                  <td style={numStyle}>
+                  <td className="upload-cell" style={numStyle}>
                     <input type="number" value={r.transport_fee} onChange={(e) => updateRow(r._key, "transport_fee", e.target.value)} style={{ ...inpStyle, textAlign: "right" }} />
                   </td>
-                  <td style={{ ...numStyle, fontWeight: 600, color: t.ac }}>{yen(rowSubtotal(r))}</td>
-                  <td style={tdStyle}>
+                  <td style={{ ...numStyle, fontWeight: 800, color: t.ac, fontSize: 13 }}>{yen(rowSubtotal(r))}</td>
+                  <td className="upload-cell" style={tdStyle}>
                     <input value={r.student_name || ""} onChange={(e) => updateRow(r._key, "student_name", e.target.value)} placeholder="一对一必填" style={inpStyle} />
                   </td>
-                  <td style={tdStyle}>
+                  <td className="upload-cell" style={tdStyle}>
                     <input value={r.course_name || ""} onChange={(e) => updateRow(r._key, "course_name", e.target.value)} placeholder="课程名/说明" style={inpStyle} />
                   </td>
                   <td style={{ ...tdStyle, textAlign: "center" }}>
-                    <button onClick={() => removeRow(r)} style={{ background: "transparent", border: "none", color: t.rd, cursor: "pointer", padding: 4, fontFamily: "inherit" }} title="删除">
-                      <Trash2 size={13} />
+                    <button onClick={() => removeRow(r)} style={{ background: "transparent", border: "none", color: t.rd, cursor: "pointer", padding: 6, fontFamily: "inherit", borderRadius: 999, display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = `${t.rd}15`; e.currentTarget.style.transform = "scale(1.05)" }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.transform = "none" }} title="删除">
+                      <Trash2 size={14} strokeWidth={1.8} />
                     </button>
                   </td>
                 </tr>
@@ -883,6 +884,7 @@ export default function UploadTable({ user, t, tk }) {
             })}
           </tbody>
         </table>
+       </div>
       </div>
 
       {isSubmitted && (
@@ -892,36 +894,32 @@ export default function UploadTable({ user, t, tk }) {
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <button onClick={addRow} disabled={isSubmitted && !isAdmin} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.ac}`, background: `${t.ac}08`, color: t.ac, cursor: (isSubmitted && !isAdmin) ? "not-allowed" : "pointer", fontSize: 12, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, opacity: (isSubmitted && !isAdmin) ? 0.4 : 1 }}>
-          <Plus size={14} /> 新增一行
+        <button onClick={addRow} disabled={isSubmitted && !isAdmin} style={{ padding: "8px 16px", borderRadius: 12, border: `1px dashed ${t.ac}`, background: `rgba(255,255,255,0.6)`, backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", color: t.ac, cursor: (isSubmitted && !isAdmin) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, opacity: (isSubmitted && !isAdmin) ? 0.4 : 1, transition: "background .2s" }} onMouseEnter={(e) => { if (!(isSubmitted && !isAdmin)) e.currentTarget.style.background = "rgba(255,255,255,0.9)" }} onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.6)"}>
+          <Plus size={16} strokeWidth={2.5} /> 新增一行
         </button>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={save} disabled={saving || (isSubmitted && !isAdmin) || rows.every(r => !r._dirty && !r._isNew)} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, opacity: (saving || (isSubmitted && !isAdmin) || rows.every(r => !r._dirty && !r._isNew)) ? 0.5 : 1 }}>
-            <Save size={14} /> {saving ? "保存中..." : "保存全部"}
+        <div style={{ display: "flex", gap: 12 }}>
+          <button onClick={save} disabled={saving || (isSubmitted && !isAdmin) || rows.every(r => !r._dirty && !r._isNew)} style={{ padding: "10px 20px", borderRadius: 12, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, boxShadow: "0 8px 20px -6px rgba(59,130,246,.4)", opacity: (saving || (isSubmitted && !isAdmin) || rows.every(r => !r._dirty && !r._isNew)) ? 0.5 : 1, transition: "transform .2s" }} onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-1px)"} onMouseLeave={(e) => e.currentTarget.style.transform = "none"}>
+            <Save size={16} /> {saving ? "保存中..." : "保存全部"}
           </button>
           {!isAdmin && !isSubmitted && (
-            <button onClick={submitReport} disabled={submittingReport || hasChanges || rows.length === 0} title={hasChanges ? "请先保存修改" : rows.length === 0 ? "本月无工时记录" : ""} style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: t.gn, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submittingReport ? "wait" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, opacity: (submittingReport || hasChanges || rows.length === 0) ? 0.5 : 1 }}>
-              <Send size={14} /> {submittingReport ? "提交中..." : "提交月报"}
+            <button onClick={submitReport} disabled={submittingReport || hasChanges || rows.length === 0} title={hasChanges ? "请先保存修改" : rows.length === 0 ? "本月无工时记录" : ""} style={{ padding: "10px 20px", borderRadius: 12, border: "none", background: t.gn, color: "#fff", fontSize: 13, fontWeight: 600, cursor: submittingReport ? "wait" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, boxShadow: "0 8px 20px -6px rgba(16,185,129,.4)", opacity: (submittingReport || hasChanges || rows.length === 0) ? 0.5 : 1, transition: "transform .2s" }} onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-1px)"} onMouseLeave={(e) => e.currentTarget.style.transform = "none"}>
+              <Send size={16} /> {submittingReport ? "提交中..." : "提交月报"}
             </button>
           )}
         </div>
       </div>
 
-      {/* 底部汇总（粘性） */}
-      <div style={{
-        position: "sticky", bottom: 0, background: t.bgC, border: `1px solid ${t.bd}`,
-        borderRadius: 10, padding: "14px 18px", display: "flex", justifyContent: "space-between",
-        alignItems: "center", flexWrap: "wrap", gap: 14, boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
-      }}>
-        <div style={{ display: "flex", gap: 22, flexWrap: "wrap", fontSize: 12, color: t.ts }}>
+      {/* 底部汇总 —— 玻璃卡 + 合計徽章 */}
+      <div style={{ ...glassCard, padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, position: "sticky", bottom: 0 }}>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap", fontSize: 12, color: t.ts }}>
           <Stat label="総時間数" value={`${totals.totalHours.toFixed(2)} h`} t={t} />
           <Stat label="給与総額" value={yen(totals.wageSum)} t={t} />
           {showBonus && <Stat label="班课绩效" value={yen(totals.bonusSum)} t={t} />}
           <Stat label="交通費総額" value={yen(totals.transSum)} t={t} />
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 12, color: t.tm }}>合計</span>
-          <span style={{ fontSize: 22, fontWeight: 800, color: t.ac, fontVariantNumeric: "tabular-nums" }}>{yen(totals.grand)}</span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, background: "rgba(255,255,255,0.5)", padding: "10px 20px", borderRadius: 16 }}>
+          <span style={{ fontSize: 13, color: t.tm, fontWeight: 600 }}>合計</span>
+          <span style={{ fontSize: 26, fontWeight: 800, color: t.ac, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{yen(totals.grand)}</span>
         </div>
       </div>
       </>)}
@@ -1098,9 +1096,9 @@ export default function UploadTable({ user, t, tk }) {
 
 function Stat({ label, value, t }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span style={{ fontSize: 10, color: t.tm }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 600, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 11, color: t.tm, fontWeight: 600, letterSpacing: "0.05em" }}>{label}</span>
+      <span style={{ fontSize: 16, fontWeight: 700, color: t.tx, fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </div>
   )
 }

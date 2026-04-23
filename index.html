@@ -57,6 +57,10 @@ input,select,button,textarea{font-family:inherit}
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 input[type=number]{-moz-appearance:textfield}
+
+/* 上传表格内单元格输入的聚焦高亮 —— 仅该页用，避免污染其它页 */
+.upload-cell input:focus,.upload-cell select:focus{background:#fff!important;border-color:rgba(59,130,246,.6)!important;box-shadow:0 0 0 3px rgba(59,130,246,.12)!important}
+.upload-row:hover{background:rgba(59,130,246,.04)!important}
 .home-banner:hover{background:rgba(255,237,213,.6);border-color:rgba(253,186,116,.7)}
 .home-banner:active{transform:scale(.995)}
 
