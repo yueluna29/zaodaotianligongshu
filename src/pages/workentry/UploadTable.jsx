@@ -110,13 +110,21 @@ export default function UploadTable({ user, t, tk }) {
     ])
     const loaded = (entries || [])
       .filter(e => e.business_type) // 过滤掉纯"其他报销"行
-      .map(e => ({
-        ...e, _key: e.id, _isNew: false, _dirty: false,
-        start_time: e.start_time?.slice(0, 5) || "",
-        end_time: e.end_time?.slice(0, 5) || "",
-        transport_fee: e.transport_fee != null ? String(e.transport_fee) : "",
-        bonus_per_hour: e.bonus_per_hour != null ? Number(e.bonus_per_hour) : 0,
-      }))
+      .map(e => {
+        const start_time = e.start_time?.slice(0, 5) || ""
+        const end_time = e.end_time?.slice(0, 5) || ""
+        // 自愈：旧记录跨夜被存成 work_minutes=0，如果 start/end 都在就当场重算
+        let work_minutes = e.work_minutes
+        if (start_time && end_time && (!work_minutes || work_minutes === 0)) {
+          work_minutes = calcMin(start_time, end_time)
+        }
+        return {
+          ...e, work_minutes, _key: e.id, _isNew: false, _dirty: false,
+          start_time, end_time,
+          transport_fee: e.transport_fee != null ? String(e.transport_fee) : "",
+          bonus_per_hour: e.bonus_per_hour != null ? Number(e.bonus_per_hour) : 0,
+        }
+      })
     setRows(loaded)
     setRates(payRates || [])
     setLd(false)

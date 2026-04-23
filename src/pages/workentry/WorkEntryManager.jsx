@@ -132,9 +132,20 @@ export default function WorkEntryManager({ user, t, tk }) {
     setNoteSavedAt(null)
     const loaded = (r || []).map(e => {
       const isExp = !e.business_type && (Number(e.other_expense) > 0 || e.other_expense_note)
+      const start_time = e.start_time?.slice(0, 5) || ""
+      const end_time = e.end_time?.slice(0, 5) || ""
+      // 自愈：旧跨夜记录存成 work_minutes=0，读时重算
+      let work_minutes = e.work_minutes
+      if (!isExp && start_time && end_time && (!work_minutes || work_minutes === 0)) {
+        const [sh, sm] = start_time.split(":").map(Number)
+        const [eh, em] = end_time.split(":").map(Number)
+        let m = (eh * 60 + em) - (sh * 60 + sm)
+        if (m < 0) m += 24 * 60
+        work_minutes = m
+      }
       return {
-        ...e, _key: e.id, _isNew: false, _dirty: false, _type: isExp ? "expense" : "work",
-        start_time: e.start_time?.slice(0, 5) || "", end_time: e.end_time?.slice(0, 5) || "",
+        ...e, work_minutes, _key: e.id, _isNew: false, _dirty: false, _type: isExp ? "expense" : "work",
+        start_time, end_time,
         transport_fee: e.transport_fee != null ? String(e.transport_fee) : "",
         other_expense: e.other_expense != null ? String(e.other_expense) : "",
         other_expense_note: e.other_expense_note || "", student_name: e.student_name || "", course_name: e.course_name || "",
