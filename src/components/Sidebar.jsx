@@ -8,12 +8,15 @@ import MaintenanceModeModal from "./MaintenanceModeModal"
 export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleTheme, badge, workBadge }) {
   const isA = user.role === "admin"
   const isSA = isSuperAdmin(user)
+  const isPlainAdmin = isA && !isSA
   const et = user.employment_type || "正社員"
   const isHourly = empIsHourly(et)
   const [pwdShow, setPwdShow] = useState(false)
   const [idShow, setIdShow] = useState(false)
   const [maintShow, setMaintShow] = useState(false)
 
+  // 普通管理员（非 super admin）只保留 4 个菜单：首页 / 档案 / 承认中心 / 休假日历
+  const PLAIN_ADMIN_ALLOWED = new Set(["home", "empmgr", "approve", "cal"])
   const items = [
     { id: "home", l: "首页", ic: Home, show: true },
     { id: "att", l: "勤怠一览", ic: ClipboardList, show: !isHourly || isA },
@@ -23,7 +26,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
     { id: "approve", l: "承认中心", ic: CheckCircle, show: isA },
     { id: "cal", l: "休假日历", ic: CalendarDays, show: !isHourly || isA },
     { id: "report", l: "月度报告", ic: BarChart3, show: isA },
-  ]
+  ].map((it) => (isPlainAdmin && !PLAIN_ADMIN_ALLOWED.has(it.id) ? { ...it, show: false } : it))
 
   return (
     <>
