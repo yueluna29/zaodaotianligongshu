@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { themes } from "./config/theme"
 import { sbGet, sbRefresh } from "./api/supabase"
 import { useAuth } from "./hooks/useAuth"
@@ -39,6 +39,9 @@ export default function App() {
   const [maintState, setMaintState] = useState({ on: false, message: null })
   const t = themes[theme]
 
+  const userRef = useRef(user)
+  useEffect(() => { userRef.current = user }, [user])
+
   useEffect(() => {
     const check = () => setMobile(window.innerWidth < 768)
     check()
@@ -78,12 +81,16 @@ export default function App() {
 
   // 自动续期：挂载时立刻刷一次（防止 localStorage 里的 token 已过期），
   // 之后每 50 分钟刷一次（access_token 1h 过期），tab 从后台切回也刷一次。
+  // 关键：dep 用 user?.id 而不是 user?.refreshToken —— Supabase 每次 refresh 都会返回新的
+  // refresh_token，若依赖它则 effect 会在每次刷新后重跑 → 立刻再 doRefresh → 死循环频闪。
   useEffect(() => {
-    if (!user?.refreshToken) return
+    if (!user?.id || !userRef.current?.refreshToken) return
     const doRefresh = async () => {
-      const r = await sbRefresh(user.refreshToken)
+      const cur = userRef.current
+      if (!cur?.refreshToken) return
+      const r = await sbRefresh(cur.refreshToken)
       if (r?.access_token) {
-        login({ ...user, token: r.access_token, refreshToken: r.refresh_token || user.refreshToken })
+        login({ ...cur, token: r.access_token, refreshToken: r.refresh_token || cur.refreshToken })
       }
     }
     doRefresh()
@@ -91,8 +98,7 @@ export default function App() {
     const onVis = () => { if (document.visibilityState === "visible") doRefresh() }
     document.addEventListener("visibilitychange", onVis)
     return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis) }
-    // 仅在 refreshToken 变化时重置（每次刷新都会变），避免依赖 user 整个对象
-  }, [user?.refreshToken])
+  }, [user?.id])
 
   const toggleTheme = () =>
     setTheme((p) => {
