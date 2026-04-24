@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, KeyRound, UserCog, ShieldAlert, Table as TableIcon } from "lucide-react"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, KeyRound, UserCog, ShieldAlert, Table as TableIcon, Receipt } from "lucide-react"
 import { isHourly as empIsHourly, isSuperAdmin } from "../config/constants"
 import ChangePasswordModal from "./ChangePasswordModal"
 import ChangeLoginIdModal from "./ChangeLoginIdModal"
@@ -15,8 +15,8 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
   const [idShow, setIdShow] = useState(false)
   const [maintShow, setMaintShow] = useState(false)
 
-  // 普通管理员（非 super admin）只保留 4 个菜单：首页 / 档案 / 承认中心 / 休假日历
-  const PLAIN_ADMIN_ALLOWED = new Set(["home", "empmgr", "approve", "cal"])
+  // 普通管理员（非 super admin）只保留 5 个菜单：首页 / 勤怠一览 / 档案 / 承认中心 / 休假日历
+  const PLAIN_ADMIN_ALLOWED = new Set(["home", "att", "empmgr", "approve", "cal"])
   const items = [
     { id: "home", l: "首页", ic: Home, show: true },
     { id: "att", l: "勤怠一览", ic: ClipboardList, show: !isHourly || isA },
@@ -26,6 +26,7 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
     { id: "approve", l: "承认中心", ic: CheckCircle, show: isA },
     { id: "cal", l: "休假日历", ic: CalendarDays, show: !isHourly || isA },
     { id: "report", l: "月度报告", ic: BarChart3, show: isA },
+    { id: "payroll", l: "给与明细", ic: Receipt, show: isSA },
   ].map((it) => (isPlainAdmin && !PLAIN_ADMIN_ALLOWED.has(it.id) ? { ...it, show: false } : it))
 
   return (

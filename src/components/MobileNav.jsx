@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, Table as TableIcon } from "lucide-react"
+import { Home, ClipboardList, Clock, Users, CheckCircle, CalendarDays, BarChart3, Table as TableIcon, Receipt } from "lucide-react"
 import { isHourly as empIsHourly, isSuperAdmin } from "../config/constants"
 
 export default function MobileNav({ user, view, onNav, t, badge, workBadge }) {
@@ -8,8 +8,8 @@ export default function MobileNav({ user, view, onNav, t, badge, workBadge }) {
   const et = user.employment_type || "正社員"
   const isHourly = empIsHourly(et)
 
-  // 普通管理员（非 super admin）只保留 4 个菜单：首页 / 档案 / 审批 / 日历
-  const PLAIN_ADMIN_ALLOWED = new Set(["home", "empmgr", "approve", "cal"])
+  // 普通管理员（非 super admin）只保留 5 个菜单：首页 / 勤怠 / 档案 / 审批 / 日历
+  const PLAIN_ADMIN_ALLOWED = new Set(["home", "att", "empmgr", "approve", "cal"])
   const all = [
     { id: "home", ic: Home, l: "首页", show: true },
     { id: "att", ic: ClipboardList, l: "勤怠", show: !isHourly || isA },
@@ -19,6 +19,7 @@ export default function MobileNav({ user, view, onNav, t, badge, workBadge }) {
     { id: "cal", ic: CalendarDays, l: "日历", show: !isHourly || isA },
     { id: "approve", ic: CheckCircle, l: "审批", show: isA },
     { id: "report", ic: BarChart3, l: "月报", show: isA },
+    { id: "payroll", ic: Receipt, l: "给与", show: isSA },
   ]
 
   const items = all.filter(n => n.show && (!isPlainAdmin || PLAIN_ADMIN_ALLOWED.has(n.id)))
