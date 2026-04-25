@@ -139,7 +139,7 @@ export default function LeaveHub({ user, t, tk }) {
         <div style={{ display: "flex", background: t.bgI, padding: 4, borderRadius: 12, border: `1px solid ${t.bd}`, flexWrap: "wrap" }}>
           <NavTab t={t} label="我的假期"     icon={<Activity size={13} />}     active={view === "my_dashboard"} onClick={() => setView("my_dashboard")} />
           <NavTab t={t} label="休假申请"     icon={<CalendarPlus size={13} />} active={view === "apply_leave"}  onClick={() => setView("apply_leave")} />
-          <NavTab t={t} label="休息日加班"   icon={<Briefcase size={13} />}    active={view === "apply_work"}   onClick={() => setView("apply_work")} />
+          <NavTab t={t} label="休息日出勤"   icon={<Briefcase size={13} />}    active={view === "apply_work"}   onClick={() => setView("apply_work")} />
           {canManage && (
             <>
               <div style={{ width: 1, background: t.bd, margin: "4px 6px" }} />
@@ -152,7 +152,7 @@ export default function LeaveHub({ user, t, tk }) {
 
       {view === "my_dashboard" && <ViewMyDashboard t={t} card={card} canManage={canManage} onAdjust={(pool) => openAdjust({ id: user.id, name: user.name }, pool)} onOpenDetail={setDetailModal} />}
       {view === "apply_leave"  && <ViewApplyLeave  t={t} tk={tk} card={card} inputS={inputS} />}
-      {view === "apply_work"   && <ViewApplyWork   t={t} card={card} inputS={inputS} />}
+      {view === "apply_work"   && <ViewApplyWork   t={t} tk={tk} card={card} inputS={inputS} />}
       {view === "admin_red"    && canManage && <ViewAdminRedDays t={t} tk={tk} card={card} inputS={inputS} />}
       {view === "admin_team"   && canManage && <ViewAdminTeam    t={t} card={card} rows={teamRows} loading={teamLoading} onRefresh={loadTeam} onAdjust={openAdjust} />}
 
@@ -417,6 +417,7 @@ function ViewApplyLeave({ t, tk, card, inputS }) {
   const [pool, setPool] = useState("paid")
   const [dates, setDates] = useState([])
   const [halfMode, setHalfMode] = useState("full")
+  const [leaveReason, setLeaveReason] = useState("")
 
   const PoolOption = ({ value, color, title, sub, badge }) => {
     const active = pool === value
@@ -473,20 +474,28 @@ function ViewApplyLeave({ t, tk, card, inputS }) {
         </div>
 
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.ts, marginBottom: 7 }}>理由（选填）</label>
-          <textarea rows={3} placeholder="处理私事" style={{ ...inputS, width: "100%", resize: "none", boxSizing: "border-box" }} />
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.ts, marginBottom: 7 }}>理由 <span style={{ color: t.rd }}>*</span></label>
+          <textarea rows={3} placeholder="处理私事" value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} style={{ ...inputS, width: "100%", resize: "none", boxSizing: "border-box" }} />
         </div>
 
-        <button disabled={!dates.length} style={{ padding: 13, borderRadius: 11, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, cursor: dates.length ? "pointer" : "not-allowed", marginTop: 4, fontFamily: "inherit", opacity: dates.length ? 1 : 0.5 }}>
-          <Send size={14} /> 提交申请{dates.length > 0 && `（共 ${dates.length} 天）`}
-        </button>
+        {(() => {
+          const ok = dates.length > 0 && leaveReason.trim().length > 0
+          return (
+            <button disabled={!ok} style={{ padding: 13, borderRadius: 11, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, cursor: ok ? "pointer" : "not-allowed", marginTop: 4, fontFamily: "inherit", opacity: ok ? 1 : 0.5 }}>
+              <Send size={14} /> 提交申请{dates.length > 0 && `（共 ${dates.length} 天）`}
+            </button>
+          )
+        })()}
       </div>
     </div>
   )
 }
 
-function ViewApplyWork({ t, card, inputS }) {
+function ViewApplyWork({ t, tk, card, inputS }) {
   const [compMethod, setCompMethod] = useState("pool")
+  const [dates, setDates] = useState([])
+  const [swapDate, setSwapDate] = useState("")
+  const [reason, setReason] = useState("")
 
   const CompOption = ({ value, title, sub, expand }) => {
     const active = compMethod === value
@@ -502,37 +511,44 @@ function ViewApplyWork({ t, card, inputS }) {
     )
   }
 
+  const canSubmit = dates.length > 0 && reason.trim().length > 0
+
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", ...card, padding: 26 }}>
       <h2 style={{ fontSize: 17, fontWeight: 700, color: t.tx, margin: "0 0 20px", display: "flex", alignItems: "center", gap: 8 }}><Briefcase color={t.gn} size={20} /> 提交休息日出勤申请</h2>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.ts, marginBottom: 7 }}>预计出勤日</label>
-          <input type="date" style={{ ...inputS, width: "100%", boxSizing: "border-box" }} />
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.ts, marginBottom: 7 }}>预计出勤日（可多选，点格子选取）</label>
+          <DateMultiPicker selected={dates} onChange={setDates} t={t} tk={tk} />
+          {dates.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: t.tm }}>已选 <strong style={{ color: t.ac }}>{dates.length}</strong> 天</div>
+          )}
         </div>
 
         <div>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.ts, marginBottom: 7 }}>选择补偿方式</label>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            <CompOption value="pool" title="换休（未定）→ 存入代休池" sub="获得 1 天代休余额，日后再决定哪天休。" />
+            <CompOption value="pool" title="换休（未定）→ 存入代休池" sub="获得对应天数代休余额，日后再决定哪天休。" />
             <CompOption
               value="swap"
               title="换休（指定日期）"
-              sub="直接配对，指定将来某天休息。"
-              expand={<input type="date" style={{ ...inputS, marginTop: 8, width: "100%", boxSizing: "border-box", borderColor: t.ac }} />}
+              sub={dates.length > 1 ? "选了多日时，每条记录的换休日均设为待定，可在批准后单独编辑" : "直接配对，指定将来某天休息。"}
+              expand={dates.length <= 1 ? (
+                <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={{ ...inputS, marginTop: 8, width: "100%", boxSizing: "border-box", borderColor: t.ac }} />
+              ) : null}
             />
             <CompOption value="pay" title="作为加班费发放" sub="不进代休池，直接换算成加班费发了。" />
           </div>
         </div>
 
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.ts, marginBottom: 7 }}>工作内容/理由</label>
-          <textarea rows={3} placeholder="为应对突发活动等" style={{ ...inputS, width: "100%", resize: "none", boxSizing: "border-box" }} />
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: t.ts, marginBottom: 7 }}>工作内容 / 理由 <span style={{ color: t.rd }}>*</span></label>
+          <textarea rows={3} placeholder="为应对突发活动等" value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputS, width: "100%", resize: "none", boxSizing: "border-box" }} />
         </div>
 
-        <button style={{ padding: 13, borderRadius: 11, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, cursor: "pointer", marginTop: 4, fontFamily: "inherit" }}>
-          <Send size={14} /> 提交申请
+        <button disabled={!canSubmit} style={{ padding: 13, borderRadius: 11, border: "none", background: t.ac, color: "#fff", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, cursor: canSubmit ? "pointer" : "not-allowed", marginTop: 4, fontFamily: "inherit", opacity: canSubmit ? 1 : 0.5 }}>
+          <Send size={14} /> 提交申请{dates.length > 0 && `（共 ${dates.length} 天）`}
         </button>
       </div>
     </div>
