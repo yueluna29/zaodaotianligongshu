@@ -425,7 +425,7 @@ export default function PayrollManager({ user, t, tk }) {
                   {ADJUSTMENT_FIELDS.map(f => <th key={f.k} style={{ ...th, top: th2Top, background: `${t.wn}0c`, fontWeight: 500, minWidth: 84 }}>{f.l}</th>)}
 
                   <th style={{ ...th, top: th2Top, background: `${t.bg}`, minWidth: 100 }}>方法</th>
-                  <th style={{ ...th, top: th2Top, background: `${t.bg}`, minWidth: 72 }}>税率</th>
+                  <th style={{ ...th, top: th2Top, background: `${t.bg}`, minWidth: 80 }}>扣税0.1</th>
                 </tr>
               </thead>
               <tbody>
