@@ -68,13 +68,13 @@ export default function LeaveHub({ user, t, tk }) {
     if (!canManage) return
     setTeamLoading(true)
     const emps = await sbGet(
-      `employees?is_active=eq.true&employment_type=in.(正社員,契約社員,正社员)&order=name&select=id,name,employment_type`,
+      `employees?is_active=eq.true&employment_type=in.(正社員,契約社員,正社员)&order=name&select=id,name,employment_type,region`,
       tk
     )
     const summaries = await Promise.all(
       (emps || []).map((e) => sbRpc("get_leave_summary", { p_employee_id: e.id }, tk))
     )
-    setTeamRows((emps || []).map((e, i) => ({ id: e.id, name: e.name, summary: summaries[i] })))
+    setTeamRows((emps || []).map((e, i) => ({ id: e.id, name: e.name, region: e.region, summary: summaries[i] })))
     setTeamLoading(false)
   }, [canManage, tk])
 
@@ -591,6 +591,7 @@ function ViewAdminRedDays({ t, card, inputS }) {
 }
 
 function ViewAdminTeam({ t, card, rows, loading, onRefresh, onAdjust }) {
+  const [regionTab, setRegionTab] = useState("all")
   const Cell = ({ value, color, onClick }) => (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}10`, padding: "4px 10px", borderRadius: 8, border: `1px solid ${color}25` }}>
       <span style={{ fontWeight: 700, fontSize: 13, color: t.tx }}>{value}</span>
@@ -598,9 +599,32 @@ function ViewAdminTeam({ t, card, rows, loading, onRefresh, onAdjust }) {
     </div>
   )
 
+  const counts = {
+    all:  rows ? rows.length : 0,
+    日本: rows ? rows.filter((r) => r.region === "日本").length : 0,
+    中国: rows ? rows.filter((r) => r.region === "中国").length : 0,
+    未分类: rows ? rows.filter((r) => !r.region).length : 0,
+  }
+  const filtered = !rows ? [] : regionTab === "all" ? rows : regionTab === "未分类" ? rows.filter((r) => !r.region) : rows.filter((r) => r.region === regionTab)
+
+  const RegionTab = ({ k, label }) => {
+    const active = regionTab === k
+    return (
+      <button onClick={() => setRegionTab(k)} style={{
+        padding: "6px 14px", borderRadius: 8, border: `1px solid ${active ? t.ac : t.bd}`,
+        background: active ? `${t.ac}12` : t.bgI, color: active ? t.ac : t.ts,
+        fontSize: 12, fontWeight: active ? 700 : 500, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit",
+      }}>
+        {label}
+        <span style={{ background: active ? `${t.ac}25` : t.bd, color: active ? t.ac : t.tm, padding: "1px 7px", borderRadius: 9, fontSize: 10, fontWeight: 700 }}>{counts[k]}</span>
+      </button>
+    )
+  }
+
   return (
     <div style={{ ...card, padding: 22 }}>
-      <div style={{ marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ fontSize: 16, fontWeight: 700, color: t.tx, margin: 0, display: "flex", alignItems: "center", gap: 7 }}><Users color={t.ac} size={18} /> 团队假期台账</h2>
           <p style={{ fontSize: 11, color: t.tm, margin: "4px 0 0" }}>点击铅笔图标手动调整余额，会写入该员工的调整记录表。</p>
@@ -610,15 +634,26 @@ function ViewAdminTeam({ t, card, rows, loading, onRefresh, onAdjust }) {
         </button>
       </div>
 
+      {rows && rows.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+          <RegionTab k="all" label="全部" />
+          <RegionTab k="日本" label="日本" />
+          <RegionTab k="中国" label="中国" />
+          {counts["未分类"] > 0 && <RegionTab k="未分类" label="未分类" />}
+        </div>
+      )}
+
       {rows === null && <div style={{ textAlign: "center", padding: 30, color: t.tm, fontSize: 12 }}>加载中…</div>}
       {rows && rows.length === 0 && <div style={{ textAlign: "center", padding: 30, color: t.tm, fontSize: 12 }}>暂无在职正/契社员</div>}
+      {rows && rows.length > 0 && filtered.length === 0 && <div style={{ textAlign: "center", padding: 30, color: t.tm, fontSize: 12 }}>该地区无员工</div>}
 
-      {rows && rows.length > 0 && (
+      {rows && filtered.length > 0 && (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 760 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 800 }}>
             <thead>
               <tr style={{ background: t.bgI }}>
                 <th style={{ padding: 11, textAlign: "left",   color: t.ts, borderBottom: `2px solid ${t.bd}` }}>员工姓名</th>
+                <th style={{ padding: 11, textAlign: "center", color: t.ts, borderBottom: `2px solid ${t.bd}` }}>地区</th>
                 <th style={{ padding: 11, textAlign: "center", color: t.ac, borderBottom: `2px solid ${t.bd}` }}>年假剩余</th>
                 <th style={{ padding: 11, textAlign: "center", color: t.wn, borderBottom: `2px solid ${t.bd}` }}>義務残</th>
                 <th style={{ padding: 11, textAlign: "center", color: t.rd, borderBottom: `2px solid ${t.bd}` }}>红日补休</th>
@@ -627,16 +662,20 @@ function ViewAdminTeam({ t, card, rows, loading, onRefresh, onAdjust }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => {
+              {filtered.map((row, i) => {
                 const s = row.summary || {}
                 const paid    = s.paid_leave || {}
                 const red     = s.holiday_comp || {}
                 const comp    = s.comp_leave || {}
                 const mandRem = paid.mandatory_remaining ?? 0
                 const usedAll = (Number(paid.used) || 0) + (Number(red.used) || 0) + (Number(comp.used) || 0)
+                const regionColor = row.region === "日本" ? t.ac : row.region === "中国" ? t.rd : t.tm
                 return (
                   <tr key={row.id} style={{ borderBottom: `1px solid ${t.bl}`, background: i % 2 === 0 ? "transparent" : t.bgI }}>
                     <td style={{ padding: 11, fontWeight: 700, color: t.tx }}>{row.name}</td>
+                    <td style={{ padding: 11, textAlign: "center" }}>
+                      <span style={{ background: `${regionColor}15`, color: regionColor, padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700 }}>{row.region || "未分类"}</span>
+                    </td>
                     <td style={{ padding: 11, textAlign: "center" }}><Cell value={paid.balance ?? 0} color={t.ac} onClick={() => onAdjust({ id: row.id, name: row.name }, "年假")} /></td>
                     <td style={{ padding: 11, textAlign: "center" }}>
                       {mandRem > 0
