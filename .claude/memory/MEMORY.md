@@ -1,6 +1,8 @@
 - [每次改完都 push 到 main](feedback_auto_deploy.md) — 项目靠线上部署查看，做完默认 commit+push
 - [全站 UI 玻璃质感风格](feedback_design_style.md) — glass-card / ambient glow / 细字重细线图标，新设计默认沿用
 - [共用 UI 不写差异化提示](feedback_no_differentiating_ui_text.md) — 规则例外私下跟个人说，不要在界面里暴露"谁可以不做"
+- [不加多余的"新/预览/临时"标签](feedback_no_extraneous_labels.md) — 菜单/按钮直接用最终命名，不要 (新)/(beta)/(WIP) 之类括号后缀
+- [用户没技术背景，说人话](feedback_plain_language.md) — Luna 零编程/财务/人事背景，进度汇报用日常话不堆 RPC/RLS/migration 等术语
 - [假期相关 DB 枚举](project_leave_enums.md) — 赤日休 / 使用代休 / 赤日補休 的合法值与 balance 计算规则
 - [Edge Function 用 anon key 鉴权](project_edge_fn_auth.md) — user access_token 过期踩坑，前端统一走 anon key
 - [打卡照片 Drive 上传系统](reference_clock_photo_drive.md) — OAuth refresh_token 方案（换掉了 SA），2 个 edge function，secrets 清单

@@ -16,10 +16,11 @@ export default function Sidebar({ user, view, onNav, onLogout, t, theme, toggleT
   const [maintShow, setMaintShow] = useState(false)
 
   // 普通管理员（非 super admin）只保留 5 个菜单：首页 / 勤怠一览 / 档案 / 承认中心 / 休假日历
-  const PLAIN_ADMIN_ALLOWED = new Set(["home", "att", "empmgr", "approve", "cal"])
+  const PLAIN_ADMIN_ALLOWED = new Set(["home", "att", "empmgr", "approve", "cal", "leavehub"])
   const items = [
     { id: "home", l: "首页", ic: Home, show: true },
     { id: "att", l: "勤怠一览", ic: ClipboardList, show: !isHourly || isA },
+    { id: "leavehub", l: "假期管理", ic: CalendarDays, show: !isHourly || isA },
     { id: "work", l: "工资报表", ic: Clock, show: isHourly || isA },
     { id: "upload", l: "一键上传", ic: TableIcon, show: isHourly || isA },
     { id: "empmgr", l: isA ? "人事档案" : "入职信息", ic: Users, show: true },

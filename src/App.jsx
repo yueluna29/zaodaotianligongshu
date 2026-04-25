@@ -23,6 +23,7 @@ import WorkEntryManager from "./pages/workentry/WorkEntryManager"
 import UploadTable from "./pages/workentry/UploadTable"
 import ApprovalCenter from "./pages/approval/ApprovalCenter"
 import LeaveCalendar from "./pages/leave/LeaveCalendar"
+import LeaveHub from "./pages/leave/LeaveHub"
 import DaySwapRequest from "./pages/leave/DaySwapRequest"
 import MonthlyReport from "./pages/report/MonthlyReport"
 import PayrollManager from "./pages/payroll/PayrollManager"
@@ -143,6 +144,7 @@ export default function App() {
     empmgr:  <EmployeeManager user={user} t={t} tk={user.token} />,
     approve: <ApprovalCenter user={user} t={t} tk={user.token} />,
     cal:     <LeaveCalendar t={t} tk={user.token} />,
+    leavehub: <LeaveHub user={user} t={t} tk={user.token} />,
     report:  <MonthlyReport t={t} tk={user.token} />,
     // 超管专属：非 super admin 不注册此路由，即使手动改 view 也无法渲染
     ...(isSuperAdmin(user) ? { payroll: <PayrollManager user={user} t={t} tk={user.token} /> } : {}),
