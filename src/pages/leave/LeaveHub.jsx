@@ -1,11 +1,14 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   CalendarDays, CalendarPlus, Briefcase, Users, ShieldAlert,
   Clock, CheckCircle2, AlertCircle, FileClock, Info,
-  History, X, Send, Activity, Pencil,
+  History, X, Send, Activity, Pencil, RefreshCw,
 } from "lucide-react"
 import { isSuperAdmin } from "../../config/constants"
+import { sbGet, sbPost, sbRpc } from "../../api/supabase"
 import DateMultiPicker from "../../components/DateMultiPicker"
+
+const POOL_LABEL = { "年假": "带薪年假", "红日补休": "红日补休", "代休": "代休余额" }
 
 const MOCK_ME = {
   name: "Luna",
@@ -55,6 +58,58 @@ export default function LeaveHub({ user, t, tk }) {
   const [view, setView] = useState("my_dashboard")
   const [adjustModal, setAdjustModal] = useState(null)
   const [detailModal, setDetailModal] = useState(null)
+  const [teamRows, setTeamRows] = useState(null)
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [adjFm, setAdjFm] = useState({ sign: "+", days: "", reason: "" })
+  const [adjSub, setAdjSub] = useState(false)
+  const [adjError, setAdjError] = useState("")
+
+  const loadTeam = useCallback(async () => {
+    if (!canManage) return
+    setTeamLoading(true)
+    const emps = await sbGet(
+      `employees?is_active=eq.true&employment_type=in.(正社員,契約社員,正社员)&order=name&select=id,name,employment_type`,
+      tk
+    )
+    const summaries = await Promise.all(
+      (emps || []).map((e) => sbRpc("get_leave_summary", { p_employee_id: e.id }, tk))
+    )
+    setTeamRows((emps || []).map((e, i) => ({ id: e.id, name: e.name, summary: summaries[i] })))
+    setTeamLoading(false)
+  }, [canManage, tk])
+
+  useEffect(() => {
+    if (view === "admin_team" && canManage && teamRows === null) loadTeam()
+  }, [view, canManage, teamRows, loadTeam])
+
+  const openAdjust = (emp, pool) => {
+    setAdjFm({ sign: "+", days: "", reason: "" })
+    setAdjError("")
+    setAdjustModal({ emp, pool })
+  }
+
+  const submitAdjust = async () => {
+    if (!adjustModal) return
+    const days = parseFloat(adjFm.days)
+    if (!days || days <= 0) { setAdjError("天数必须大于 0"); return }
+    if (!adjFm.reason.trim()) { setAdjError("理由必填"); return }
+    setAdjSub(true); setAdjError("")
+    const signed = adjFm.sign === "+" ? days : -days
+    const today = new Date().toISOString().slice(0, 10)
+    const res = await sbPost("leave_balance_adjustments", {
+      employee_id: adjustModal.emp.id,
+      pool_type: adjustModal.pool,
+      adjustment_days: signed,
+      reason: adjFm.reason.trim(),
+      adjusted_by: user.id,
+      effective_date: today,
+    }, tk)
+    setAdjSub(false)
+    if (res?.code || res?.message) { setAdjError(res.message || "保存失败"); return }
+    setAdjustModal(null)
+    setTeamRows(null)
+    if (view === "admin_team") loadTeam()
+  }
 
   const card = {
     background: t.bgC,
@@ -94,19 +149,19 @@ export default function LeaveHub({ user, t, tk }) {
         </div>
       </div>
 
-      {view === "my_dashboard" && <ViewMyDashboard t={t} card={card} canManage={canManage} onAdjust={(pool) => setAdjustModal({ emp: MOCK_ME, pool })} onOpenDetail={setDetailModal} />}
+      {view === "my_dashboard" && <ViewMyDashboard t={t} card={card} canManage={canManage} onAdjust={(pool) => openAdjust({ id: user.id, name: user.name }, pool)} onOpenDetail={setDetailModal} />}
       {view === "apply_leave"  && <ViewApplyLeave  t={t} tk={tk} card={card} inputS={inputS} />}
       {view === "apply_work"   && <ViewApplyWork   t={t} card={card} inputS={inputS} />}
       {view === "admin_red"    && canManage && <ViewAdminRedDays t={t} card={card} inputS={inputS} />}
-      {view === "admin_team"   && canManage && <ViewAdminTeam    t={t} card={card} onAdjust={(emp, pool) => setAdjustModal({ emp, pool })} />}
+      {view === "admin_team"   && canManage && <ViewAdminTeam    t={t} card={card} rows={teamRows} loading={teamLoading} onRefresh={loadTeam} onAdjust={openAdjust} />}
 
       {adjustModal && canManage && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,.45)", backdropFilter: "blur(4px)" }} onClick={() => setAdjustModal(null)} />
+          <div style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,.45)", backdropFilter: "blur(4px)" }} onClick={() => !adjSub && setAdjustModal(null)} />
           <div style={{ ...card, background: t.bgC, width: "100%", maxWidth: 440, padding: 22, position: "relative", zIndex: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: t.tx }}>余额池调整</h3>
-              <button onClick={() => setAdjustModal(null)} style={{ padding: 6, borderRadius: "50%", border: `1px solid ${t.bd}`, background: t.bgI, color: t.ts, cursor: "pointer", display: "flex" }}><X size={14} /></button>
+              <button onClick={() => !adjSub && setAdjustModal(null)} style={{ padding: 6, borderRadius: "50%", border: `1px solid ${t.bd}`, background: t.bgI, color: t.ts, cursor: "pointer", display: "flex" }}><X size={14} /></button>
             </div>
 
             <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
@@ -116,30 +171,25 @@ export default function LeaveHub({ user, t, tk }) {
               </div>
               <div style={{ flex: 1, background: t.bgI, padding: 12, borderRadius: 10, border: `1px solid ${t.bl}` }}>
                 <div style={{ color: t.tm, fontSize: 10, marginBottom: 4 }}>目标余额池</div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: t.ac }}>{adjustModal.pool}</div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: t.ac }}>{POOL_LABEL[adjustModal.pool] || adjustModal.pool}</div>
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <select style={{ ...inputS, flex: 1 }}>
-                <option>增加 (+)</option>
-                <option>减少 (-)</option>
+              <select value={adjFm.sign} onChange={(e) => setAdjFm((p) => ({ ...p, sign: e.target.value }))} style={{ ...inputS, flex: 1 }}>
+                <option value="+">增加 (+)</option>
+                <option value="-">减少 (-)</option>
               </select>
-              <input type="number" placeholder="天数" style={{ ...inputS, flex: 1 }} />
+              <input type="number" min="0" step="0.5" placeholder="天数" value={adjFm.days} onChange={(e) => setAdjFm((p) => ({ ...p, days: e.target.value }))} style={{ ...inputS, flex: 1 }} />
             </div>
 
-            <textarea placeholder="操作理由（必填，例如：前期系统故障补偿）" rows={3} style={{ ...inputS, width: "100%", resize: "none", boxSizing: "border-box", marginBottom: 16 }} />
+            <textarea placeholder="操作理由（必填，例如：前期系统故障补偿）" rows={3} value={adjFm.reason} onChange={(e) => setAdjFm((p) => ({ ...p, reason: e.target.value }))} style={{ ...inputS, width: "100%", resize: "none", boxSizing: "border-box", marginBottom: 12 }} />
 
-            <button style={{ width: "100%", padding: 12, borderRadius: 10, background: t.ac, color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-              确认并记录
+            {adjError && <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: `${t.rd}15`, color: t.rd, fontSize: 11, fontWeight: 600 }}>{adjError}</div>}
+
+            <button onClick={submitAdjust} disabled={adjSub} style={{ width: "100%", padding: 12, borderRadius: 10, background: t.ac, color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: adjSub ? "wait" : "pointer", opacity: adjSub ? 0.6 : 1, fontFamily: "inherit" }}>
+              {adjSub ? "保存中…" : "确认并记录"}
             </button>
-
-            <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px dashed ${t.bd}` }}>
-              <div style={{ fontSize: 10, color: t.tm, fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}><History size={11} /> 最近调整记录</div>
-              <div style={{ fontSize: 10, color: t.ts, background: t.bgI, padding: "8px 12px", borderRadius: 8, border: `1px solid ${t.bl}` }}>
-                <span style={{ color: t.tm }}>2026-04-01</span> · Ryan <span style={{ color: t.gn, fontWeight: 700 }}>+2天</span>（理由：入职特别发放）
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -236,7 +286,7 @@ function ViewMyDashboard({ t, card, canManage, onAdjust, onOpenDetail }) {
             <div style={{ display: "flex", alignItems: "center", gap: 7, color: t.ac, fontWeight: 700, fontSize: 13 }}>
               <Clock size={15} strokeWidth={2.4} /> 带薪年假
             </div>
-            {canManage && <button onClick={() => onAdjust("带薪年假")} style={{ padding: 5, borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tm, cursor: "pointer", display: "flex" }}><Pencil size={11} /></button>}
+            {canManage && <button onClick={() => onAdjust("年假")} style={{ padding: 5, borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tm, cursor: "pointer", display: "flex" }}><Pencil size={11} /></button>}
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10 }}>
             <span style={{ fontSize: 32, fontWeight: 700, color: t.tx, lineHeight: 1 }}>{paid.remain}</span>
@@ -303,7 +353,7 @@ function ViewMyDashboard({ t, card, canManage, onAdjust, onOpenDetail }) {
             <div style={{ display: "flex", alignItems: "center", gap: 7, color: t.gn, fontWeight: 700, fontSize: 13 }}>
               <FileClock size={15} strokeWidth={2.4} /> 代休余额
             </div>
-            {canManage && <button onClick={() => onAdjust("代休余额")} style={{ padding: 5, borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tm, cursor: "pointer", display: "flex" }}><Pencil size={11} /></button>}
+            {canManage && <button onClick={() => onAdjust("代休")} style={{ padding: 5, borderRadius: 6, border: `1px solid ${t.bd}`, background: t.bgI, color: t.tm, cursor: "pointer", display: "flex" }}><Pencil size={11} /></button>}
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10 }}>
             <span style={{ fontSize: 32, fontWeight: 700, color: t.tx, lineHeight: 1 }}>{comp.remain}</span>
@@ -540,7 +590,7 @@ function ViewAdminRedDays({ t, card, inputS }) {
   )
 }
 
-function ViewAdminTeam({ t, card, onAdjust }) {
+function ViewAdminTeam({ t, card, rows, loading, onRefresh, onAdjust }) {
   const Cell = ({ value, color, onClick }) => (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: `${color}10`, padding: "4px 10px", borderRadius: 8, border: `1px solid ${color}25` }}>
       <span style={{ fontWeight: 700, fontSize: 13, color: t.tx }}>{value}</span>
@@ -550,42 +600,60 @@ function ViewAdminTeam({ t, card, onAdjust }) {
 
   return (
     <div style={{ ...card, padding: 22 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: t.tx, margin: 0, display: "flex", alignItems: "center", gap: 7 }}><Users color={t.ac} size={18} /> 团队假期台账</h2>
-        <p style={{ fontSize: 11, color: t.tm, margin: "4px 0 0" }}>点击铅笔图标可手动调整，记录会自动保存到该员工的审计日志中。</p>
+      <div style={{ marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: t.tx, margin: 0, display: "flex", alignItems: "center", gap: 7 }}><Users color={t.ac} size={18} /> 团队假期台账</h2>
+          <p style={{ fontSize: 11, color: t.tm, margin: "4px 0 0" }}>点击铅笔图标手动调整余额，会写入该员工的调整记录表。</p>
+        </div>
+        <button onClick={onRefresh} disabled={loading} style={{ padding: "7px 12px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.ts, fontSize: 11, fontWeight: 600, cursor: loading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, fontFamily: "inherit", opacity: loading ? 0.6 : 1 }}>
+          <RefreshCw size={12} /> {loading ? "刷新中…" : "刷新"}
+        </button>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 760 }}>
-          <thead>
-            <tr style={{ background: t.bgI }}>
-              <th style={{ padding: 11, textAlign: "left",   color: t.ts, borderBottom: `2px solid ${t.bd}` }}>员工姓名</th>
-              <th style={{ padding: 11, textAlign: "center", color: t.ac, borderBottom: `2px solid ${t.bd}` }}>年假剩余</th>
-              <th style={{ padding: 11, textAlign: "center", color: t.wn, borderBottom: `2px solid ${t.bd}` }}>義務残</th>
-              <th style={{ padding: 11, textAlign: "center", color: t.rd, borderBottom: `2px solid ${t.bd}` }}>红日补休</th>
-              <th style={{ padding: 11, textAlign: "center", color: t.gn, borderBottom: `2px solid ${t.bd}` }}>代休剩余</th>
-              <th style={{ padding: 11, textAlign: "right",  color: t.ts, borderBottom: `2px solid ${t.bd}` }}>本年总使用</th>
-            </tr>
-          </thead>
-          <tbody>
-            {MOCK_TEAM.map((emp, i) => (
-              <tr key={emp.id} style={{ borderBottom: `1px solid ${t.bl}`, background: i % 2 === 0 ? "transparent" : t.bgI }}>
-                <td style={{ padding: 11, fontWeight: 700, color: t.tx }}>{emp.name}</td>
-                <td style={{ padding: 11, textAlign: "center" }}><Cell value={emp.paid}   color={t.ac} onClick={() => onAdjust(emp, "带薪年假")} /></td>
-                <td style={{ padding: 11, textAlign: "center" }}>
-                  {emp.mandatory > 0
-                    ? <span style={{ background: `${t.wn}15`, color: t.wn, padding: "4px 8px", borderRadius: 5, fontSize: 11, fontWeight: 700 }}>剩余 {emp.mandatory} 天</span>
-                    : <span style={{ color: t.gn, fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={13} /> 已达标</span>
-                  }
-                </td>
-                <td style={{ padding: 11, textAlign: "center" }}><Cell value={emp.redDay} color={t.rd} onClick={() => onAdjust(emp, "红日补休")} /></td>
-                <td style={{ padding: 11, textAlign: "center" }}><Cell value={emp.comp}   color={t.gn} onClick={() => onAdjust(emp, "代休余额")} /></td>
-                <td style={{ padding: 11, textAlign: "right", fontWeight: 700, color: t.tm }}>{emp.usedTotal} 天</td>
+      {rows === null && <div style={{ textAlign: "center", padding: 30, color: t.tm, fontSize: 12 }}>加载中…</div>}
+      {rows && rows.length === 0 && <div style={{ textAlign: "center", padding: 30, color: t.tm, fontSize: 12 }}>暂无在职正/契社员</div>}
+
+      {rows && rows.length > 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 760 }}>
+            <thead>
+              <tr style={{ background: t.bgI }}>
+                <th style={{ padding: 11, textAlign: "left",   color: t.ts, borderBottom: `2px solid ${t.bd}` }}>员工姓名</th>
+                <th style={{ padding: 11, textAlign: "center", color: t.ac, borderBottom: `2px solid ${t.bd}` }}>年假剩余</th>
+                <th style={{ padding: 11, textAlign: "center", color: t.wn, borderBottom: `2px solid ${t.bd}` }}>義務残</th>
+                <th style={{ padding: 11, textAlign: "center", color: t.rd, borderBottom: `2px solid ${t.bd}` }}>红日补休</th>
+                <th style={{ padding: 11, textAlign: "center", color: t.gn, borderBottom: `2px solid ${t.bd}` }}>代休剩余</th>
+                <th style={{ padding: 11, textAlign: "right",  color: t.ts, borderBottom: `2px solid ${t.bd}` }}>本年已用合计</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                const s = row.summary || {}
+                const paid    = s.paid_leave || {}
+                const red     = s.holiday_comp || {}
+                const comp    = s.comp_leave || {}
+                const mandRem = paid.mandatory_remaining ?? 0
+                const usedAll = (Number(paid.used) || 0) + (Number(red.used) || 0) + (Number(comp.used) || 0)
+                return (
+                  <tr key={row.id} style={{ borderBottom: `1px solid ${t.bl}`, background: i % 2 === 0 ? "transparent" : t.bgI }}>
+                    <td style={{ padding: 11, fontWeight: 700, color: t.tx }}>{row.name}</td>
+                    <td style={{ padding: 11, textAlign: "center" }}><Cell value={paid.balance ?? 0} color={t.ac} onClick={() => onAdjust({ id: row.id, name: row.name }, "年假")} /></td>
+                    <td style={{ padding: 11, textAlign: "center" }}>
+                      {mandRem > 0
+                        ? <span style={{ background: `${t.wn}15`, color: t.wn, padding: "4px 8px", borderRadius: 5, fontSize: 11, fontWeight: 700 }}>剩余 {mandRem} 天</span>
+                        : <span style={{ color: t.gn, fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={13} /> 已达标</span>
+                      }
+                    </td>
+                    <td style={{ padding: 11, textAlign: "center" }}><Cell value={red.balance  ?? 0} color={t.rd} onClick={() => onAdjust({ id: row.id, name: row.name }, "红日补休")} /></td>
+                    <td style={{ padding: 11, textAlign: "center" }}><Cell value={comp.balance ?? 0} color={t.gn} onClick={() => onAdjust({ id: row.id, name: row.name }, "代休")} /></td>
+                    <td style={{ padding: 11, textAlign: "right", fontWeight: 700, color: t.tm }}>{usedAll} 天</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
