@@ -58,6 +58,12 @@ export default function LeaveHub({ user, t, tk }) {
   const [view, setView] = useState("my_dashboard")
   const [adjustModal, setAdjustModal] = useState(null)
   const [detailModal, setDetailModal] = useState(null)
+  const [mobile, setMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768)
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < 768)
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
   const [teamRows, setTeamRows] = useState(null)
   const [teamLoading, setTeamLoading] = useState(false)
   const [adjFm, setAdjFm] = useState({ sign: "+", days: "", reason: "" })
@@ -136,20 +142,32 @@ export default function LeaveHub({ user, t, tk }) {
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", background: t.bgI, padding: 4, borderRadius: 12, border: `1px solid ${t.bd}`, flexWrap: "wrap", gap: 2 }}>
-            <NavTab t={t} label="我的假期"   icon={<Activity size={13} />}     active={view === "my_dashboard"} onClick={() => setView("my_dashboard")} />
-            <NavTab t={t} label="休假申请"   icon={<CalendarPlus size={13} />} active={view === "apply_leave"}  onClick={() => setView("apply_leave")} />
-            <NavTab t={t} label="休息日出勤" icon={<Briefcase size={13} />}    active={view === "apply_work"}   onClick={() => setView("apply_work")} />
-          </div>
-          {canManage && (
-            <div style={{ display: "flex", alignItems: "center", background: `${t.ac}08`, padding: "4px 4px 4px 10px", borderRadius: 12, border: `1px solid ${t.ac}25`, flexWrap: "wrap", gap: 4 }}>
-              <span style={{ fontSize: 9, color: t.ac, fontWeight: 700, letterSpacing: ".06em", paddingRight: 4 }}>管理</span>
+        {mobile && canManage ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", background: t.bgI, padding: 4, borderRadius: 12, border: `1px solid ${t.bd}`, flexWrap: "wrap", gap: 2 }}>
+              <NavTab t={t} label="我的假期"   icon={<Activity size={13} />}     active={view === "my_dashboard"} onClick={() => setView("my_dashboard")} />
+              <NavTab t={t} label="休假申请"   icon={<CalendarPlus size={13} />} active={view === "apply_leave"}  onClick={() => setView("apply_leave")} />
+              <NavTab t={t} label="休息日出勤" icon={<Briefcase size={13} />}    active={view === "apply_work"}   onClick={() => setView("apply_work")} />
+            </div>
+            <div style={{ display: "flex", background: t.bgI, padding: 4, borderRadius: 12, border: `1px solid ${t.bd}`, flexWrap: "wrap", gap: 2 }}>
               <NavTab t={t} label="红日出勤" icon={<ShieldAlert size={13} />} active={view === "admin_red"}  onClick={() => setView("admin_red")} />
               <NavTab t={t} label="团队台账" icon={<Users size={13} />}       active={view === "admin_team"} onClick={() => setView("admin_team")} />
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", background: t.bgI, padding: 4, borderRadius: 12, border: `1px solid ${t.bd}`, flexWrap: "wrap" }}>
+            <NavTab t={t} label="我的假期"     icon={<Activity size={13} />}     active={view === "my_dashboard"} onClick={() => setView("my_dashboard")} />
+            <NavTab t={t} label="休假申请"     icon={<CalendarPlus size={13} />} active={view === "apply_leave"}  onClick={() => setView("apply_leave")} />
+            <NavTab t={t} label="休息日出勤"   icon={<Briefcase size={13} />}    active={view === "apply_work"}   onClick={() => setView("apply_work")} />
+            {canManage && (
+              <>
+                <div style={{ width: 1, background: t.bd, margin: "4px 6px" }} />
+                <NavTab t={t} label="红日出勤" icon={<ShieldAlert size={13} />} active={view === "admin_red"}  onClick={() => setView("admin_red")} />
+                <NavTab t={t} label="团队台账" icon={<Users size={13} />}       active={view === "admin_team"} onClick={() => setView("admin_team")} />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {view === "my_dashboard" && <ViewMyDashboard t={t} card={card} canManage={canManage} onAdjust={(pool) => openAdjust({ id: user.id, name: user.name }, pool)} onOpenDetail={setDetailModal} />}
