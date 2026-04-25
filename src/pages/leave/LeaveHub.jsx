@@ -152,7 +152,7 @@ export default function LeaveHub({ user, t, tk }) {
       {view === "my_dashboard" && <ViewMyDashboard t={t} card={card} canManage={canManage} onAdjust={(pool) => openAdjust({ id: user.id, name: user.name }, pool)} onOpenDetail={setDetailModal} />}
       {view === "apply_leave"  && <ViewApplyLeave  t={t} tk={tk} card={card} inputS={inputS} />}
       {view === "apply_work"   && <ViewApplyWork   t={t} card={card} inputS={inputS} />}
-      {view === "admin_red"    && canManage && <ViewAdminRedDays t={t} card={card} inputS={inputS} />}
+      {view === "admin_red"    && canManage && <ViewAdminRedDays t={t} tk={tk} card={card} inputS={inputS} />}
       {view === "admin_team"   && canManage && <ViewAdminTeam    t={t} card={card} rows={teamRows} loading={teamLoading} onRefresh={loadTeam} onAdjust={openAdjust} />}
 
       {adjustModal && canManage && (
@@ -538,54 +538,109 @@ function ViewApplyWork({ t, card, inputS }) {
   )
 }
 
-function ViewAdminRedDays({ t, card, inputS }) {
-  const rows = [
-    { holiday: "5/3 宪法纪念日", emp: "Luna",  base: "工作日 (周三)", actual: "打卡出勤了",            verdict: { txt: "+1 红日补休获得", color: t.rd } },
-    { holiday: "5/3 宪法纪念日", emp: "Ryan",  base: "休息日 (周日)", actual: "在家睡觉",              verdict: { txt: "无变动",          color: t.tm } },
-    { holiday: "5/4 绿之日",     emp: "Peter", base: "工作日 (周四)", actual: "没来打卡 (正常休节假日)", verdict: { txt: "无变动 (红日正常休息)", color: t.tm } },
-  ]
+function ViewAdminRedDays({ t, tk, card, inputS }) {
+  const today = new Date()
+  const sixMonthsLater = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate())
+  const fmt = (d) => d.toISOString().slice(0, 10)
+  const [from, setFrom] = useState(fmt(today))
+  const [to, setTo] = useState(fmt(sixMonthsLater))
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState("")
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr("")
+    const res = await sbRpc("get_holiday_attendance_report", { p_start_date: from, p_end_date: to }, tk)
+    if (res?.code || res?.message) { setErr(res.message || "加载失败"); setData([]); setLoading(false); return }
+    setData(Array.isArray(res) ? res : [])
+    setLoading(false)
+  }, [from, to, tk])
+
+  useEffect(() => { load() }, [load])
+
+  const grouped = (() => {
+    if (!data) return []
+    const map = new Map()
+    for (const r of data) {
+      const key = r.holiday_date
+      if (!map.has(key)) map.set(key, { date: r.holiday_date, name: r.holiday_name, applicants: [] })
+      if (r.employee_id) {
+        map.get(key).applicants.push({
+          id: r.employee_id, name: r.employee_name, status: r.status,
+          comp: r.compensation_type, half: r.is_half_day, sid: r.swap_request_id,
+        })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
+  })()
+
+  const isApproved = (s) => s === "已通过" || s === "承認"
 
   return (
     <div style={{ ...card, padding: 22 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: t.tx, margin: 0, display: "flex", alignItems: "center", gap: 7 }}><ShieldAlert color={t.rd} size={18} /> 节假日出勤一览（自动生成）</h2>
-          <p style={{ fontSize: 11, color: t.tm, margin: "4px 0 0" }}>系统根据排班表和打卡记录，自动推算红日子的出勤和补休状态，零手工操作。</p>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: t.tx, margin: 0, display: "flex", alignItems: "center", gap: 7 }}><ShieldAlert color={t.rd} size={18} /> 红日子出勤申请一览</h2>
+          <p style={{ fontSize: 11, color: t.tm, margin: "4px 0 0" }}>红日子默认全员放假。这里只列「申请来上班」的人，没在名单上的就是不来。</p>
         </div>
-        <select style={inputS}>
-          <option>2026年 5月 (黄金周)</option>
-          <option>2026年 4月</option>
-        </select>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 720 }}>
-          <thead>
-            <tr style={{ background: t.bgI }}>
-              <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}` }}>节假日名称 (日期)</th>
-              <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}` }}>员工姓名</th>
-              <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}` }}>原定排班</th>
-              <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}` }}>实际打卡/操作</th>
-              <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}` }}>系统判定结果</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} style={{ borderBottom: `1px solid ${t.bl}`, background: i % 2 === 0 ? "transparent" : t.bgI }}>
-                <td style={{ padding: 11, fontWeight: 600, color: t.tx }}>{r.holiday}</td>
-                <td style={{ padding: 11, fontWeight: 600, color: t.tx }}>{r.emp}</td>
-                <td style={{ padding: 11, color: t.tm }}>{r.base}</td>
-                <td style={{ padding: 11, color: t.tx }}>{r.actual}</td>
-                <td style={{ padding: 11 }}>
-                  <span style={{ background: r.verdict.color === t.tm ? "transparent" : `${r.verdict.color}15`, color: r.verdict.color, padding: r.verdict.color === t.tm ? 0 : "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 700 }}>
-                    {r.verdict.txt}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: t.ts }}>从</span>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ ...inputS, padding: "7px 10px" }} />
+        <span style={{ fontSize: 11, color: t.ts }}>到</span>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ ...inputS, padding: "7px 10px" }} />
+        <button onClick={load} disabled={loading} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${t.bd}`, background: t.bgI, color: t.ts, fontSize: 11, fontWeight: 600, cursor: loading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 5, fontFamily: "inherit", opacity: loading ? 0.6 : 1 }}>
+          <RefreshCw size={12} /> {loading ? "查询中…" : "查询"}
+        </button>
       </div>
+
+      {err && <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, background: `${t.rd}15`, color: t.rd, fontSize: 12, fontWeight: 600 }}>{err}</div>}
+
+      {data === null && <div style={{ textAlign: "center", padding: 30, color: t.tm, fontSize: 12 }}>加载中…</div>}
+      {data && grouped.length === 0 && <div style={{ textAlign: "center", padding: 30, color: t.tm, fontSize: 12 }}>该区间无红日子</div>}
+
+      {grouped.length > 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 720 }}>
+            <thead>
+              <tr style={{ background: t.bgI }}>
+                <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}`, width: 130 }}>红日子日期</th>
+                <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}`, width: 160 }}>节假日名</th>
+                <th style={{ padding: 11, textAlign: "left", color: t.ts, borderBottom: `2px solid ${t.bd}` }}>出勤人员名单</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grouped.map((row, i) => (
+                <tr key={row.date} style={{ borderBottom: `1px solid ${t.bl}`, background: i % 2 === 0 ? "transparent" : t.bgI, verticalAlign: "top" }}>
+                  <td style={{ padding: 11, fontWeight: 700, color: t.tx, fontFamily: "monospace" }}>{row.date}</td>
+                  <td style={{ padding: 11, color: t.rd, fontWeight: 600 }}>{row.name}</td>
+                  <td style={{ padding: 11 }}>
+                    {row.applicants.length === 0 ? (
+                      <span style={{ fontSize: 11, color: t.gn, fontWeight: 600, background: `${t.gn}12`, padding: "3px 9px", borderRadius: 5 }}>全员休息</span>
+                    ) : (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                        {row.applicants.map((a) => {
+                          const ok = isApproved(a.status)
+                          const sColor = ok ? t.gn : t.wn
+                          return (
+                            <span key={a.sid} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 7, background: `${sColor}10`, border: `1px solid ${sColor}30`, fontSize: 11 }}>
+                              <strong style={{ color: t.tx }}>{a.name}</strong>
+                              <span style={{ color: sColor, fontWeight: 700 }}>· {ok ? "已通过" : "申请中"}</span>
+                              {a.comp && <span style={{ color: t.tm }}>· {a.comp}</span>}
+                              {a.half && <span style={{ color: t.tm }}>· 半天</span>}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
