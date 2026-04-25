@@ -4,7 +4,7 @@ import {
   Clock, CheckCircle2, AlertCircle, FileClock, Info,
   History, X, Send, Activity, Pencil, RefreshCw,
 } from "lucide-react"
-import { isSuperAdmin } from "../../config/constants"
+import { isSuperAdmin, sortByName } from "../../config/constants"
 import { sbGet, sbPost, sbRpc } from "../../api/supabase"
 import DateMultiPicker from "../../components/DateMultiPicker"
 
@@ -67,14 +67,15 @@ export default function LeaveHub({ user, t, tk }) {
   const loadTeam = useCallback(async () => {
     if (!canManage) return
     setTeamLoading(true)
-    const emps = await sbGet(
-      `employees?is_active=eq.true&employment_type=in.(正社員,契約社員,正社员)&order=name&select=id,name,employment_type,region`,
+    const empsRaw = await sbGet(
+      `employees?is_active=eq.true&employment_type=in.(正社員,契約社員,正社员)&select=id,name,furigana,pinyin,employment_type,region`,
       tk
     )
+    const emps = sortByName(empsRaw || [])
     const summaries = await Promise.all(
-      (emps || []).map((e) => sbRpc("get_leave_summary", { p_employee_id: e.id }, tk))
+      emps.map((e) => sbRpc("get_leave_summary", { p_employee_id: e.id }, tk))
     )
-    setTeamRows((emps || []).map((e, i) => ({ id: e.id, name: e.name, region: e.region, summary: summaries[i] })))
+    setTeamRows(emps.map((e, i) => ({ id: e.id, name: e.name, region: e.region, summary: summaries[i] })))
     setTeamLoading(false)
   }, [canManage, tk])
 
@@ -566,12 +567,14 @@ function ViewAdminRedDays({ t, tk, card, inputS }) {
       if (!map.has(key)) map.set(key, { date: r.holiday_date, name: r.holiday_name, applicants: [] })
       if (r.employee_id) {
         map.get(key).applicants.push({
-          id: r.employee_id, name: r.employee_name, status: r.status,
-          comp: r.compensation_type, half: r.is_half_day, sid: r.swap_request_id,
+          id: r.employee_id, name: r.employee_name, furigana: r.furigana, pinyin: r.pinyin,
+          status: r.status, comp: r.compensation_type, half: r.is_half_day, sid: r.swap_request_id,
         })
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
+    return Array.from(map.values())
+      .map((row) => ({ ...row, applicants: sortByName(row.applicants) }))
+      .sort((a, b) => a.date.localeCompare(b.date))
   })()
 
   const isApproved = (s) => s === "已通过" || s === "承認"
