@@ -8,4 +8,7 @@
 - [改 login_id 一次性额度](reference_change_login_id.md) — service-role edge fn change-login-id，employees.login_id_changed_at 锁额度
 - [Drive 上传通用攻略](../../docs/google-drive-上传攻略.md) — 复用到新项目的完整步骤（GCP / OAuth / Edge Function / RLS / 前端）
 - [SQL 批量建 auth 用户的坑](project_bulk_create_auth_users.md) — 密码 cost≥10、8 个 token 字段不能 NULL，否则 "Database error querying schema"
-- [2026-04-24 进度快照](project_open_items_2026_04_24.md) — 今天做完的 + 还欠的功能（税务重做 / 扶养控除页 / Phase 3-4 / 正契入职）+ admin 人肉清单
+- [2026-04-24 进度快照](project_open_items_2026_04_24.md) — 今天做完的 + 还欠的功能（税务重做 / 扶养控除页 / Phase 3-4 / 正契入职 / 给与扩 R8）+ admin 人肉清单
+- [给与明细页 & payroll_slips](project_payroll_feature.md) — 超管专属，R8 甲欄 0 人查表，三层权限守卫，扩展点
+- [敏感台账页默认只读](feedback_readonly_default_for_sensitive_pages.md) — 给与/税务类默认 readOnly，「编辑」按钮进入修改态，防手误
+- [页面 reload 用 tkRef 不直接依赖 tk](feedback_tk_in_ref.md) — useCallback deps 放 tk 会被 token 续期冲掉数据，改 tkRef

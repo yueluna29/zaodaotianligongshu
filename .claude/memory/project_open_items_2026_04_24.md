@@ -1,6 +1,6 @@
 ---
 name: 2026-04-24 进度快照
-description: 4/23-4/24 通宵迭代的结果；还欠的功能 + 需要 admin 人肉跟进的数据
+description: 4/23-4/24 全天迭代的结果；还欠的功能 + 需要 admin 人肉跟进的数据
 type: project
 ---
 
@@ -53,12 +53,34 @@ type: project
 - 底部汇总的"班课绩效"条件从 `showBonus` 收紧为 `rows.some(EJU_TYPE)`，没 EJU 行就不显示
 - "給与総額" → "基本给"（= Σ hours×hourly_rate，不含交通费/绩效）
 
+---
+
+## ✅ 4/24 下午/晚上续迭代
+
+**紧急 bug 修复**
+- **整站频闪死循环**：App.jsx token 自动续期 effect deps 错写 `[user?.refreshToken]`，而 Supabase 每次 refresh 返回新 refresh_token → effect 重跑 → 再 refresh → 死循环每秒全树 re-render。改用 `userRef` + deps=`[user?.id]` 根治
+- **普通管理员菜单收窄 → 回放勤怠一览**：先上了白名单 `{home, empmgr, approve, cal}`，刘/方老师反映需要「勤怠一览」记录自己勤怠 → 加回（白名单变 `{home, att, empmgr, approve, cal}`）
+
+**给与明细页（超管专属，新）**：详见 `project_payroll_feature.md`
+- payroll_slips 表 + 超管专属 RLS（login_id='luna'）
+- 一行 = 一个支付片段，同员工同月可 N 行，支持日元/国内/微信/支付宝等拆分
+- 源泉自动算（R8 税額表 甲欄 0 人，仅 baito/外部）
+- 上报金额从当月 work_entries 自动预填
+- 默认只读，点「编辑」才能改 + 保存失败保留脏数据 + 错误弹窗
+- 玻璃风 UI（Gemini 参谋版）+ sticky 两级表头 + 左 4 列 rowSpan
+- 三层守卫：菜单 / 路由字典 / RLS
+
+**关联的跨页技术改进**
+- 「用 tkRef 而不是 tk 依赖」模式 —— 见 `feedback_tk_in_ref.md`
+- 「敏感台账页默认只读」模式 —— 见 `feedback_readonly_default_for_sensitive_pages.md`
+
 ## 📝 还欠的功能（可以接着做）
 
 ### 高优先
 - **税务与合同信息重做**：当前只超管能看，用户说要重新设计。重做完去掉 `isSuperAdmin(user)` 守卫就行
 - **扶养控除专门页**：用户明确提过"之后专门做一个"。学生老师常申请勤劳学生控除等，要独立于入职向导
 - **正/契 入职向导**：当前只 baito 有 Quick Mode，正/契依旧是 4 步完整向导但没整合入职手续页
+- **给与明细 · 扶养 > 0 人 / 乙欄**：目前 R8 表只做了甲欄 0 人。如果哪个 baito 有扶养或明确乙欄，得扩表 + 接 `employees.dependents_count`
 
 ### 中优先
 - **一键上传 Phase 3 — 导出 Excel**：按学部/大学院两套模板布局生成 .xlsx，给社劳士用。当前"导出 Excel"按钮 disabled 占位
