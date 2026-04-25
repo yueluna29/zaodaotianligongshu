@@ -53,19 +53,19 @@ const num = (v) => {
 const sumIncome = (r) => INCOME_FIELDS.reduce((s, f) => s + num(r[f.k]), 0)
 const sumDeduction = (r) => DEDUCTION_FIELDS.reduce((s, f) => s + num(r[f.k]), 0)
 const sumAdjustment = (r) => ADJUSTMENT_FIELDS.reduce((s, f) => s + num(r[f.k]), 0)
-// 源泉自动：
-// - withhold_rate = 0（不扣）→ 0
-// - 正社員 / 契約社員 → 0（社労士提供最终数字，表只做"提醒"）
+// 源泉所得税自动（与扣税0.1 无关）：
+// - 正社員 / 契約社員 → 0（社労士提供最终数字，需手填覆盖）
 // - baito / 外部（甲欄 扶養 0 人）→ R8税額表查表：(支給合計 − 社保4项)
 const autoTax = (r) => {
-  if (!num(r.withhold_rate)) return 0
   const et = r._emp?.employment_type
   if (isFullTime(et)) return 0
   if (isHourly(et)) return lookupR8Tax0(sumIncome(r) - sumDeduction(r))
   return 0
 }
 const effTax = (r) => (r.withholding_tax === null || r.withholding_tax === undefined || r.withholding_tax === "") ? autoTax(r) : num(r.withholding_tax)
-const netPay = (r) => sumIncome(r) - sumDeduction(r) - effTax(r) + sumAdjustment(r)
+// 扣税0.1（公司侧扣项，仅在非公账支付方式时使用）：支給合計 × withhold_rate（0 或 0.1）
+const extraWithhold = (r) => Math.round(sumIncome(r) * num(r.withhold_rate))
+const netPay = (r) => sumIncome(r) - sumDeduction(r) - effTax(r) + sumAdjustment(r) - extraWithhold(r)
 const hasTaxOverride = (r) => r.withholding_tax !== null && r.withholding_tax !== undefined && r.withholding_tax !== ""
 
 const emptyRow = (emp, year, month, company_id, sort_order = 0) => ({
@@ -282,7 +282,7 @@ export default function PayrollManager({ user, t, tk }) {
       ...ADJUSTMENT_FIELDS.map(f => f.l),
       "源泉所得税",
       "差引支給額",
-      "雇用形態", "支払方法", "税率", "口座名義", "口座情報", "備考欄",
+      "雇用形態", "支払方法", "扣税0.1額", "口座名義", "口座情報", "備考欄",
     ]
     const data = rows.filter(r => !r._delete && hasAnyData(r)).map(r => {
       const e = r._emp || {}
@@ -300,7 +300,7 @@ export default function PayrollManager({ user, t, tk }) {
         netPay(r),
         e.employment_type || "",
         r.payment_method || "",
-        r.withhold_rate ?? 0,
+        extraWithhold(r),
         e.bank_account_holder || "",
         account,
         r.note || "",
@@ -474,21 +474,20 @@ export default function PayrollManager({ user, t, tk }) {
                             style={{ ...inp, color: taxOverride ? t.wn : t.rd, fontWeight: 700, background: taxOverride ? `${t.wn}12` : "rgba(255,255,255,0.5)" }}
                             title={
                               taxOverride ? "已手动覆盖（清空可恢复自动）" :
-                              !num(r.withhold_rate) ? "税率=不扣 → 0" :
-                              isFullTime(r._emp?.employment_type) ? "正社員/契約 不自动算，等社労士数字" :
-                              `R8税額表 甲欄 0人: (支給合計 ${sumIncome(r)} − 社保 ${sumDeduction(r)}) → ${autoTax(r)}`
+                              isFullTime(r._emp?.employment_type) ? "正社員/契約 等社労士给数字，手填覆盖" :
+                              `R8税額表 甲欄 0人 自动: (支給合計 ${sumIncome(r)} − 社保 ${sumDeduction(r)}) → ${autoTax(r)}`
                             }
                           />
                           {taxOverride && <Calculator size={10} color={t.wn} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)" }} />}
                         </td>
-                        <td style={{ ...td, background: `${t.bgS}`, textAlign: "right", fontWeight: 800, fontSize: 13, color: netPay(r) < 0 ? t.rd : t.tx, fontVariantNumeric: "tabular-nums" }}>{fmtYen(netPay(r))}</td>
+                        <td style={{ ...td, background: `${t.bgS}`, textAlign: "right", fontWeight: 800, fontSize: 13, color: netPay(r) < 0 ? t.rd : t.tx, fontVariantNumeric: "tabular-nums" }} title={`差引 = 支給合計(${sumIncome(r)}) − 控除(${sumDeduction(r)}) − 源泉(${effTax(r)}) + 調整(${sumAdjustment(r)}) − 扣税0.1(${extraWithhold(r)}) = ${netPay(r)}`}>{fmtYen(netPay(r))}</td>
 
                         <td style={td}>
                           <select value={r.payment_method || ""} onChange={(e) => updateRow(r._key, { payment_method: e.target.value })} disabled={!editing} className="pm-inp" style={inpLeft}>
                             {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
                           </select>
                         </td>
-                        <td style={td}>
+                        <td style={td} title={num(r.withhold_rate) > 0 ? `扣 ${extraWithhold(r)} 円（支給合計 × 0.1，从差引扣除）` : "无附加扣税"}>
                           <select value={r.withhold_rate ?? 0} onChange={(e) => updateRow(r._key, { withhold_rate: parseFloat(e.target.value) })} disabled={!editing} className="pm-inp" style={inpLeft}>
                             {TAX_MODES.map(rt => <option key={rt.value} value={rt.value}>{rt.label}</option>)}
                           </select>
