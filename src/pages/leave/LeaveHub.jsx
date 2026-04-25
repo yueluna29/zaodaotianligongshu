@@ -489,7 +489,7 @@ function ViewApplyLeave({ t, tk, card, inputS }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             <PoolOption value="paid" color={t.ac} title="带薪年假" sub="剩余: 13 天" badge={mandatoryLeft > 0 ? "优先" : null} />
             <PoolOption value="red"  color={t.rd} title="红日补休" sub="剩余: 2 天" />
-            <PoolOption value="comp" color={t.gn} title="代休 (休息日加班补偿)" sub="剩余: 1 天 (14天内有过期风险)" />
+            <PoolOption value="comp" color={t.gn} title="代休 (休息日加班补偿)" sub="剩余: 1 天" />
           </div>
         </div>
 
@@ -558,7 +558,7 @@ function ViewApplyWork({ t, tk, card, inputS }) {
                 <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={{ ...inputS, marginTop: 8, width: "100%", boxSizing: "border-box", borderColor: t.ac }} />
               ) : null}
             />
-            <CompOption value="pay" title="作为加班费发放" sub="不进代休池，直接换算成加班费发了。" />
+            <CompOption value="pay" title="作为加班" sub="不进代休池" />
           </div>
         </div>
 
